@@ -24,10 +24,12 @@ public:
     explicit IslandGeometry(float scale = 1.0f) : scale_(scale) {}
 
     // The window never changes size during a transition, so its coordinate space stays fixed.
-    // It is the expanded pill plus room for spring overshoot.
+    // It is the expanded pill plus room for its flares and spring overshoot.
     WindowSize Window() const {
         return {Px(kExpandedWidth + kOvershootMargin * 2), Px(kExpandedHeight + kOvershootMargin)};
     }
+
+    int FlareRadius() const { return Px(kFlareRadius); }
 
     Pill PillFor(IslandState state) const {
         const bool expanded = state == IslandState::Expanded;
@@ -49,6 +51,7 @@ private:
     static constexpr float kExpandedWidth = 440;
     static constexpr float kExpandedHeight = 140;
     static constexpr float kExpandedRadius = 24;
+    static constexpr float kFlareRadius = 8;
     static constexpr float kOvershootMargin = 16;
 
     int Px(float logical) const { return static_cast<int>(logical * scale_ + 0.5f); }

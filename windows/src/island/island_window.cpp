@@ -106,6 +106,7 @@ void IslandWindow::ApplyLayout() {
     const Pill pill = geometry_.PillFor(state_);
     motion_.Jump(pill);
     UpdateHitRegion();
+    compositor_.SetFlareRadius(geometry_.FlareRadius());
     compositor_.ShowPill(pill);
 }
 
@@ -127,14 +128,15 @@ void IslandWindow::FinishTransition() {
     if (state_ == IslandState::Collapsed) UpdateHitRegion();
 }
 
-// The window has a fixed size, so the region is what keeps it from blocking clicks around the pill.
+// The window has a fixed size, so the region is what keeps it from blocking clicks around the island.
 void IslandWindow::UpdateHitRegion() {
     if (state_ == IslandState::Expanded) {
         SetWindowRgn(hwnd_, nullptr, FALSE);
         return;
     }
     const Pill pill = geometry_.PillFor(IslandState::Collapsed);
-    SetWindowRgn(hwnd_, CreateRectRgn(static_cast<int>(pill.left), 0, static_cast<int>(pill.right), static_cast<int>(pill.bottom)), FALSE);
+    const int flare = geometry_.FlareRadius();
+    SetWindowRgn(hwnd_, CreateRectRgn(static_cast<int>(pill.left) - flare, 0, static_cast<int>(pill.right) + flare, static_cast<int>(pill.bottom)), FALSE);
 }
 
 void IslandWindow::ShowMenu() {

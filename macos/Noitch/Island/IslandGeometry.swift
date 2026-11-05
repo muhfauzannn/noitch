@@ -16,9 +16,11 @@ struct IslandGeometry: Equatable {
     static let expandedSize = CGSize(width: 440, height: 140)
     static let collapsedCornerRadius: CGFloat = 10
     static let expandedCornerRadius: CGFloat = 24
+    /// The concave curve on each side, where the island meets the top of the screen.
+    static let flareRadius: CGFloat = 8
     /// Used on displays without a notch, where the island is drawn over the menu bar.
     static let virtualNotchWidth: CGFloat = 180
-    /// Spring overshoot must stay inside the window, or it would be clipped.
+    /// Flares and spring overshoot must stay inside the window, or they would be clipped.
     static let overshootMargin: CGFloat = 16
 
     let display: Display
@@ -37,12 +39,15 @@ struct IslandGeometry: Equatable {
         state == .expanded ? Self.expandedCornerRadius : Self.collapsedCornerRadius
     }
 
-    /// The window is the hit region, so while collapsed it must not cover more than the pill.
+    /// The window is the hit region, so while collapsed it must not cover more than the pill and
+    /// its flares.
     /// It is sized only at the two ends of a transition, never per frame.
     func panelFrame(for state: IslandState) -> CGRect {
         let pill = pillSize(for: state)
-        let margin = state == .expanded ? Self.overshootMargin : 0
-        let size = CGSize(width: pill.width + margin * 2, height: pill.height + margin)
+        let expanded = state == .expanded
+        let sideMargin = expanded ? Self.overshootMargin : Self.flareRadius
+        let bottomMargin = expanded ? Self.overshootMargin : 0
+        let size = CGSize(width: pill.width + sideMargin * 2, height: pill.height + bottomMargin)
         return CGRect(
             x: display.frame.midX - size.width / 2,
             y: display.frame.maxY - size.height,

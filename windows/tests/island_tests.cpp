@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include "island/flare.h"
 #include "island/island_geometry.h"
 #include "island/spring.h"
 
@@ -120,6 +121,46 @@ void TestRetargetContinuesFromCurrentMotion() {
     assert(Near(motion.Channel(2).Velocity(0), velocity, 1e-6));
 }
 
+void TestFlaresFitBesideTheExpandedPill() {
+    for (float scale : {1.0f, 1.25f, 1.5f, 2.0f, 3.5f}) {
+        const IslandGeometry geometry(scale);
+        const Pill expanded = geometry.PillFor(IslandState::Expanded);
+        assert(expanded.left - geometry.FlareRadius() >= 0);
+        assert(expanded.right + geometry.FlareRadius() <= geometry.Window().width);
+    }
+}
+
+void TestFlareTapersFromThePillToTheTopEdge() {
+    const int radius = 16;
+    assert(FlareCoverage(radius, radius - 1, 0) == 1.0f);   // Against the pill, at the top
+    assert(FlareCoverage(radius, 0, radius - 1) == 0.0f);   // Far corner: the removed quarter circle
+    float previous = 0;
+    bool sawPartialPixel = false;
+    for (int x = 0; x < radius; ++x) {                      // Along the top edge, toward the pill
+        const float coverage = FlareCoverage(radius, x, 0);
+        assert(coverage >= previous);
+        sawPartialPixel = sawPartialPixel || (coverage > 0 && coverage < 1);
+        previous = coverage;
+    }
+    assert(sawPartialPixel);                                // Antialiased, not a hard step
+    for (int y = 0; y < radius; ++y) assert(FlareCoverage(radius, radius, y) == 1.0f);  // Overlap column
+}
+
+void TestFlarePixelsArePremultipliedBlackAndMirror() {
+    constexpr int radius = 12;
+    constexpr int width = radius + kFlareOverlapPx;
+    std::uint32_t left[width * radius];
+    std::uint32_t right[width * radius];
+    FillFlarePixels(radius, false, left);
+    FillFlarePixels(radius, true, right);
+    for (int y = 0; y < radius; ++y) {
+        for (int x = 0; x < width; ++x) {
+            assert((left[y * width + x] & 0x00FFFFFF) == 0);
+            assert(left[y * width + x] == right[y * width + (width - 1 - x)]);
+        }
+    }
+}
+
 void TestJumpLeavesNothingToAnimate() {
     PillMotion motion;
     motion.Jump(IslandGeometry().PillFor(IslandState::Expanded));
@@ -137,6 +178,9 @@ int main() {
     TestCubicSegmentsTrackTheSpring();
     TestEverySegmentIsAcceptedByDirectComposition();
     TestRetargetContinuesFromCurrentMotion();
+    TestFlaresFitBesideTheExpandedPill();
+    TestFlareTapersFromThePillToTheTopEdge();
+    TestFlarePixelsArePremultipliedBlackAndMirror();
     TestJumpLeavesNothingToAnimate();
     std::puts("island_tests: all passed");
     return 0;

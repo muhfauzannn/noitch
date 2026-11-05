@@ -10,10 +10,14 @@
 namespace noitch {
 
 // Owns the DirectComposition visual tree. The pill is a rounded clip over a stretched 1x1 black
-// surface, so moving it costs no drawing: only clip properties change, and DWM animates those.
+// surface and the flares are small fixed surfaces, so moving them costs no drawing: only clip and
+// offset properties change, and DWM animates those.
 class Compositor {
 public:
     HRESULT Create(HWND hwnd);
+
+    // Rebuilds the flares for a new DPI. Follow with ShowPill, which commits.
+    HRESULT SetFlareRadius(int radius);
 
     // Sets the pill with no animation and drops any running one.
     HRESULT ShowPill(const Pill& pill);
@@ -26,14 +30,20 @@ public:
 
 private:
     HRESULT BuildScene();
-    HRESULT PaintFill(IDCompositionSurface* surface, ID3D11DeviceContext* context);
-    HRESULT BuildAnimation(const PillMotion& motion, int channel, IDCompositionAnimation** animation);
+    HRESULT BuildFlare(IDCompositionVisual* visual, bool mirrored);
+    HRESULT Paint(IDCompositionSurface* surface, UINT width, UINT height, const void* pixels);
+    HRESULT BuildAnimation(const PillMotion& motion, int channel, float bias, IDCompositionAnimation** animation);
 
     HWND hwnd_ = nullptr;
+    int flareRadius_ = 0;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
     Microsoft::WRL::ComPtr<IDCompositionDevice> device_;
     Microsoft::WRL::ComPtr<IDCompositionTarget> target_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> root_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual> body_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> fill_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual> leftFlare_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual> rightFlare_;
     Microsoft::WRL::ComPtr<IDCompositionRectangleClip> clip_;
     Microsoft::WRL::ComPtr<IDCompositionSurface> surface_;
 };

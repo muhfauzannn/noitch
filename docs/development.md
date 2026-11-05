@@ -62,10 +62,10 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 5 unit tests | Passing |
+| Builds; 6 unit tests | Passing |
 | Budgets at rest | Passing |
-| Hover, reversal, click area sizing (8 automated checks) | Passing on a notched MacBook, with Boring Notch running. Last run was before coverage was turned off in Release, with the same source |
-| Pill shape | Checked by screenshot |
+| Hover, reversal, click area sizing (8 automated checks) | Passing on a notched MacBook, on the clean Release build |
+| Pill and flare shape, collapsed and expanded | Checked by screenshot |
 | Right-click quit menu | **Not tested** |
 | Space swipes, full screen | **Not tested** |
 | External display, display without a notch | **Not tested** (geometry is unit tested) |

@@ -24,6 +24,7 @@ passing or to frames drawn. The spec for "at rest" is simple: **zero threads run
 | Scene | `CALayer` tree | DirectComposition visual tree |
 | Compositor | Render server (out of process) | DWM, `dwm.exe` (out of process) |
 | Pill shape | Layer `bounds` and `cornerRadius` | Rounded `IDCompositionRectangleClip` over a stretched 1×1 surface |
+| Top flares | Two fixed `CAShapeLayer`s that only move | Two small fixed surfaces, pixels computed once per DPI |
 | Animation | `CASpringAnimation` | Spring sampled into cubic `IDCompositionAnimation` segments |
 | Idle wait | `NSApplication` run loop | `GetMessageW` |
 | Hover | `NSTrackingArea` | `WM_MOUSEMOVE` + one-shot `TrackMouseEvent` |
@@ -84,7 +85,8 @@ A transition therefore changes the click area exactly twice per round trip, neve
 - Windows keeps one fixed window and switches a `SetWindowRgn` region. The coordinate space never
   moves, so nothing has to stay in step with the animation.
 
-The expanded area includes `overshootMargin`, because a spring passes its target briefly.
+The collapsed area includes the flares. The expanded area includes `overshootMargin`, which covers
+the flares and the brief moment a spring passes its target.
 
 Neither window ever takes focus. Typing, the frontmost app and Alt-Tab are unaffected.
 
@@ -111,6 +113,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Collapsed size | Physical notch if present, otherwise 180 pt wide |
 | Collapsed height without a notch | macOS: menu bar height. Windows: 32 |
 | Corner radius | 10 collapsed, 24 expanded, bottom corners only |
+| Top flares | Concave curve on each side where the island meets the screen edge, 8 pt, same size in both states |
 | Corner shape | macOS: continuous. Windows: circular (DirectComposition has no continuous corner) |
 | Overshoot margin | 16 pt |
 | Spring | Response 0.38 s, bounce 0.18 |
@@ -128,6 +131,8 @@ two have not yet been compared side by side on screen.
 - **Black over a black notch.** The collapsed pill matches the camera housing, so it looks like the
   hardware itself is expanding.
 - **Solid shapes, not bitmaps.** Neither app's pill has any pixels of its own to allocate or redraw.
+- **Move shapes, don't reshape them.** The flares never change shape. Each follows a pill edge with
+  the same spring, which avoids path animation entirely.
 - **Lazy everything.** Nothing exists until first needed, and content is released on collapse.
 
 ## Known limitations

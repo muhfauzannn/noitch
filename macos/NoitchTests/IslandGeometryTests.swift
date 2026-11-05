@@ -24,8 +24,15 @@ struct IslandGeometryTests {
         #expect(external.pillSize(for: .collapsed) == CGSize(width: IslandGeometry.virtualNotchWidth, height: 25))
     }
 
-    @Test func `the collapsed window is no larger than the pill, so it blocks no clicks around it`() {
-        #expect(notched.panelFrame(for: .collapsed).size == notched.pillSize(for: .collapsed))
+    @Test func `the collapsed window fits the pill and flares, so it blocks no clicks around them`() {
+        let pill = notched.pillSize(for: .collapsed)
+        let frame = notched.panelFrame(for: .collapsed)
+        #expect(frame.width == pill.width + IslandGeometry.flareRadius * 2)
+        #expect(frame.height == pill.height)
+    }
+
+    @Test func `the expanded window has room for the flares as well as overshoot`() {
+        #expect(IslandGeometry.overshootMargin > IslandGeometry.flareRadius)
     }
 
     @Test func `the expanded window leaves room for spring overshoot`() {

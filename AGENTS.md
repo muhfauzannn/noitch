@@ -10,8 +10,7 @@ Core Animation) and `windows/` (C++20, Win32, DirectComposition). They share no 
 **Any request to add or change a feature applies to macOS and Windows**, even if it doesn't mention
 a platform. Implement it in both apps in the same change.
 
-- Work on one platform only when the request says so explicitly, such as "macOS only" or "hanya
-  Windows".
+- Work on one platform only when the request says so explicitly, such as "macOS only".
 - If one OS has no way to support the feature, implement the other, then state the gap and the reason
   in your summary. Don't drop it silently.
 - Being unable to run Windows here is not a reason to skip it. Write the Windows code, run the checks

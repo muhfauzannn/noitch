@@ -11,7 +11,7 @@ next.
 | Stack | Swift, AppKit, Core Animation | C++20, Win32, DirectComposition |
 | Memory at rest | About 9 MB | Not measured |
 | CPU at rest | About 1 ms per minute | Not measured |
-| App size | 136 KB | Not measured |
+| App size | 152 KB | Not measured |
 | Dependencies | None | None |
 | Status | Runs and passes its checks | **Compiles; never run** |
 
