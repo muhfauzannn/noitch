@@ -1,5 +1,6 @@
 .DS_Store
 *.profraw
+.vscode/
 
 # macOS
 macos/build/
