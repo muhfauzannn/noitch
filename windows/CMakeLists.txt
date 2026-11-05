@@ -20,9 +20,19 @@ add_executable(Noitch WIN32
     src/noitch.manifest
     src/island/compositor.cpp
     src/island/island_window.cpp
+    src/features/home/home_controller.cpp
+    src/features/home/home_scene.cpp
+    src/features/lyrics/lyrics_source.cpp
+    src/features/now_playing/media_session_source.cpp
+    src/features/settings/settings_store.cpp
+    src/features/settings/settings_window.cpp
 )
+target_include_directories(Noitch PRIVATE src)
 target_compile_definitions(Noitch PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00 _HAS_EXCEPTIONS=0)
-target_link_libraries(Noitch PRIVATE d3d11 dcomp shcore user32 gdi32 uuid)
+target_link_libraries(Noitch PRIVATE
+    d3d11 dcomp shcore user32 gdi32 uuid advapi32 ole32 shell32
+    d2d1 dwrite windowscodecs winhttp runtimeobject delayimp
+)
 
 if(MSVC)
     target_compile_options(Noitch PRIVATE
@@ -36,6 +46,13 @@ if(MSVC)
         # Static vcruntime with the UCRT that ships in Windows 10+: no redistributable to install,
         # and no copy of the C runtime in the binary.
         "$<$<CONFIG:Release>:/NODEFAULTLIB:libucrt.lib;ucrt.lib>"
+        # Everything Home needs costs nothing until the island first opens.
+        /DELAYLOAD:d2d1.dll
+        /DELAYLOAD:dwrite.dll
+        /DELAYLOAD:windowscodecs.dll
+        /DELAYLOAD:winhttp.dll
+        /DELAYLOAD:api-ms-win-core-winrt-l1-1-0.dll
+        /DELAYLOAD:api-ms-win-core-winrt-string-l1-1-0.dll
         "$<$<CONFIG:Release>:/LTCG;/OPT:REF;/OPT:ICF;/INCREMENTAL:NO>"
     )
 endif()

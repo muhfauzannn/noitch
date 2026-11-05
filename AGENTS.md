@@ -51,6 +51,10 @@ The app must have **no runnable threads at rest**, and our process must do **no 
 - Web views or embedded runtimes
 - SwiftUI inside the island (it is allowed only in separate, lazily created windows)
 
+MediaRemoteAdapter on macOS is the one approved exception for dependencies, extra processes and
+private APIs. Its limits are in [docs/architecture.md](docs/architecture.md#now-playing-on-macos);
+don't widen them without asking.
+
 Moving to a shared cross-platform layer is out of scope. The duplication is deliberate.
 
 ## Project structure

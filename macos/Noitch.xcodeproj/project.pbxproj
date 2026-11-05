@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A10000000000000000000052 /* mediaremote-adapter.pl in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000050 /* mediaremote-adapter.pl */; };
+		A10000000000000000000053 /* MediaRemoteAdapter.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A10000000000000000000051 /* MediaRemoteAdapter.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A10000000000000000000020 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -16,7 +21,23 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000055 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A10000000000000000000053 /* MediaRemoteAdapter.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		A10000000000000000000050 /* mediaremote-adapter.pl */ = {isa = PBXFileReference; lastKnownFileType = text.script.perl; path = "mediaremote-adapter.pl"; sourceTree = "<group>"; };
+		A10000000000000000000051 /* MediaRemoteAdapter.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = MediaRemoteAdapter.framework; sourceTree = "<group>"; };
 		A10000000000000000000002 /* Noitch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Noitch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000003 /* NoitchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NoitchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -40,8 +61,19 @@
 			children = (
 				A10000000000000000000004 /* Noitch */,
 				A10000000000000000000005 /* NoitchTests */,
+				A10000000000000000000056 /* Vendor */,
 				A10000000000000000000007 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		A10000000000000000000056 /* Vendor */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000050 /* mediaremote-adapter.pl */,
+				A10000000000000000000051 /* MediaRemoteAdapter.framework */,
+			);
+			name = Vendor;
+			path = Vendor/MediaRemoteAdapter;
 			sourceTree = "<group>";
 		};
 		A10000000000000000000007 /* Products */ = {
@@ -61,6 +93,8 @@
 			buildConfigurationList = A10000000000000000000031 /* Build configuration list for PBXNativeTarget "Noitch" */;
 			buildPhases = (
 				A10000000000000000000011 /* Sources */,
+				A10000000000000000000054 /* Resources */,
+				A10000000000000000000055 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -122,6 +156,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000054 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000052 /* mediaremote-adapter.pl in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A10000000000000000000011 /* Sources */ = {
