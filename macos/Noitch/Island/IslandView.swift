@@ -13,6 +13,7 @@ final class IslandView: NSView {
     private let pill = CALayer()
     private let leftFlare = IslandView.makeFlare(mirrored: false)
     private let rightFlare = IslandView.makeFlare(mirrored: true)
+    private var hoverTrackingArea: NSTrackingArea?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -43,14 +44,24 @@ final class IslandView: NSView {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        if trackingAreas.isEmpty {
-            // Delivered by the window server only on crossing the edge: no polling, no global monitor.
-            addTrackingArea(NSTrackingArea(
-                rect: .zero,
-                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-                owner: self
-            ))
+        refreshHoverTrackingArea()
+    }
+
+    /// Delivered by the window server only on crossing the edge: no polling or global monitor.
+    func refreshHoverTrackingArea() {
+        if let hoverTrackingArea, hoverTrackingArea.rect == bounds { return }
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
+        guard !bounds.isEmpty else {
+            hoverTrackingArea = nil
+            return
         }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
     }
 
     override func mouseEntered(with event: NSEvent) { onHoverChange?(true) }

@@ -22,6 +22,7 @@ private:
     void FinishTransition();
     void UpdateHitRegion();
     void ShowMenu();
+    bool CursorInCollapsedHitRegion() const;
 
     HWND hwnd_ = nullptr;
     Compositor compositor_;
@@ -29,6 +30,9 @@ private:
     PillMotion motion_;
     IslandState state_ = IslandState::Collapsed;
     bool trackingLeave_ = false;
+    bool ignoreHoverUntilLeave_ = false;
+    bool hoverOpenPending_ = false;
+    bool windowHasExpandedHitRegion_ = false;
 };
 
 }  // namespace noitch

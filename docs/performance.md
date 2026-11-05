@@ -7,20 +7,24 @@ one needs an explicit decision, not a quiet increase.
 
 | Metric | Budget | macOS now | Windows now |
 | --- | --- | --- | --- |
-| Memory at rest | 12 MB macOS, 30 MB Windows | 8.7–9.0 MB | Not measured |
-| CPU at rest | 20 ms per minute | 0.9–1.8 ms | Not measured |
-| Wakeups at rest | 0.5 per second | 0.10–0.17 | Not measured |
-| CPU per transition | 10 ms | 5.73 ms | Not measured |
+| Memory at rest | 12 MB macOS, 30 MB Windows | 8.48–8.50 MB | Not measured |
+| CPU at rest | 20 ms per minute | 3.23–3.37 ms | Not measured |
+| Wakeups at rest | 0.5 per second | 0.10–0.13 | Not measured |
+| CPU per transition | 10 ms | 3.84 ms | Not measured |
 | Threads at rest | None runnable | Holds, per the CPU figures | Not measured |
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 0 | 0 | 0 |
 
-macOS figures are from the Release app on an Apple M5, macOS 26.6, with only the foundation in place.
-The app bundle is 152 KB.
+Current macOS figures are from Release runs on an Apple M5, macOS 26.6, after adding delayed hover
+and collapse re-entry handling. The latest idle reads ranged from 8.48–8.50 MB, 3.23–3.37 ms/min and
+0.10–0.13 wakeups/s. The hover run measured 3.84 ms per transition. The earlier foundation-only
+baseline was 8.7–9.0 MB, 0.9–1.8 ms/min, 0.10–0.17 wakeups/s and 5.73 ms per transition.
 
-- The rest figures cover four clean runs. A fifth run showed 145 ms per minute and 6.1 wakeups per
-  second. It did not recur in three more runs, during which the cursor never entered the island. Its
-  cause is unknown; real hover is one possibility, as cursor position was not logged in that run.
+- The new idle reads were taken with the cursor away from the island. One run measured 33.35 ms/min
+  and 1.33 wakeups/s; the repeated idle and hover runs passed, and the cause of that outlier is unknown.
+- The earlier foundation baseline covered four clean runs; a fifth run showed 145 ms per minute and
+  6.1 wakeups per second. It did not recur in three more runs, during which the cursor never entered
+  the island.
 - CPU per transition includes the two flare layers, which each add a spring and a position update.
 
 The Windows memory budget is provisional, set to match Nusa's claimed 30 MB. Direct3D loads GPU driver

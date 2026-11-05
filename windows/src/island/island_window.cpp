@@ -8,6 +8,7 @@ namespace {
 
 constexpr wchar_t kClassName[] = L"NoitchIsland";
 constexpr UINT_PTR kSettleTimer = 1;
+constexpr UINT_PTR kHoverIntentTimer = 2;
 constexpr UINT kQuitCommand = 1;
 
 double NowSeconds() {
@@ -38,7 +39,30 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
     const HRESULT hr = compositor_.Create(hwnd_);
     if (FAILED(hr)) return hr;
     ApplyLayout();
+
+    // Showing the window under a stationary pointer can produce an initial WM_MOUSEMOVE. Ignore
+    // that synthetic entry until the pointer leaves, so launch alone never expands the island.
+    POINT cursor{};
+    RECT windowRect{};
+    if (GetCursorPos(&cursor) && GetWindowRect(hwnd_, &windowRect)) {
+        const Pill collapsed = geometry_.PillFor(IslandState::Collapsed);
+        const int flare = geometry_.FlareRadius();
+        const RECT hitRegion{
+            windowRect.left + static_cast<int>(collapsed.left) - flare,
+            windowRect.top,
+            windowRect.left + static_cast<int>(collapsed.right) + flare,
+            windowRect.top + static_cast<int>(collapsed.bottom),
+        };
+        if (PtInRect(&hitRegion, cursor)) {
+            ignoreHoverUntilLeave_ = true;
+        }
+    }
     ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+    if (ignoreHoverUntilLeave_ && !trackingLeave_) {
+        TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
+        trackingLeave_ = TrackMouseEvent(&track) != FALSE;
+        if (!trackingLeave_) ignoreHoverUntilLeave_ = false;
+    }
     return S_OK;
 }
 
@@ -59,11 +83,26 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
                 // One-shot: the system posts WM_MOUSELEAVE on exit, so hover costs nothing at rest.
                 TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
                 trackingLeave_ = TrackMouseEvent(&track) != FALSE;
-                TransitionTo(IslandState::Expanded);
+            }
+            if (!ignoreHoverUntilLeave_ && !windowHasExpandedHitRegion_ && state_ == IslandState::Collapsed &&
+                !hoverOpenPending_) {
+                hoverOpenPending_ = SetTimer(hwnd_, kHoverIntentTimer, 150, nullptr) != 0;
+                if (!hoverOpenPending_) TransitionTo(IslandState::Expanded);
             }
             return 0;
         case WM_MOUSELEAVE:
             trackingLeave_ = false;
+            KillTimer(hwnd_, kHoverIntentTimer);
+            hoverOpenPending_ = false;
+            if (ignoreHoverUntilLeave_) {
+                if (!CursorInCollapsedHitRegion()) ignoreHoverUntilLeave_ = false;
+                else {
+                    TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
+                    trackingLeave_ = TrackMouseEvent(&track) != FALSE;
+                    if (!trackingLeave_) ignoreHoverUntilLeave_ = false;
+                }
+                return 0;
+            }
             TransitionTo(IslandState::Collapsed);
             return 0;
         case WM_MOUSEACTIVATE:
@@ -72,7 +111,16 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             ShowMenu();
             return 0;
         case WM_TIMER:
-            if (wparam == kSettleTimer) FinishTransition();
+            if (wparam == kHoverIntentTimer) {
+                KillTimer(hwnd_, kHoverIntentTimer);
+                hoverOpenPending_ = false;
+                if (trackingLeave_ && !ignoreHoverUntilLeave_ && !windowHasExpandedHitRegion_ &&
+                    state_ == IslandState::Collapsed && CursorInCollapsedHitRegion()) {
+                    TransitionTo(IslandState::Expanded);
+                }
+            } else if (wparam == kSettleTimer) {
+                FinishTransition();
+            }
             return 0;
         case WM_DISPLAYCHANGE:
         case WM_DPICHANGED:
@@ -103,6 +151,9 @@ void IslandWindow::ApplyLayout() {
     SetWindowPos(hwnd_, HWND_TOPMOST, x, screen.top, size.width, size.height, SWP_NOACTIVATE);
 
     KillTimer(hwnd_, kSettleTimer);
+    KillTimer(hwnd_, kHoverIntentTimer);
+    hoverOpenPending_ = false;
+    windowHasExpandedHitRegion_ = state_ == IslandState::Expanded;
     const Pill pill = geometry_.PillFor(state_);
     motion_.Jump(pill);
     UpdateHitRegion();
@@ -115,7 +166,10 @@ void IslandWindow::TransitionTo(IslandState next) {
     state_ = next;
     motion_.Retarget(geometry_.PillFor(next), NowSeconds());
     // Grow the hit region before expanding and shrink it after collapsing.
-    if (next == IslandState::Expanded) UpdateHitRegion();
+    if (next == IslandState::Expanded) {
+        windowHasExpandedHitRegion_ = true;
+        UpdateHitRegion();
+    }
     compositor_.AnimatePill(motion_);
     // One-shot, not periodic: it fires once, when DWM has finished the curve.
     SetTimer(hwnd_, kSettleTimer, static_cast<UINT>(motion_.Duration() * 1000) + 1, nullptr);
@@ -125,7 +179,32 @@ void IslandWindow::FinishTransition() {
     KillTimer(hwnd_, kSettleTimer);
     // Replacing the animations with constants lets DWM release them.
     compositor_.ShowPill(motion_.Target());
-    if (state_ == IslandState::Collapsed) UpdateHitRegion();
+    if (state_ == IslandState::Collapsed) {
+        UpdateHitRegion();
+        windowHasExpandedHitRegion_ = false;
+        ignoreHoverUntilLeave_ = CursorInCollapsedHitRegion();
+        if (ignoreHoverUntilLeave_ && !trackingLeave_) {
+            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
+            trackingLeave_ = TrackMouseEvent(&track) != FALSE;
+            if (!trackingLeave_) ignoreHoverUntilLeave_ = false;
+        } else if (!ignoreHoverUntilLeave_) {
+            trackingLeave_ = false;
+        }
+    }
+}
+
+bool IslandWindow::CursorInCollapsedHitRegion() const {
+    POINT cursor{};
+    if (!GetCursorPos(&cursor) || !ScreenToClient(hwnd_, &cursor)) return false;
+    const Pill collapsed = geometry_.PillFor(IslandState::Collapsed);
+    const int flare = geometry_.FlareRadius();
+    const RECT hitRegion{
+        static_cast<int>(collapsed.left) - flare,
+        0,
+        static_cast<int>(collapsed.right) + flare,
+        static_cast<int>(collapsed.bottom),
+    };
+    return PtInRect(&hitRegion, cursor) != FALSE;
 }
 
 // The window has a fixed size, so the region is what keeps it from blocking clicks around the island.
