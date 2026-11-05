@@ -1,6 +1,9 @@
 #include "island_window.h"
 
 #include <shellscalingapi.h>
+#include <windowsx.h>
+
+#include "features/settings/settings_store.h"
 
 namespace noitch {
 
@@ -9,6 +12,7 @@ namespace {
 constexpr wchar_t kClassName[] = L"NoitchIsland";
 constexpr UINT_PTR kSettleTimer = 1;
 constexpr UINT kQuitCommand = 1;
+constexpr UINT kSettingsCommand = 2;
 
 double NowSeconds() {
     LARGE_INTEGER frequency;
@@ -21,6 +25,8 @@ double NowSeconds() {
 }  // namespace
 
 HRESULT IslandWindow::Create(HINSTANCE instance) {
+    instance_ = instance;
+    settings_ = LoadSettings();
     WNDCLASSEXW windowClass{};
     windowClass.cbSize = sizeof(windowClass);
     windowClass.lpfnWndProc = WndProc;
@@ -37,6 +43,16 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
 
     const HRESULT hr = compositor_.Create(hwnd_);
     if (FAILED(hr)) return hr;
+    home_.Initialize(hwnd_, &compositor_, NowSeconds);
+    home_.Apply(settings_);
+    home_.onOpenSettings = [](void* context) { static_cast<IslandWindow*>(context)->OpenSettings(); };
+    home_.onOpenSettingsContext = this;
+    settingsWindow_.context = this;
+    settingsWindow_.onChange = [](void* context, const AppSettings& settings) {
+        auto* self = static_cast<IslandWindow*>(context);
+        self->settings_ = settings;
+        self->home_.Apply(settings);
+    };
     ApplyLayout();
 
     ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
@@ -58,9 +74,37 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT message, WPARAM wparam, L
     return self ? self->HandleMessage(message, wparam, lparam) : DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
+float IslandWindow::PointerX(LPARAM lparam) const {
+    return static_cast<float>(GET_X_LPARAM(lparam)) - geometry_.PillFor(IslandState::Expanded).left;
+}
+
+float IslandWindow::PointerY(LPARAM lparam) const {
+    return static_cast<float>(GET_Y_LPARAM(lparam));
+}
+
 LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (home_.HandleMessage(message, wparam, lparam)) return 0;
     switch (message) {
+        case WM_LBUTTONDOWN:
+            if (state_ == IslandState::Expanded) {
+                // Keeps a slider drag ours when the pointer leaves the island.
+                SetCapture(hwnd_);
+                home_.PointerDown(PointerX(lparam), PointerY(lparam));
+            }
+            return 0;
+        case WM_LBUTTONUP:
+            if (GetCapture() == hwnd_) ReleaseCapture();
+            if (state_ == IslandState::Expanded) {
+                home_.PointerUp(PointerX(lparam), PointerY(lparam));
+                // A slider drag can end outside the island, where no leave message will follow.
+                if (!CursorInWindow()) TransitionTo(IslandState::Collapsed);
+            } else if (!settings_.openOnHover) {
+                TransitionTo(IslandState::Expanded);
+            }
+            return 0;
         case WM_MOUSEMOVE:
+            if (state_ == IslandState::Expanded) home_.PointerMoved(PointerX(lparam), PointerY(lparam));
+            [[fallthrough]];
         case WM_MOUSEWHEEL:
             if (!trackingLeave_) {
                 // One-shot: the system posts WM_MOUSELEAVE on exit, so hover costs nothing at rest.
@@ -71,6 +115,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             return 0;
         case WM_MOUSELEAVE:
             trackingLeave_ = false;
+            if (home_.IsInteracting()) return 0;
             TransitionTo(IslandState::Collapsed);
             if (CursorInCollapsedHitRegion()) OpenIfPointerInNotch();
             return 0;
@@ -86,6 +131,10 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
         case WM_DPICHANGED:
             ApplyLayout();
             compositor_.RecoverIfLost(geometry_.PillFor(state_));
+            if (compositor_.Generation() != compositorGeneration_) {
+                compositorGeneration_ = compositor_.Generation();
+                home_.DeviceLost();
+            }
             return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
@@ -125,6 +174,10 @@ void IslandWindow::TransitionTo(IslandState next) {
     // Grow the hit region before expanding and shrink it after collapsing.
     if (next == IslandState::Expanded) {
         UpdateHitRegion();
+        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(), geometry_.Scale());
+        home_.IslandWillOpen(layout, geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale());
+    } else {
+        home_.IslandWillClose();
     }
     compositor_.AnimatePill(motion_);
     // One-shot, not periodic: it fires once, when DWM has finished the curve.
@@ -142,7 +195,7 @@ void IslandWindow::FinishTransition() {
 }
 
 void IslandWindow::OpenIfPointerInNotch() {
-    if (state_ == IslandState::Collapsed && CursorInCollapsedHitRegion()) {
+    if (state_ == IslandState::Collapsed && settings_.openOnHover && CursorInCollapsedHitRegion()) {
         TransitionTo(IslandState::Expanded);
     }
 }
@@ -161,6 +214,16 @@ bool IslandWindow::CursorInCollapsedHitRegion() const {
     return PtInRect(&hitRegion, cursor) != FALSE;
 }
 
+bool IslandWindow::CursorInWindow() const {
+    POINT cursor{};
+    RECT window{};
+    return GetCursorPos(&cursor) && GetWindowRect(hwnd_, &window) && PtInRect(&window, cursor);
+}
+
+void IslandWindow::OpenSettings() {
+    settingsWindow_.Show(instance_, settings_);
+}
+
 // The window has a fixed size, so the region is what keeps it from blocking clicks around the island.
 void IslandWindow::UpdateHitRegion() {
     if (state_ == IslandState::Expanded) {
@@ -174,6 +237,8 @@ void IslandWindow::UpdateHitRegion() {
 
 void IslandWindow::ShowMenu() {
     const HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, kSettingsCommand, L"Settings…");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kQuitCommand, L"Quit Noitch");
     POINT cursor;
     GetCursorPos(&cursor);
@@ -182,6 +247,7 @@ void IslandWindow::ShowMenu() {
     const UINT command = static_cast<UINT>(TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY, cursor.x, cursor.y, 0, hwnd_, nullptr));
     DestroyMenu(menu);
     if (command == kQuitCommand) DestroyWindow(hwnd_);
+    if (command == kSettingsCommand) OpenSettings();
 }
 
 }  // namespace noitch

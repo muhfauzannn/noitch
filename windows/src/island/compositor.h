@@ -28,6 +28,18 @@ public:
     // Rebuilds the tree if the GPU device was lost. Call on display changes, never on a timer.
     HRESULT RecoverIfLost(const Pill& pill);
 
+    // A surface for what sits on the pill. Its visual is inside the pill's clip, so transitions
+    // reveal and hide it in DWM with nothing else to animate. `left` is the expanded pill's left edge.
+    HRESULT CreateContentSurface(UINT width, UINT height, float left, IDCompositionSurface** surface);
+    HRESULT RemoveContent();
+    HRESULT Commit() { return device_->Commit(); }
+
+    // For Direct2D, which draws on the same device as the composition surfaces.
+    IDXGIDevice* DxgiDevice() const { return dxgi_.Get(); }
+
+    // Rises when the tree is rebuilt. Anything made from the old device must then be made again.
+    int Generation() const { return generation_; }
+
 private:
     HRESULT BuildScene();
     HRESULT BuildFlare(IDCompositionVisual* visual, bool mirrored);
@@ -36,12 +48,15 @@ private:
 
     HWND hwnd_ = nullptr;
     int flareRadius_ = 0;
+    int generation_ = 0;
+    Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
     Microsoft::WRL::ComPtr<IDCompositionDevice> device_;
     Microsoft::WRL::ComPtr<IDCompositionTarget> target_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> root_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> body_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> fill_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual> content_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> leftFlare_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> rightFlare_;
     Microsoft::WRL::ComPtr<IDCompositionRectangleClip> clip_;

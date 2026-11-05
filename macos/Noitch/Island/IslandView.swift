@@ -6,6 +6,11 @@ import QuartzCore
 final class IslandView: NSView {
     var onHoverChange: ((Bool, CGPoint) -> Void)?
     var onSecondaryClick: ((NSEvent) -> Void)?
+    /// Points are from the pill's top-left corner with y growing downward, as `HomeLayout` measures.
+    var onPointerMoved: ((CGPoint) -> Void)?
+    var onPrimaryDown: ((CGPoint) -> Void)?
+    var onPrimaryDragged: ((CGPoint) -> Void)?
+    var onPrimaryUp: ((CGPoint) -> Void)?
 
     /// Flares reach this far into the pill, so no seam shows at a fractional position.
     private static let flareOverlap: CGFloat = 1
@@ -14,6 +19,8 @@ final class IslandView: NSView {
     private let leftFlare = IslandView.makeFlare(mirrored: false)
     private let rightFlare = IslandView.makeFlare(mirrored: true)
     private var hoverTrackingArea: NSTrackingArea?
+    private weak var content: CALayer?
+    private var contentSize = CGSize.zero
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -83,6 +90,32 @@ final class IslandView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         onHoverChange?(true, screenLocation(of: event))
+        onPointerMoved?(contentLocation(of: event))
+    }
+
+    /// The panel never becomes key, so without this the first click would only be swallowed.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) { onPrimaryDown?(contentLocation(of: event)) }
+
+    override func mouseDragged(with event: NSEvent) { onPrimaryDragged?(contentLocation(of: event)) }
+
+    override func mouseUp(with event: NSEvent) { onPrimaryUp?(contentLocation(of: event)) }
+
+    private func contentLocation(of event: NSEvent) -> CGPoint {
+        let point = convert(event.locationInWindow, from: nil)
+        return CGPoint(
+            x: point.x - (bounds.midX - contentSize.width / 2),
+            y: bounds.maxY - IslandGeometry.topEdgeHitMargin - point.y
+        )
+    }
+
+    /// Shows a feature's layers on the pill. `size` is the area they cover when expanded.
+    func setContent(_ layer: CALayer, size: CGSize) {
+        contentSize = size
+        content = layer
+        self.layer?.addSublayer(layer)
+        pinPill()
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -104,6 +137,7 @@ final class IslandView: NSView {
         withoutImplicitAnimations {
             let top = bounds.maxY - IslandGeometry.topEdgeHitMargin
             pill.position = CGPoint(x: bounds.midX, y: top)
+            content?.position = pill.position
             let flares = flarePositions(pillWidth: pill.bounds.width)
             leftFlare.position = CGPoint(x: flares.left, y: top)
             rightFlare.position = CGPoint(x: flares.right, y: top)

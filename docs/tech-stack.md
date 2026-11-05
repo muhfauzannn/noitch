@@ -7,7 +7,7 @@
 | Rendering | Core Animation | DirectComposition, Direct3D 11 |
 | Build | Xcode project | CMake, MSVC |
 | Minimum OS | macOS 14 | Windows 10 1809 (intended, untested) |
-| Third-party dependencies | None | None |
+| Third-party dependencies | MediaRemoteAdapter | None |
 | Evidence | **Measured on real hardware** | **Documentation only; never run** |
 
 The confidence behind these two columns is very different, and the rest of this page keeps that
@@ -98,6 +98,17 @@ The cost of the choice is `spring.h`, which is written and tested. The benefit i
 layer, which is plausible but **unmeasured**. All the composition code is in `compositor.cpp`, so
 switching later is contained. [performance.md](performance.md#first-run-on-windows) lists the
 comparison to run.
+
+## macOS: the adapter
+
+Now playing on macOS uses MediaRemoteAdapter, vendored in `macos/Vendor/MediaRemoteAdapter/`, because
+macOS offers no public alternative that covers every player. Per-app events from Spotify and Music were
+the other option; they need no extra process, but miss browsers and every other player. The choice was
+made to match Boring Notch, and its limits are in
+[architecture.md](architecture.md#now-playing-on-macos).
+
+The adapter's binary is prebuilt, not built from source here. Boring Notch itself is GPL-3, so Noitch
+reimplements its behavior and copies none of its code. Only the BSD-licensed adapter is reused.
 
 ## Trade-offs accepted
 

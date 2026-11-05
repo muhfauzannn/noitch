@@ -13,7 +13,7 @@ struct IslandGeometry: Equatable {
         var menuBarHeight: CGFloat
     }
 
-    static let expandedSize = CGSize(width: 440, height: 140)
+    static let expandedSize = CGSize(width: 580, height: 180)
     static let collapsedCornerRadius: CGFloat = 10
     static let expandedCornerRadius: CGFloat = 24
     /// The concave curve on each side, where the island meets the top of the screen.

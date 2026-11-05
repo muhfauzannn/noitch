@@ -7,15 +7,29 @@ one needs an explicit decision, not a quiet increase.
 
 | Metric | Budget | macOS now | Windows now |
 | --- | --- | --- | --- |
-| Memory at rest | 12 MB macOS, 30 MB Windows | 8.53–8.59 MB | Not measured |
-| CPU at rest | 20 ms per minute | 1.05–1.19 ms | Not measured |
-| Wakeups at rest | 0.5 per second | 0.10 | Not measured |
-| CPU per transition | 10 ms | 4.03 ms | Not measured |
+| Memory at rest | 12 MB macOS, 30 MB Windows | 9.14 MB, 10.13 MB after Home and seek were used | Not measured |
+| CPU at rest | 20 ms per minute | 1.48–2.87 ms | Not measured |
+| Wakeups at rest | 0.5 per second | 0.13–0.17 | Not measured |
+| CPU per transition | 10 ms | 4.83 ms | Not measured |
 | Threads at rest | None runnable | Holds, per the CPU figures | Not measured |
 | Per-frame work in our process | None | By design | By design |
-| Third-party dependencies | 0 | 0 | 0 |
+| Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
-Current macOS figures are from Release runs on an Apple M5, macOS 26.6, after switching to immediate real-notch activation with
+Current macOS figures are from two Release runs on an Apple M5, macOS 26.6, with Home, Settings and
+the adapter in place, while a browser played media. Immediately before this change, the same machine
+read 9.20 MB, 1.27 ms/min and 0.10 wakeups/s. With the adapter held out, the same build read 1.01
+ms/min and 4.23 ms per transition, so the difference in idle CPU between runs is unexplained.
+
+After opening Home and seeking, once everything was released, the app read 10.13 MB, 0.19 ms/min and
+0.03 wakeups/s, with no child left. These runs had no artwork, because the player sent none.
+
+These budgets cover our process only. While the island is open, and for 10 to 12 seconds after, the
+adapter's `perl` child adds about 26 MB of resident memory that the table doesn't show.
+
+SF Symbols were replaced by path icons after measuring them: the symbol catalog kept about 2 MB after
+Home was released, reading 11.84 MB against 9.86 MB, too close to the 12 MB budget.
+
+Earlier figures, from Release runs after switching to immediate real-notch activation with
 mouse/scroll event reconciliation and no reopening lock or hover timer. The latest idle reads
 ranged from 8.53–8.59 MB, 1.05–1.19 ms/min and 0.10 wakeups/s. The hover run measured
 4.03 ms per transition. A preceding idle run exceeded the budget at 566.36 ms/min and 14.63 wakeups/s;
@@ -81,6 +95,8 @@ In this codebase:
   animations until the hover check caught it. Unit tests and idle measurements both missed it.
 - Test interaction, not only rest. Budgets at rest say nothing about behavior under hover.
 - Another notch app above the island takes its mouse events, which looks like a hover bug.
+- Memory at rest must be measured after a feature has been used, not only at launch. SF Symbols passed
+  the launch measurement and took 2 MB that never came back.
 - Xcode enables code coverage by default, even in Release. It doubled the binary size and invalidated
   a round of measurements. Release now turns it off, and `measure.sh` refuses instrumented builds.
 
@@ -101,4 +117,5 @@ Then these experiments, each of which could change a decision:
 | How much private memory does `D3D11CreateDevice` add? | Probably the largest single cost |
 | Does `D3D_DRIVER_TYPE_WARP` work for a 1×1 surface, and is it lighter? | Could avoid loading the GPU driver at all |
 | Does a Windows.UI.Composition version cost more? | Tests the [DirectComposition decision](tech-stack.md#rendering-directcomposition) |
+| What do WinRT, Direct2D and DirectWrite add to private memory, and does it return after release? | They are the first things loaded after launch |
 | Does EcoQoS (`PROCESS_POWER_THROTTLING`) help without hurting hover latency? | Possible battery gain |

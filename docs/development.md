@@ -15,7 +15,14 @@ open macos/build/Build/Products/Release/Noitch.app
 xcodebuild test -project macos/Noitch.xcodeproj -scheme Noitch -destination 'platform=macOS,arch=arm64' -derivedDataPath macos/build
 ```
 
-Noitch has no Dock icon or menu bar item. **Right-click the island to quit**, or run `pkill -x Noitch`.
+Noitch has no Dock icon or menu bar item. **Right-click the island for Settings and Quit**, or run
+`pkill -x Noitch`.
+
+To check Home's layout without the adapter or the network, run a Debug build with sample data:
+
+```sh
+macos/build/Build/Products/Debug/Noitch.app/Contents/MacOS/Noitch --demo-media
+```
 
 Quit other notch apps such as Boring Notch while testing. They compete for the same screen area and
 the same mouse events.
@@ -54,6 +61,10 @@ zig c++ -target x86_64-windows-gnu -std=c++20 -fno-exceptions -fno-rtti -DUNICOD
   -ld3d11 -ldcomp -lshcore -luser32 -lgdi32 -luuid -o /tmp/Noitch.exe
 ```
 
+This no longer links, because mingw has no `windows.media.control.h`. To type-check everything else,
+add `-Isrc -c`, compile one file at a time, and put a stub of that header on the include
+path. `media_session_source.cpp` can only be checked by MSVC.
+
 ## CI
 
 GitHub Actions runs on pushes to `main` and on pull requests, one workflow per platform, each only
@@ -79,10 +90,17 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 6 unit tests | Passing |
+| Builds; 33 unit tests | Passing |
 | Budgets at rest | Passing |
 | Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Passing on a notched MacBook, on the clean Release build |
 | Pill and flare shape, collapsed and expanded | Checked by screenshot |
+| Home layout, lyrics panel, header buttons, opening Settings by click | Checked with `--demo-media` and real clicks |
+| Adapter stream, play/pause and seek by real clicks | Passing with a browser player on macOS 26.6 |
+| Adapter stops after closing, and on quit | Passing |
+| Lyrics lookup from LRCLIB | Passing for one known track, outside a real playback session |
+| Artwork, next, previous, shuffle, repeat on a real player | **Not tested**; the player used sent no artwork |
+| Spotify and Music | **Not tested** |
+| Launch at login, Open on hover turned off | **Not tested** |
 | Right-click quit menu | **Not tested** |
 | Space swipes, full screen | **Not tested** |
 | External display, display without a notch | **Not tested** (geometry is unit tested) |
@@ -94,12 +112,13 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Spring and geometry tests | Passing on macOS, under ASan and UBSan |
-| Compiles and links | With Zig and mingw only |
+| Spring, geometry, Home, lyrics and JSON tests | Passing on macOS, under ASan and UBSan |
+| Compiles | With Zig and mingw, using a stub for the WinRT header. It no longer links there |
+| `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |
 | **Built with MSVC** | **Never**; `windows.yml` will do this on its first run |
 | **Run on Windows** | **Never** |
-| Rendering, hover, click-through, DPI | **Unverified** |
+| Rendering, hover, click-through, DPI, Home, Settings | **Unverified** |
 
 Treat the Windows app as untested code. Start with
 [First run on Windows](performance.md#first-run-on-windows).

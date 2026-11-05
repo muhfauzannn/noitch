@@ -26,6 +26,8 @@ HRESULT Compositor::BuildScene() {
     root_.Reset();
     body_.Reset();
     fill_.Reset();
+    content_.Reset();
+    dxgi_.Reset();
     leftFlare_.Reset();
     rightFlare_.Reset();
     clip_.Reset();
@@ -39,9 +41,8 @@ HRESULT Compositor::BuildScene() {
                                    nullptr, 0, D3D11_SDK_VERSION, &d3d, nullptr, &context_);
     if (FAILED(hr)) return hr;
 
-    ComPtr<IDXGIDevice> dxgi;
-    if (FAILED(hr = d3d.As(&dxgi))) return hr;
-    if (FAILED(hr = DCompositionCreateDevice(dxgi.Get(), IID_PPV_ARGS(&device_)))) return hr;
+    if (FAILED(hr = d3d.As(&dxgi_))) return hr;
+    if (FAILED(hr = DCompositionCreateDevice(dxgi_.Get(), IID_PPV_ARGS(&device_)))) return hr;
     if (FAILED(hr = device_->CreateTargetForHwnd(hwnd_, TRUE, &target_))) return hr;
     if (FAILED(hr = device_->CreateVisual(&root_))) return hr;
     if (FAILED(hr = device_->CreateVisual(&body_))) return hr;
@@ -164,8 +165,31 @@ HRESULT Compositor::RecoverIfLost(const Pill& pill) {
     BOOL valid = FALSE;
     HRESULT hr = device_->CheckDeviceState(&valid);
     if (SUCCEEDED(hr) && valid) return S_OK;
+    ++generation_;
     if (FAILED(hr = BuildScene())) return hr;
     return ShowPill(pill);
+}
+
+HRESULT Compositor::CreateContentSurface(UINT width, UINT height, float left, IDCompositionSurface** surface) {
+    HRESULT hr;
+    if (!content_) {
+        if (FAILED(hr = device_->CreateVisual(&content_))) return hr;
+        // Above fill_, so the black pill stays behind it.
+        if (FAILED(hr = body_->AddVisual(content_.Get(), TRUE, fill_.Get()))) return hr;
+    }
+    ComPtr<IDCompositionSurface> created;
+    if (FAILED(hr = device_->CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED, &created))) return hr;
+    if (FAILED(hr = content_->SetOffsetX(left))) return hr;
+    if (FAILED(hr = content_->SetContent(created.Get()))) return hr;
+    *surface = created.Detach();
+    return S_OK;
+}
+
+HRESULT Compositor::RemoveContent() {
+    if (!content_) return S_OK;
+    HRESULT hr = body_->RemoveVisual(content_.Get());
+    content_.Reset();
+    return FAILED(hr) ? hr : device_->Commit();
 }
 
 }  // namespace noitch

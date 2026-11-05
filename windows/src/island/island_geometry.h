@@ -31,6 +31,13 @@ public:
 
     int FlareRadius() const { return Px(kFlareRadius); }
 
+    float Scale() const { return scale_; }
+
+    // Logical sizes for laying out what sits on the expanded pill.
+    static constexpr float ExpandedWidth() { return kExpandedWidth; }
+    static constexpr float ExpandedHeight() { return kExpandedHeight; }
+    static constexpr float CollapsedHeight() { return kCollapsedHeight; }
+
     Pill PillFor(IslandState state) const {
         const bool expanded = state == IslandState::Expanded;
         const float halfWidth = (expanded ? kExpandedWidth : kCollapsedWidth) * scale_ / 2;
@@ -48,8 +55,8 @@ private:
     static constexpr float kCollapsedWidth = 180;
     static constexpr float kCollapsedHeight = 32;
     static constexpr float kCollapsedRadius = 10;
-    static constexpr float kExpandedWidth = 440;
-    static constexpr float kExpandedHeight = 140;
+    static constexpr float kExpandedWidth = 580;
+    static constexpr float kExpandedHeight = 180;
     static constexpr float kExpandedRadius = 24;
     static constexpr float kFlareRadius = 8;
     static constexpr float kOvershootMargin = 16;

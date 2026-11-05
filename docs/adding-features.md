@@ -13,6 +13,9 @@ Each feature has up to two parts, in its own folder (`macos/Noitch/Features/<Nam
 
 The island's controller connects the two and remains the only owner of state.
 
+`HomeController` also sits between the island and its sources, so the island's own controller stays
+about the window.
+
 Don't add a `Feature` protocol, plugin registry, event bus or dependency injection for the first
 feature. Write it concretely. Extract an abstraction when a second feature shows what is actually
 shared.
@@ -47,8 +50,7 @@ shared.
 - Text and images are drawn once with Direct2D and DirectWrite into an `IDCompositionSurface`, then
   shown by a visual. Redraw only when the content changes.
 - Animate visual properties with `IDCompositionAnimation`. Build curves with `ScalarSpring`.
-- D2D and DirectWrite are not linked yet. Add them with `/DELAYLOAD`, so they cost nothing until the
-  first text is drawn.
+- D2D and DirectWrite are delay-loaded, so they cost nothing until the first text is drawn.
 - Surfaces cost GPU memory for their whole area: size them to the content, not the window.
 
 **Continuous motion** (visualizers, progress) needs care on both platforms, because it is the one
@@ -71,7 +73,7 @@ SwiftUI over a small AppKit window. The numbers are in [tech-stack.md](tech-stac
 ## Where the events come from
 
 Starting points for likely features. Verify each against current OS documentation before relying on
-it; none of these is implemented yet.
+it. Only now playing and launch at login are implemented so far.
 
 | Feature | macOS | Windows |
 | --- | --- | --- |
@@ -80,29 +82,14 @@ it; none of these is implemented yet.
 | Network | `NWPathMonitor` | `INetworkListManager` events |
 | Timers (focus, reminders) | One-shot `DispatchSourceTimer`, tolerance set | One-shot waitable timer |
 | File shelf | `NSDraggingDestination`; keep URLs, not file data | `IDropTarget`; keep paths |
-| Now playing | **See below** | `GlobalSystemMediaTransportControlsSessionManager` |
+| Now playing | [Implemented](architecture.md#now-playing-on-macos) | `GlobalSystemMediaTransportControlsSessionManager` |
 | Launch at login | `SMAppService` | Run registry key or Startup task |
 | Full-screen detection | `NSWorkspace` and Space notifications | `SHQueryUserNotificationState` on foreground change |
 
-### Decide before building: now playing on macOS
-
-There is no public API for system-wide now playing. Since macOS 15.4 the private MediaRemote framework
-no longer works when loaded from a third-party app. The community workaround runs a long-lived
-`/usr/bin/perl` child process that loads a helper framework, and its authors warn that a future macOS
-update could break it.
-
-That conflicts with the single-process rule and leans on undocumented behavior. Before building
-this, choose deliberately between:
-
-- Per-app events, such as the distributed notifications sent by Spotify and Music. No helper process,
-  but only covers those apps.
-- The adapter, started only while media is playing. Full coverage, but with a real cost and fragility
-  that must be measured and accepted.
-
 ### Windows WinRT
 
-Now playing on Windows is a WinRT API. It would be the first WinRT use in the app, so load it lazily
-and measure what it adds to private memory.
+Now playing is the first WinRT use in the app. It uses the raw ABI headers with WRL, because
+C++/WinRT needs exceptions. It loads lazily; what it adds to private memory has not been measured.
 
 ## Things that need a discussion first
 

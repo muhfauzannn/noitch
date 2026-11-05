@@ -7,15 +7,36 @@ final class IslandController: NSObject {
     private var geometry: IslandGeometry
     private var state = IslandState.collapsed
     private var latestTransition = 0
+    private var settings = AppSettings.load()
+    private let home: HomeController
+    private var settingsWindow: SettingsWindowController?
 
     override init() {
         geometry = IslandGeometry(display: Self.preferredScreen().islandDisplay)
+        home = HomeController(settings: settings)
         super.init()
         panel.contentView = view
+        home.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: IslandGeometry.expandedSize) }
+        home.onOpenSettings = { [unowned self] in openSettings() }
+        view.onPointerMoved = { [unowned self] point in if state == .expanded { home.pointerMoved(to: point) } }
+        view.onPrimaryDown = { [unowned self] point in
+            if state == .expanded {
+                home.pointerDown(at: point)
+            } else if !settings.openOnHover {
+                transition(to: .expanded)
+            }
+        }
+        view.onPrimaryDragged = { [unowned self] point in if state == .expanded { home.pointerDragged(to: point) } }
+        view.onPrimaryUp = { [unowned self] point in
+            guard state == .expanded else { return }
+            home.pointerUp(at: point)
+            // A slider drag can end outside the island, where no exit event will follow.
+            if !panel.frame.contains(NSEvent.mouseLocation) { transition(to: .collapsed) }
+        }
         view.onHoverChange = { [unowned self] isInside, eventLocation in
             if isInside {
                 if geometry.panelFrame(for: .collapsed).contains(eventLocation) { openIfPointerInNotch() }
-            } else {
+            } else if !home.isInteracting {
                 transition(to: .collapsed)
             }
         }
@@ -38,7 +59,7 @@ final class IslandController: NSObject {
     }
 
     private func openIfPointerInNotch() {
-        guard state == .collapsed,
+        guard state == .collapsed, settings.openOnHover,
               geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) else { return }
         transition(to: .expanded)
     }
@@ -50,7 +71,12 @@ final class IslandController: NSObject {
         let transition = latestTransition
         // Grow before expanding and shrink after collapsing: the window changes size twice per
         // round trip instead of on every frame.
-        if newState == .expanded { resizePanel(for: .expanded) }
+        if newState == .expanded {
+            resizePanel(for: .expanded)
+            home.islandWillOpen(layout: homeLayout, scale: panel.backingScaleFactor)
+        } else {
+            home.islandWillClose()
+        }
         view.animatePill(
             to: geometry.pillSize(for: newState),
             cornerRadius: geometry.cornerRadius(for: newState)
@@ -62,6 +88,10 @@ final class IslandController: NSObject {
                 if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }
             }
         }
+    }
+
+    private var homeLayout: HomeLayout {
+        HomeLayout(size: IslandGeometry.expandedSize, headerHeight: geometry.collapsedSize.height)
     }
 
     private func resizePanel(for state: IslandState) {
@@ -85,8 +115,28 @@ final class IslandController: NSObject {
 
     private func showMenu(for event: NSEvent) {
         let menu = NSMenu()
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "").target = self
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Noitch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         NSMenu.popUpContextMenu(menu, with: event, for: view)
+    }
+
+    @objc private func openSettings() {
+        if settingsWindow == nil {
+            let window = SettingsWindowController(settings: settings)
+            window.onChange = { [unowned self] updated in
+                settings = updated
+                home.apply(updated)
+            }
+            window.onClose = { [unowned self] in settingsWindow = nil }
+            settingsWindow = window
+        }
+        settingsWindow?.show()
+    }
+
+    /// The adapter would otherwise outlive the app until its next write.
+    func stop() {
+        home.stop()
     }
 
     private static func preferredScreen() -> NSScreen {

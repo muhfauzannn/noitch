@@ -4,6 +4,10 @@
 #include <cmath>
 #include <cstdio>
 
+#include "features/home/home_layout.h"
+#include "features/home/home_model.h"
+#include "features/lyrics/lyrics.h"
+#include "features/now_playing/now_playing.h"
 #include "island/flare.h"
 #include "island/island_geometry.h"
 #include "island/spring.h"
@@ -167,6 +171,144 @@ void TestJumpLeavesNothingToAnimate() {
     assert(motion.Duration() == 0);
 }
 
+void TestClockRunsFromTheReportedPositionAndStopsAtTheEnd() {
+    NowPlaying state;
+    state.isPlaying = true;
+    state.duration = 100;
+    state.elapsed = 10;
+    state.timestamp = 50;
+    assert(Near(state.Position(55), 15, 1e-9));
+    assert(Near(state.Position(500), 100, 1e-9));
+    state.isPlaying = false;
+    assert(Near(state.Position(500), 10, 1e-9));
+}
+
+void TestRepeatCyclesThroughEveryMode() {
+    assert(NextRepeatMode(RepeatMode::Off) == RepeatMode::All);
+    assert(NextRepeatMode(RepeatMode::All) == RepeatMode::One);
+    assert(NextRepeatMode(RepeatMode::One) == RepeatMode::Off);
+}
+
+void TestLrcParsesTimestampsSkipsMetadataAndSorts() {
+    const auto lines = ParseLrc("[ar:Someone]\n[00:12.50]second\r\n[00:02.00]first\n[01:00.00][00:30.00]chorus\n");
+    assert(lines.size() == 4);
+    assert(lines[0].text == "first" && Near(lines[0].start, 2, 1e-9));
+    assert(lines[1].text == "second" && Near(lines[1].start, 12.5, 1e-9));
+    assert(lines[2].text == "chorus" && Near(lines[2].start, 30, 1e-9));
+    assert(lines[3].text == "chorus" && Near(lines[3].start, 60, 1e-9));
+}
+
+void TestLyricsFindTheCurrentAndNextLine() {
+    Lyrics lyrics;
+    lyrics.synced = {{5, "a"}, {10, "b"}};
+    assert(lyrics.LineIndex(1) == -1);
+    assert(lyrics.LineIndex(5) == 0);
+    assert(lyrics.LineIndex(100) == 1);
+    assert(Near(lyrics.NextChange(0), 5, 1e-9));
+    assert(Near(lyrics.NextChange(7), 10, 1e-9));
+    assert(lyrics.NextChange(11) < 0);
+}
+
+void TestTitlesLoseWhatPlayersAdd() {
+    assert(CleanTitle("Song (feat. Someone)") == "Song");
+    assert(CleanTitle("Song - Remastered 2011") == "Song");
+    assert(CleanTitle("Song [Official Video]") == "Song");
+    assert(CleanTitle("Song (Part 2)") == "Song (Part 2)");
+    assert(CleanTitle("Love - Hate") == "Love - Hate");
+}
+
+void TestLyricsMatchingPrefersSyncedThenClosestLength() {
+    LyricsRecord plain{200, false, "plain", ""};
+    LyricsRecord far{210, false, "", "[00:01.00]far"};
+    LyricsRecord near{201, false, "", "[00:01.00]near"};
+    LyricsRecord other{300, false, "", "[00:01.00]other"};
+    const auto best = BestLyricsRecord({plain, far, near, other}, 200);
+    assert(best && best->syncedLyrics == near.syncedLyrics);
+    assert(!BestLyricsRecord({other}, 200));
+}
+
+void TestJsonReadsOneRecordOrAnArray() {
+    const auto one = ParseLyricsRecords(R"({"id":1,"nested":{"a":[1,2,{"b":null}]},"duration":12.5,"instrumental":false,"plainLyrics":null,"syncedLyrics":"[00:01.00]hi\nthere"})");
+    assert(one.size() == 1);
+    assert(Near(one[0].duration, 12.5, 1e-9));
+    assert(one[0].syncedLyrics == "[00:01.00]hi\nthere");
+    const auto many = ParseLyricsRecords(R"([{"instrumental":true},{"plainLyrics":"caf\u00e9 \ud83c\udfb5"}])");
+    assert(many.size() == 2);
+    assert(many[0].instrumental);
+    assert(many[1].plainLyrics == "caf\xC3\xA9 \xF0\x9F\x8E\xB5");
+    assert(ParseLyricsRecords("[]").empty());
+    assert(ParseLyricsRecords("not json").empty());
+}
+
+void TestPercentEncoding() {
+    assert(PercentEncode("a b&c/\xC3\xA9-_.~") == "a%20b%26c%2F%C3%A9-_.~");
+}
+
+void TestHomeControlsDoNotOverlapAndStayInsideThePill() {
+    for (float scale : {1.0f, 1.5f, 2.0f}) {
+        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(), scale);
+        for (const HomeControl first : kHomeControls) {
+            const HomeRect frame = layout.Frame(first);
+            assert(frame.x >= 0 && frame.y >= 0 && frame.Right() <= layout.Width() && frame.Bottom() <= layout.Height());
+            for (const HomeControl second : kHomeControls) {
+                assert(first == second || !frame.Intersects(layout.Frame(second)));
+            }
+        }
+    }
+}
+
+void TestHomePointsFindTheirControl() {
+    const HomeLayout layout(580, 180, 32, 1);
+    const HomeRect play = layout.Frame(HomeControl::PlayPause);
+    assert(layout.ControlAt(play.x + 5, play.y + 5) == HomeControl::PlayPause);
+    assert(layout.ControlAt(1, 1) == HomeControl::None);
+    const HomeRect track = layout.SliderTrack();
+    assert(Near(layout.SliderFraction(track.x), 0, 1e-6));
+    assert(Near(layout.SliderFraction(track.x + track.width / 2), 0.5, 1e-6));
+    assert(Near(layout.SliderFraction(track.Right() + 50), 1, 1e-6));
+}
+
+void TestFormatTime() {
+    assert(FormatTime(0) == "0:00");
+    assert(FormatTime(65) == "1:05");
+    assert(FormatTime(3725) == "1:02:05");
+}
+
+void TestNextTickIsTheNextSecondOrAnEarlierLyric() {
+    assert(Near(NextHomeTick(10.25, 1, -1), 0.75, 1e-6));
+    assert(Near(NextHomeTick(10.25, 1, 10.5), 0.25, 1e-6));
+    assert(Near(NextHomeTick(10.5, 2, -1), 0.25, 1e-6));
+}
+
+void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
+    const AppSettings settings;
+    assert(!MakeHomeModel({}, nullptr, false, 0, false, settings).hasTrack);
+
+    NowPlaying nowPlaying;
+    nowPlaying.title = "Song";
+    nowPlaying.duration = 100;
+    Lyrics lyrics;
+    lyrics.synced = {{1, "one"}, {2, "two"}, {3, "three"}};
+    const HomeModel model = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, true, settings);
+    assert(model.lyricLine == "two");
+    assert(model.panelLines[0] == "one" && model.panelLines[2] == "three");
+    assert(model.remainingText == "-1:37");
+    assert(Near(model.progress, 0.025, 1e-9));
+
+    AppSettings off;
+    off.showLyrics = false;
+    const HomeModel hidden = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, true, off);
+    assert(hidden.lyricLine.empty() && !hidden.showsLyricsPanel && !hidden.showsLyricsButton);
+}
+
+void TestArtworkTintIsAverageAndLifted() {
+    const uint32_t dark[2] = {0xFF000010, 0xFF000030};
+    assert((ArtworkTint(dark, 2) & 0xFF) == 191);
+    const uint32_t bright[1] = {0xFFFF0000};
+    assert(ArtworkTint(bright, 1) == 0xFFFF0000);
+    assert(ArtworkTint(nullptr, 0) == 0xFFFFFFFF);
+}
+
 }  // namespace
 
 int main() {
@@ -182,6 +324,20 @@ int main() {
     TestFlareTapersFromThePillToTheTopEdge();
     TestFlarePixelsArePremultipliedBlackAndMirror();
     TestJumpLeavesNothingToAnimate();
+    TestClockRunsFromTheReportedPositionAndStopsAtTheEnd();
+    TestRepeatCyclesThroughEveryMode();
+    TestLrcParsesTimestampsSkipsMetadataAndSorts();
+    TestLyricsFindTheCurrentAndNextLine();
+    TestTitlesLoseWhatPlayersAdd();
+    TestLyricsMatchingPrefersSyncedThenClosestLength();
+    TestJsonReadsOneRecordOrAnArray();
+    TestPercentEncoding();
+    TestHomeControlsDoNotOverlapAndStayInsideThePill();
+    TestHomePointsFindTheirControl();
+    TestFormatTime();
+    TestNextTickIsTheNextSecondOrAnEarlierLyric();
+    TestHomeModelShowsThePlaceholderAndFollowsLyrics();
+    TestArtworkTintIsAverageAndLifted();
     std::puts("island_tests: all passed");
     return 0;
 }
