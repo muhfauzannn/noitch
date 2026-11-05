@@ -1,0 +1,50 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - windows/**
+      - .github/workflows/windows.yml
+  pull_request:
+    paths:
+      - windows/**
+      - .github/workflows/windows.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure
+        run: cmake --preset default
+
+      - name: Build Debug
+        run: cmake --build --preset debug
+
+      - name: Test
+        run: ctest --preset debug
+
+      - name: Build Release
+        run: cmake --build --preset release
+
+      # Lets the app be tried on a real Windows PC without installing Visual Studio.
+      - name: Upload Noitch.exe
+        uses: actions/upload-artifact@v7
+        with:
+          name: Noitch-windows-x64
+          path: windows/build/Release/Noitch.exe
+          if-no-files-found: error
+          retention-days: 14

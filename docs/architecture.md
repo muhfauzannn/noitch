@@ -39,6 +39,7 @@ Why each technology was chosen, and the evidence, is in [tech-stack.md](tech-sta
 ```text
 AGENTS.md                  Rules for coding agents
 README.md                  Overview and quick start
+.github/workflows/         CI, one workflow per platform
 docs/                      This documentation
 macos/
   Noitch.xcodeproj         Synchronized folders: new files need no project edits

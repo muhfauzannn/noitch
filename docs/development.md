@@ -54,6 +54,23 @@ zig c++ -target x86_64-windows-gnu -std=c++20 -fno-exceptions -fno-rtti -DUNICOD
   -ld3d11 -ldcomp -lshcore -luser32 -lgdi32 -luuid -o /tmp/Noitch.exe
 ```
 
+## CI
+
+GitHub Actions runs on pushes to `main` and on pull requests, one workflow per platform, each only
+when its own folder changes.
+
+| Workflow | Runner | What it does |
+| --- | --- | --- |
+| `macos.yml` | `macos-26`, Xcode 26.6 | Unit tests, Release build, no coverage in Release |
+| `windows.yml` | `windows-2025`, Visual Studio 2026 | Debug and Release builds with MSVC, unit tests, uploads `Noitch.exe` |
+
+**CI proves the code builds and the logic tests pass. It does not prove the app works.** Budgets and
+the hover check stay local, because shared runners are too noisy for performance numbers and hover
+needs a real cursor. Run them before merging anything that touches the window, hover or animation
+code.
+
+To try the Windows app without Visual Studio, download `Noitch-windows-x64` from the workflow run.
+
 ## Verification status
 
 Keep this honest and up to date.
@@ -80,7 +97,7 @@ Keep this honest and up to date.
 | Spring and geometry tests | Passing on macOS, under ASan and UBSan |
 | Compiles and links | With Zig and mingw only |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |
-| **Built with MSVC** | **Never** |
+| **Built with MSVC** | **Never**; `windows.yml` will do this on its first run |
 | **Run on Windows** | **Never** |
 | Rendering, hover, click-through, DPI | **Unverified** |
 

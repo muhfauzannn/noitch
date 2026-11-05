@@ -17,7 +17,8 @@ build=build
 xcodebuild -project Noitch.xcodeproj -scheme Noitch -configuration Release \
     -derivedDataPath "$build" CODE_SIGN_IDENTITY=- -quiet build
 app="$build/Build/Products/Release/Noitch.app"
-if nm "$app/Contents/MacOS/Noitch" | grep -q __llvm_profile; then
+# Not grep -q: exiting early could kill nm, and pipefail would then read that as "not found".
+if nm "$app/Contents/MacOS/Noitch" | grep __llvm_profile >/dev/null; then
     echo "Release build is coverage-instrumented; its numbers would be wrong" >&2
     exit 1
 fi

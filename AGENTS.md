@@ -125,6 +125,9 @@ clang++ -std=c++20 -Iwindows/src windows/tests/island_tests.cpp -o /tmp/island_t
 In your summary, report the budget numbers before and after, and state plainly what you could not
 run. **Never describe Windows code as working unless it was run on Windows.** Compiling is not running.
 
+CI (`.github/workflows/`) runs builds and unit tests only. A green run says nothing about budgets or
+hover, so it never replaces the checks above.
+
 The scripts open real windows and can move the cursor, so tell the user before running them. Never
 capture the whole screen: use `screencapture -l <window id>`, or personal data can end up in your
 context.

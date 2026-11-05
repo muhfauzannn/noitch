@@ -1,0 +1,52 @@
+name: macOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - macos/**
+      - "!macos/benchmarks/**"
+      - .github/workflows/macos.yml
+  pull_request:
+    paths:
+      - macos/**
+      - "!macos/benchmarks/**"
+      - .github/workflows/macos.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # Pinned, not macos-latest: the Xcode here is the oldest version the project claims to support.
+    runs-on: macos-26
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Test
+        run: >
+          xcodebuild test -project Noitch.xcodeproj -scheme Noitch
+          -destination 'platform=macOS,arch=arm64' -derivedDataPath build CODE_SIGN_IDENTITY=-
+
+      - name: Build Release
+        run: >
+          xcodebuild build -project Noitch.xcodeproj -scheme Noitch -configuration Release
+          -destination 'platform=macOS,arch=arm64' -derivedDataPath build CODE_SIGN_IDENTITY=-
+
+      - name: Check Release has no coverage instrumentation
+        run: |
+          if nm build/Build/Products/Release/Noitch.app/Contents/MacOS/Noitch | grep __llvm_profile >/dev/null; then
+            echo "::error::Release build is coverage-instrumented"
+            exit 1
+          fi
