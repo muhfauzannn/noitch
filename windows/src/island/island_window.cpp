@@ -8,7 +8,6 @@ namespace {
 
 constexpr wchar_t kClassName[] = L"NoitchIsland";
 constexpr UINT_PTR kSettleTimer = 1;
-constexpr UINT_PTR kHoverIntentTimer = 2;
 constexpr UINT kQuitCommand = 1;
 
 double NowSeconds() {
@@ -40,28 +39,11 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
     if (FAILED(hr)) return hr;
     ApplyLayout();
 
-    // Showing the window under a stationary pointer can produce an initial WM_MOUSEMOVE. Ignore
-    // that synthetic entry until the pointer leaves, so launch alone never expands the island.
-    POINT cursor{};
-    RECT windowRect{};
-    if (GetCursorPos(&cursor) && GetWindowRect(hwnd_, &windowRect)) {
-        const Pill collapsed = geometry_.PillFor(IslandState::Collapsed);
-        const int flare = geometry_.FlareRadius();
-        const RECT hitRegion{
-            windowRect.left + static_cast<int>(collapsed.left) - flare,
-            windowRect.top,
-            windowRect.left + static_cast<int>(collapsed.right) + flare,
-            windowRect.top + static_cast<int>(collapsed.bottom),
-        };
-        if (PtInRect(&hitRegion, cursor)) {
-            ignoreHoverUntilLeave_ = true;
-        }
-    }
     ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
-    if (ignoreHoverUntilLeave_ && !trackingLeave_) {
+    if (CursorInCollapsedHitRegion()) {
         TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
         trackingLeave_ = TrackMouseEvent(&track) != FALSE;
-        if (!trackingLeave_) ignoreHoverUntilLeave_ = false;
+        OpenIfPointerInNotch();
     }
     return S_OK;
 }
@@ -79,31 +61,18 @@ LRESULT CALLBACK IslandWindow::WndProc(HWND hwnd, UINT message, WPARAM wparam, L
 LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
         case WM_MOUSEMOVE:
+        case WM_MOUSEWHEEL:
             if (!trackingLeave_) {
                 // One-shot: the system posts WM_MOUSELEAVE on exit, so hover costs nothing at rest.
                 TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
                 trackingLeave_ = TrackMouseEvent(&track) != FALSE;
             }
-            if (!ignoreHoverUntilLeave_ && !windowHasExpandedHitRegion_ && state_ == IslandState::Collapsed &&
-                !hoverOpenPending_) {
-                hoverOpenPending_ = SetTimer(hwnd_, kHoverIntentTimer, 150, nullptr) != 0;
-                if (!hoverOpenPending_) TransitionTo(IslandState::Expanded);
-            }
+            if (CursorInCollapsedHitRegion()) OpenIfPointerInNotch();
             return 0;
         case WM_MOUSELEAVE:
             trackingLeave_ = false;
-            KillTimer(hwnd_, kHoverIntentTimer);
-            hoverOpenPending_ = false;
-            if (ignoreHoverUntilLeave_) {
-                if (!CursorInCollapsedHitRegion()) ignoreHoverUntilLeave_ = false;
-                else {
-                    TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
-                    trackingLeave_ = TrackMouseEvent(&track) != FALSE;
-                    if (!trackingLeave_) ignoreHoverUntilLeave_ = false;
-                }
-                return 0;
-            }
             TransitionTo(IslandState::Collapsed);
+            if (CursorInCollapsedHitRegion()) OpenIfPointerInNotch();
             return 0;
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;
@@ -111,16 +80,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             ShowMenu();
             return 0;
         case WM_TIMER:
-            if (wparam == kHoverIntentTimer) {
-                KillTimer(hwnd_, kHoverIntentTimer);
-                hoverOpenPending_ = false;
-                if (trackingLeave_ && !ignoreHoverUntilLeave_ && !windowHasExpandedHitRegion_ &&
-                    state_ == IslandState::Collapsed && CursorInCollapsedHitRegion()) {
-                    TransitionTo(IslandState::Expanded);
-                }
-            } else if (wparam == kSettleTimer) {
-                FinishTransition();
-            }
+            if (wparam == kSettleTimer) FinishTransition();
             return 0;
         case WM_DISPLAYCHANGE:
         case WM_DPICHANGED:
@@ -151,9 +111,6 @@ void IslandWindow::ApplyLayout() {
     SetWindowPos(hwnd_, HWND_TOPMOST, x, screen.top, size.width, size.height, SWP_NOACTIVATE);
 
     KillTimer(hwnd_, kSettleTimer);
-    KillTimer(hwnd_, kHoverIntentTimer);
-    hoverOpenPending_ = false;
-    windowHasExpandedHitRegion_ = state_ == IslandState::Expanded;
     const Pill pill = geometry_.PillFor(state_);
     motion_.Jump(pill);
     UpdateHitRegion();
@@ -167,7 +124,6 @@ void IslandWindow::TransitionTo(IslandState next) {
     motion_.Retarget(geometry_.PillFor(next), NowSeconds());
     // Grow the hit region before expanding and shrink it after collapsing.
     if (next == IslandState::Expanded) {
-        windowHasExpandedHitRegion_ = true;
         UpdateHitRegion();
     }
     compositor_.AnimatePill(motion_);
@@ -181,15 +137,13 @@ void IslandWindow::FinishTransition() {
     compositor_.ShowPill(motion_.Target());
     if (state_ == IslandState::Collapsed) {
         UpdateHitRegion();
-        windowHasExpandedHitRegion_ = false;
-        ignoreHoverUntilLeave_ = CursorInCollapsedHitRegion();
-        if (ignoreHoverUntilLeave_ && !trackingLeave_) {
-            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
-            trackingLeave_ = TrackMouseEvent(&track) != FALSE;
-            if (!trackingLeave_) ignoreHoverUntilLeave_ = false;
-        } else if (!ignoreHoverUntilLeave_) {
-            trackingLeave_ = false;
-        }
+        if (CursorInCollapsedHitRegion()) OpenIfPointerInNotch();
+    }
+}
+
+void IslandWindow::OpenIfPointerInNotch() {
+    if (state_ == IslandState::Collapsed && CursorInCollapsedHitRegion()) {
+        TransitionTo(IslandState::Expanded);
     }
 }
 

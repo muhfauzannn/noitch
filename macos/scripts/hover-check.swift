@@ -51,6 +51,7 @@ func cpuNanoseconds() -> Double {
 let originalCursor = CGEvent(source: nil)!.location
 let display = CGDisplayBounds(CGMainDisplayID())
 let notch = CGPoint(x: display.midX, y: 8)
+let topEdge = CGPoint(x: display.midX, y: 0)
 let away = CGPoint(x: display.midX, y: 420)
 
 moveCursor(to: away)
@@ -80,11 +81,18 @@ func expect(_ description: String, expanded: Bool) {
     if !passed { failures += 1 }
 }
 
+moveCursor(to: topEdge)
+wait(0.08)
+expect("opens when the cursor reaches the screen's top edge", expanded: true)
+moveCursor(to: away)
+wait(0.9)
+expect("closes after leaving the top edge", expanded: false)
+
 moveCursor(to: notch)
 wait(0.05)
 moveCursor(to: away)
-wait(0.25)
-expect("a brief hover does not expand", expanded: false)
+wait(0.9)
+expect("a brief visit closes after the pointer leaves", expanded: false)
 
 moveCursor(to: notch)
 wait(0.2)
@@ -111,7 +119,7 @@ moveCursor(to: away)
 wait(0.12)
 moveCursor(to: notch)
 wait(0.8)
-expect("returning to the notch during collapse does not reopen it", expanded: false)
+expect("returning to the real notch during collapse reopens it", expanded: true)
 moveCursor(to: away)
 wait(0.2)
 moveCursor(to: notch)
@@ -120,6 +128,26 @@ expect("a fresh hover after leaving reopens it", expanded: true)
 moveCursor(to: away)
 wait(1)
 expect("and collapses on the final exit", expanded: false)
+
+let formerExpandedArea = CGPoint(x: display.midX + collapsedWidth / 2 + 20, y: 70)
+for attempt in 1...5 {
+    moveCursor(to: notch)
+    CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: 30, wheel2: 0, wheel3: 0)?
+        .post(tap: .cghidEventTap)
+    wait(0.25)
+    moveCursor(to: away)
+    wait(0.08)
+    moveCursor(to: formerExpandedArea)
+    wait(0.8)
+    expect("former expanded area cannot reopen, attempt \(attempt)", expanded: false)
+    moveCursor(to: away)
+    wait(0.02)
+    moveCursor(to: notch)
+    wait(0.25)
+    expect("fast approach after upward scroll opens, attempt \(attempt)", expanded: true)
+    moveCursor(to: away)
+    wait(0.8)
+}
 
 let roundTrips = 10
 let before = cpuNanoseconds()

@@ -2,6 +2,18 @@ import AppKit
 
 /// Borderless, non-activating overlay. Never takes focus from the frontmost app.
 final class IslandPanel: NSPanel {
+    var onPointerEvent: (() -> Void)?
+
+    override func sendEvent(_ event: NSEvent) {
+        super.sendEvent(event)
+        switch event.type {
+        case .mouseEntered, .mouseExited, .mouseMoved, .scrollWheel:
+            onPointerEvent?()
+        default:
+            break
+        }
+    }
+
     init() {
         super.init(
             contentRect: .zero,
@@ -13,6 +25,7 @@ final class IslandPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = false
         isMovable = false
+        acceptsMouseMovedEvents = true
         animationBehavior = .none
         // Over the menu bar, which it covers on displays without a notch, and over other notch
         // apps (Boring Notch sits at mainMenu + 3), whose windows would take its mouse events.

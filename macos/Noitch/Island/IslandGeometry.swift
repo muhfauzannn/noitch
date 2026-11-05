@@ -22,6 +22,8 @@ struct IslandGeometry: Equatable {
     static let virtualNotchWidth: CGFloat = 180
     /// Flares and spring overshoot must stay inside the window, or they would be clipped.
     static let overshootMargin: CGFloat = 16
+    /// Lets the hover target include the screen's topmost cursor position.
+    static let topEdgeHitMargin: CGFloat = 1
 
     let display: Display
 
@@ -47,10 +49,13 @@ struct IslandGeometry: Equatable {
         let expanded = state == .expanded
         let sideMargin = expanded ? Self.overshootMargin : Self.flareRadius
         let bottomMargin = expanded ? Self.overshootMargin : 0
-        let size = CGSize(width: pill.width + sideMargin * 2, height: pill.height + bottomMargin)
+        let size = CGSize(
+            width: pill.width + sideMargin * 2,
+            height: pill.height + bottomMargin + Self.topEdgeHitMargin
+        )
         return CGRect(
             x: display.frame.midX - size.width / 2,
-            y: display.frame.maxY - size.height,
+            y: display.frame.maxY - size.height + Self.topEdgeHitMargin,
             width: size.width,
             height: size.height
         )

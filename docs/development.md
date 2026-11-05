@@ -81,7 +81,7 @@ Keep this honest and up to date.
 | --- | --- |
 | Builds; 6 unit tests | Passing |
 | Budgets at rest | Passing |
-| Hover delay, collapse re-entry, reversal, click area sizing (11 automated checks) | Passing on a notched MacBook, on the clean Release build |
+| Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Passing on a notched MacBook, on the clean Release build |
 | Pill and flare shape, collapsed and expanded | Checked by screenshot |
 | Right-click quit menu | **Not tested** |
 | Space swipes, full screen | **Not tested** |

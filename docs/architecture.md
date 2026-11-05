@@ -93,9 +93,12 @@ Neither window ever takes focus. Typing, the frontmost app and Alt-Tab are unaff
 
 ## Interruption
 
-An exit can reverse an expansion mid-transition, and the shape must not jump. Re-entry during collapse
-is ignored until the expanded hit area has finished shrinking, so the shrinking window cannot create
-a second hover by moving underneath the cursor.
+An exit can reverse an expansion mid-transition. Returning to the real collapsed notch area can
+reverse collapse immediately, even when the expanded window is still shrinking. The former
+expanded area alone cannot open the island. No exit/re-entry lock is used.
+
+Mouse movement and scroll events inside the overlay also reconcile the hover target. This recovers
+fast approaches that span a tracking-area replacement without polling or a global event monitor.
 
 - macOS reads the on-screen value from `layer.presentation()` and starts a new spring from it.
 - Windows cannot read values back from DWM. `PillMotion` knows the curve analytically, so it computes
@@ -120,7 +123,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Corner shape | macOS: continuous. Windows: circular (DirectComposition has no continuous corner) |
 | Overshoot margin | 16 pt |
 | Spring | Response 0.38 s, bounce 0.18 |
-| Expand / collapse | Expand after 150 ms of continuous hover; collapse immediately on exit. Ignore re-entry during collapse, and require exit before reopening if collapse finishes under the pointer |
+| Expand / collapse | Expand immediately when the pointer reaches the real notch, including at the screen top edge; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Quit | Secondary click on the island |
 
 The Windows spring is computed from the same two parameters. Its stiffness (273.4) and damping

@@ -2,46 +2,33 @@ import AppKit
 
 /// Owns the island's window and state. Every entry point here is an event; nothing polls.
 final class IslandController: NSObject {
-    private static let hoverOpenDelay: TimeInterval = 0.15
-
     private let panel = IslandPanel()
     private let view = IslandView(frame: .zero)
     private var geometry: IslandGeometry
     private var state = IslandState.collapsed
     private var latestTransition = 0
-    private var ignoresHoverUntilExit = false
-    private var windowHasExpandedHitArea = false
-    private var hoverOpenTimer: Timer?
 
     override init() {
         geometry = IslandGeometry(display: Self.preferredScreen().islandDisplay)
         super.init()
-        // Set this before attaching the view: AppKit may deliver its initial tracking event as the
-        // panel is laid out, before it is ordered on screen.
-        ignoresHoverUntilExit = geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation)
         panel.contentView = view
-        view.onHoverChange = { [unowned self] isInside in
-            if ignoresHoverUntilExit {
-                if !isInside && !geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) {
-                    ignoresHoverUntilExit = false
-                }
-                return
-            }
+        view.onHoverChange = { [unowned self] isInside, eventLocation in
             if isInside {
-                if !windowHasExpandedHitArea { scheduleHoverOpen() }
+                if geometry.panelFrame(for: .collapsed).contains(eventLocation) { openIfPointerInNotch() }
             } else {
-                hoverOpenTimer?.invalidate()
-                hoverOpenTimer = nil
-                if windowHasExpandedHitArea && panel.frame.contains(NSEvent.mouseLocation) {
-                    view.refreshHoverTrackingArea()
-                    return
-                }
                 transition(to: .collapsed)
             }
         }
         view.onSecondaryClick = { [unowned self] event in showMenu(for: event) }
+        // Reconcile after queued boundary events: a fast return may overtake an older exit.
+        panel.onPointerEvent = { [unowned self] in
+            if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) {
+                openIfPointerInNotch()
+            }
+        }
         applyLayout()
         panel.orderFrontRegardless()
+        if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenParametersChanged),
@@ -50,23 +37,9 @@ final class IslandController: NSObject {
         )
     }
 
-    private func scheduleHoverOpen() {
-        guard state == .collapsed, !windowHasExpandedHitArea, hoverOpenTimer == nil else { return }
-        let timer = Timer(
-            timeInterval: Self.hoverOpenDelay,
-            target: self,
-            selector: #selector(openAfterHoverDelay(_:)),
-            userInfo: nil,
-            repeats: false
-        )
-        hoverOpenTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
-    }
-
-    @objc private func openAfterHoverDelay(_ timer: Timer) {
-        guard hoverOpenTimer === timer else { return }
-        hoverOpenTimer = nil
-        guard !windowHasExpandedHitArea, panel.frame.contains(NSEvent.mouseLocation) else { return }
+    private func openIfPointerInNotch() {
+        guard state == .collapsed,
+              geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) else { return }
         transition(to: .expanded)
     }
 
@@ -85,14 +58,13 @@ final class IslandController: NSObject {
             // Replacing a running animation fires its completion at once, while the new one is
             // still on screen. Shrinking then would cut it off, so only the latest may finish.
             if transition == latestTransition, state == .collapsed {
-                ignoresHoverUntilExit = geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation)
                 resizePanel(for: .collapsed)
+                if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }
             }
         }
     }
 
     private func resizePanel(for state: IslandState) {
-        windowHasExpandedHitArea = state == .expanded
         panel.setFrame(geometry.panelFrame(for: state), display: false)
         view.pinPill()
         view.refreshHoverTrackingArea()
@@ -106,13 +78,9 @@ final class IslandController: NSObject {
     @objc private func screenParametersChanged() {
         let updated = IslandGeometry(display: Self.preferredScreen().islandDisplay)
         guard updated != geometry else { return }
-        hoverOpenTimer?.invalidate()
-        hoverOpenTimer = nil
         geometry = updated
-        if state == .collapsed {
-            ignoresHoverUntilExit = geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation)
-        }
         applyLayout()
+        if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }
     }
 
     private func showMenu(for event: NSEvent) {

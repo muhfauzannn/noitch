@@ -28,7 +28,7 @@ struct IslandGeometryTests {
         let pill = notched.pillSize(for: .collapsed)
         let frame = notched.panelFrame(for: .collapsed)
         #expect(frame.width == pill.width + IslandGeometry.flareRadius * 2)
-        #expect(frame.height == pill.height)
+        #expect(frame.height == pill.height + IslandGeometry.topEdgeHitMargin)
     }
 
     @Test func `the expanded window has room for the flares as well as overshoot`() {
@@ -39,15 +39,15 @@ struct IslandGeometryTests {
         let frame = notched.panelFrame(for: .expanded)
         let pill = notched.pillSize(for: .expanded)
         #expect(frame.width == pill.width + IslandGeometry.overshootMargin * 2)
-        #expect(frame.height == pill.height + IslandGeometry.overshootMargin)
+        #expect(frame.height == pill.height + IslandGeometry.overshootMargin + IslandGeometry.topEdgeHitMargin)
     }
 
     @Test(arguments: [IslandState.collapsed, .expanded])
-    func `the window is centered and flush with the top of its display`(state: IslandState) {
+    func `the window is centered and its hit area reaches the display top edge`(state: IslandState) {
         for geometry in [notched, external] {
             let frame = geometry.panelFrame(for: state)
             #expect(frame.midX == geometry.display.frame.midX)
-            #expect(frame.maxY == geometry.display.frame.maxY)
+            #expect(frame.maxY == geometry.display.frame.maxY + IslandGeometry.topEdgeHitMargin)
         }
     }
 }

@@ -7,21 +7,25 @@ one needs an explicit decision, not a quiet increase.
 
 | Metric | Budget | macOS now | Windows now |
 | --- | --- | --- | --- |
-| Memory at rest | 12 MB macOS, 30 MB Windows | 8.48–8.50 MB | Not measured |
-| CPU at rest | 20 ms per minute | 3.23–3.37 ms | Not measured |
-| Wakeups at rest | 0.5 per second | 0.10–0.13 | Not measured |
-| CPU per transition | 10 ms | 3.84 ms | Not measured |
+| Memory at rest | 12 MB macOS, 30 MB Windows | 8.53–8.59 MB | Not measured |
+| CPU at rest | 20 ms per minute | 1.05–1.19 ms | Not measured |
+| Wakeups at rest | 0.5 per second | 0.10 | Not measured |
+| CPU per transition | 10 ms | 4.03 ms | Not measured |
 | Threads at rest | None runnable | Holds, per the CPU figures | Not measured |
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 0 | 0 | 0 |
 
-Current macOS figures are from Release runs on an Apple M5, macOS 26.6, after adding delayed hover
-and collapse re-entry handling. The latest idle reads ranged from 8.48–8.50 MB, 3.23–3.37 ms/min and
-0.10–0.13 wakeups/s. The hover run measured 3.84 ms per transition. The earlier foundation-only
-baseline was 8.7–9.0 MB, 0.9–1.8 ms/min, 0.10–0.17 wakeups/s and 5.73 ms per transition.
+Current macOS figures are from Release runs on an Apple M5, macOS 26.6, after switching to immediate real-notch activation with
+mouse/scroll event reconciliation and no reopening lock or hover timer. The latest idle reads
+ranged from 8.53–8.59 MB, 1.05–1.19 ms/min and 0.10 wakeups/s. The hover run measured
+4.03 ms per transition. A preceding idle run exceeded the budget at 566.36 ms/min and 14.63 wakeups/s;
+its cause remains unknown, and subsequent runs passed.
+The earlier foundation-only baseline was 8.7–9.0 MB, 0.9–1.8 ms/min, 0.10–0.17 wakeups/s and
+5.73 ms per transition.
 
-- The new idle reads were taken with the cursor away from the island. One run measured 33.35 ms/min
-  and 1.33 wakeups/s; the repeated idle and hover runs passed, and the cause of that outlier is unknown.
+- The new idle reads were taken with the cursor away from the island. Two individual runs showed
+  outliers (33.35 ms/min and 1.33 wakeups/s; 138.05 ms/min and 3.57 wakeups/s); repeated idle and
+  hover runs passed, and the cause of those outliers is unknown.
 - The earlier foundation baseline covered four clean runs; a fifth run showed 145 ms per minute and
   6.1 wakeups per second. It did not recur in three more runs, during which the cursor never entered
   the island.

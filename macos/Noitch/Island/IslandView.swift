@@ -4,7 +4,7 @@ import QuartzCore
 /// Hosts the pill and its flares. Nothing here draws per frame: the pill is a solid-color layer and
 /// the flares are fixed shapes that only move, so every frame comes from the render server.
 final class IslandView: NSView {
-    var onHoverChange: ((Bool) -> Void)?
+    var onHoverChange: ((Bool, CGPoint) -> Void)?
     var onSecondaryClick: ((NSEvent) -> Void)?
 
     /// Flares reach this far into the pill, so no seam shows at a fractional position.
@@ -49,32 +49,64 @@ final class IslandView: NSView {
 
     /// Delivered by the window server only on crossing the edge: no polling or global monitor.
     func refreshHoverTrackingArea() {
-        if let hoverTrackingArea, hoverTrackingArea.rect == bounds { return }
-        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
         guard !bounds.isEmpty else {
+            if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
             hoverTrackingArea = nil
             return
         }
+        if let hoverTrackingArea, hoverTrackingArea.rect == bounds { return }
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
+        var options: NSTrackingArea.Options = [.mouseEnteredAndExited, .mouseMoved, .activeAlways]
+        // A resized area can appear under a stationary pointer. Seed its inside state so the next
+        // real exit is delivered even though there was no crossing into the replacement area.
+        if let window, bounds.contains(convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)) {
+            options.insert(.assumeInside)
+        }
         let area = NSTrackingArea(
             rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways],
+            options: options,
             owner: self
         )
         addTrackingArea(area)
         hoverTrackingArea = area
     }
 
-    override func mouseEntered(with event: NSEvent) { onHoverChange?(true) }
-    override func mouseExited(with event: NSEvent) { onHoverChange?(false) }
+    override func mouseEntered(with event: NSEvent) {
+        guard event.trackingArea === hoverTrackingArea else { return }
+        onHoverChange?(true, screenLocation(of: event))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        guard event.trackingArea === hoverTrackingArea else { return }
+        onHoverChange?(false, screenLocation(of: event))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        onHoverChange?(true, screenLocation(of: event))
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        onHoverChange?(true, screenLocation(of: event))
+        super.scrollWheel(with: event)
+    }
+
+    private func screenLocation(of event: NSEvent) -> CGPoint {
+        // Window coordinates become ambiguous when a queued event spans a panel resize.
+        if let point = event.cgEvent?.location, let primary = NSScreen.screens.first {
+            return CGPoint(x: point.x, y: primary.frame.maxY - point.y)
+        }
+        return window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
+    }
     override func rightMouseDown(with event: NSEvent) { onSecondaryClick?(event) }
 
     /// Keeps the island pinned to the top center of the view after the window changes size.
     func pinPill() {
         withoutImplicitAnimations {
-            pill.position = CGPoint(x: bounds.midX, y: bounds.maxY)
+            let top = bounds.maxY - IslandGeometry.topEdgeHitMargin
+            pill.position = CGPoint(x: bounds.midX, y: top)
             let flares = flarePositions(pillWidth: pill.bounds.width)
-            leftFlare.position = CGPoint(x: flares.left, y: bounds.maxY)
-            rightFlare.position = CGPoint(x: flares.right, y: bounds.maxY)
+            leftFlare.position = CGPoint(x: flares.left, y: top)
+            rightFlare.position = CGPoint(x: flares.right, y: top)
         }
     }
 
