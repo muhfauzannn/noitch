@@ -1,0 +1,17 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "default",
+      "description": "Default generator for this machine (the newest Visual Studio)",
+      "binaryDir": "${sourceDir}/build"
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "default", "configuration": "Debug" },
+    { "name": "release", "configurePreset": "default", "configuration": "Release" }
+  ],
+  "testPresets": [
+    { "name": "debug", "configurePreset": "default", "configuration": "Debug", "output": { "outputOnFailure": true } }
+  ]
+}

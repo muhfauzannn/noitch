@@ -1,0 +1,16 @@
+.DS_Store
+
+# macOS
+macos/build/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Windows
+windows/build/
+windows/out/
+.vs/
+
+# Benchmarks
+benchmarks/macos-ui-stack/build/
+benchmarks/macos-ui-stack/run.log
