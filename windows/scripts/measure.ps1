@@ -1,5 +1,5 @@
 # Runs the Release build and checks it against docs/performance.md.
-# Usage: scripts\measure-windows.ps1 [-Window 30]   Exits non-zero if a budget is exceeded.
+# Usage: windows\scripts\measure.ps1 [-Window 30]   Exits non-zero if a budget is exceeded.
 param([int]$Window = 30, [int]$Settle = 10)
 $ErrorActionPreference = 'Stop'
 
@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $MaxPrivateMB = 30
 $MaxCpuMsPerMin = 20
 
-$exe = Join-Path $PSScriptRoot '..\windows\build\Release\Noitch.exe'
+$exe = Join-Path $PSScriptRoot '..\build\Release\Noitch.exe'
 $process = Start-Process -FilePath $exe -PassThru
 try {
     Start-Sleep -Seconds $Settle

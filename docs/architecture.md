@@ -37,20 +37,25 @@ Why each technology was chosen, and the evidence, is in [tech-stack.md](tech-sta
 
 ```text
 AGENTS.md                  Rules for coding agents
+README.md                  Overview and quick start
 docs/                      This documentation
 macos/
   Noitch.xcodeproj         Synchronized folders: new files need no project edits
   Noitch/App/              Process entry and lifecycle
   Noitch/Island/           The island: window, layers, geometry, state
   NoitchTests/             Swift Testing, pure logic
+  scripts/                 Budget and hover checks against the real app
+  benchmarks/ui-stack/     The experiment behind the macOS stack decision
 windows/
   CMakeLists.txt
   src/main.cpp             Process entry and message loop
   src/island/              The island: window, compositor, geometry, spring
   tests/                   Pure logic tests; run on any host
-scripts/                   Budget checks against the real apps
-benchmarks/macos-ui-stack/ The experiment behind the macOS stack decision
+  scripts/                 Budget check against the real app
 ```
+
+Each platform folder is self-contained: it holds its own tooling, and nothing in one refers to the
+other. Only documentation is shared.
 
 ## Module responsibilities
 
@@ -91,8 +96,10 @@ A hover can reverse mid-transition, and the shape must not jump.
 - Windows cannot read values back from DWM. `PillMotion` knows the curve analytically, so it computes
   the current value and velocity from elapsed time and starts from those.
 
-An interrupted transition also fires its completion, so completion handlers check the current state
-before shrinking the click area.
+On macOS, replacing a running animation fires its completion immediately, while the replacement is
+still on screen. A state check cannot catch this, because the state is already correct. Each
+transition therefore has a number, and only the latest may shrink the click area. On Windows the
+single settle timer is simply reset, so a stale completion cannot occur.
 
 ## Shared behavior
 
@@ -110,8 +117,9 @@ The spec both apps follow. Change it here and in both apps together.
 | Expand / collapse | On hover enter / exit, immediately |
 | Quit | Secondary click on the island |
 
-The Windows spring is the same closed-form curve that these parameters describe, so the two should
-feel alike. This has not yet been compared side by side.
+The Windows spring is computed from the same two parameters. Its stiffness (273.4) and damping
+(27.12) match the values `CASpringAnimation` reports, and it settles in 0.56 s against 0.575 s. The
+two have not yet been compared side by side on screen.
 
 ## Patterns worth keeping
 
@@ -125,6 +133,9 @@ feel alike. This has not yet been compared side by side.
 ## Known limitations
 
 - **Windows has compiled but never run.** See [development.md](development.md#verification-status).
+- **Other notch apps.** Two overlays cannot share the notch. The macOS panel sits one level above
+  Boring Notch so that it receives mouse events, but both may still react. Quit other notch apps
+  when testing.
 - **Space swipes on macOS.** A standard panel can disappear during a Space swipe or full-screen
   transition. One open-source notch app solves this with a private CGS overlay space. Noitch uses
   public API only so far; check this by hand and decide before adopting anything private.

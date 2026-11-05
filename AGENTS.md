@@ -5,6 +5,18 @@ Core Animation) and `windows/` (C++20, Win32, DirectComposition). They share no 
 
 **Performance is the first priority**, ahead of developer convenience and code sharing.
 
+## Feature requests apply to both platforms
+
+**Any request to add or change a feature applies to macOS and Windows**, even if it doesn't mention
+a platform. Implement it in both apps in the same change.
+
+- Work on one platform only when the request says so explicitly, such as "macOS only" or "hanya
+  Windows".
+- If one OS has no way to support the feature, implement the other, then state the gap and the reason
+  in your summary. Don't drop it silently.
+- Being unable to run Windows here is not a reason to skip it. Write the Windows code, run the checks
+  you can, and report it as not run.
+
 ## Before you change anything
 
 Read these first. They are requirements, not background.
@@ -52,12 +64,15 @@ Moving to a shared cross-platform layer is out of scope. The duplication is deli
 - Don't add a protocol, base class, registry or event bus until two real features need it.
 - `macos/Noitch.xcodeproj` uses synchronized folders. Adding a Swift file needs no project change.
 - Windows sources are listed in `windows/CMakeLists.txt`.
+- Each platform folder is self-contained. Tooling lives in `macos/scripts/` and `windows/scripts/`;
+  nothing in one platform folder may refer to the other.
+- Generated files stay out of the repository. Add new ones to `.gitignore`.
 
 ## Shared behavior
 
 Sizes, radii, spring parameters and interaction rules are listed in
 [docs/architecture.md](docs/architecture.md#shared-behavior). A behavior change updates that table
-and both apps together. If you can only do one platform, record the gap in your summary.
+and both apps together.
 
 ## Swift conventions
 
@@ -83,18 +98,23 @@ and both apps together. If you can only do one platform, record the gap in your 
 macOS changes:
 
 ```sh
-xcodebuild test -project macos/Noitch.xcodeproj -scheme Noitch -destination 'platform=macOS'
-scripts/measure-macos.sh
+xcodebuild test -project macos/Noitch.xcodeproj -scheme Noitch -destination 'platform=macOS,arch=arm64' -derivedDataPath macos/build
+macos/scripts/measure.sh
 ```
+
+If you changed the window, hover or animation code, also run `macos/scripts/measure.sh --hover`. It
+moves the real cursor for about 25 seconds, so tell the user first. It has caught bugs that unit tests
+cannot see.
 
 Windows changes, on Windows:
 
 ```powershell
+cd windows
 cmake --preset default
 cmake --build --preset debug
 ctest --preset debug
 cmake --build --preset release
-scripts\measure-windows.ps1
+scripts\measure.ps1
 ```
 
 Windows pure logic can also be tested on macOS:
@@ -105,3 +125,7 @@ clang++ -std=c++20 -Iwindows/src windows/tests/island_tests.cpp -o /tmp/island_t
 
 In your summary, report the budget numbers before and after, and state plainly what you could not
 run. **Never describe Windows code as working unless it was run on Windows.** Compiling is not running.
+
+The scripts open real windows and can move the cursor, so tell the user before running them. Never
+capture the whole screen: use `screencapture -l <window id>`, or personal data can end up in your
+context.

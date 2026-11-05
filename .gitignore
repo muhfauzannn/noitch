@@ -1,4 +1,5 @@
 .DS_Store
+*.profraw
 
 # macOS
 macos/build/
@@ -12,5 +13,5 @@ windows/out/
 .vs/
 
 # Benchmarks
-benchmarks/macos-ui-stack/build/
-benchmarks/macos-ui-stack/run.log
+macos/benchmarks/*/build/
+macos/benchmarks/*/run.log

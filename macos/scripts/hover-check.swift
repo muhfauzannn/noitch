@@ -1,6 +1,6 @@
 // Drives a running Noitch with the real cursor and checks what its window does. Unit tests cannot
 // see these bugs: they live in how AppKit, Core Animation and the window server interact.
-// Run through scripts/measure-macos.sh --hover. No clicks. The cursor is restored at the end.
+// Run through macos/scripts/measure.sh --hover. No clicks. The cursor is restored at the end.
 // Posting mouse events may need Accessibility permission for the terminal.
 import CoreGraphics
 import Foundation

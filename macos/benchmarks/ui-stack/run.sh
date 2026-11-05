@@ -7,7 +7,7 @@ reps=${1:-3}
 out=build
 mkdir -p "$out"
 
-clang -O2 -o "$out/probe" probe.c
+clang -O2 -o "$out/probe" ../../scripts/probe.c
 swiftc -O -wmo -swift-version 6 -o "$out/appkit_ca" appkit_ca.swift
 swiftc -O -wmo -swift-version 6 -o "$out/swiftui_hosted" swiftui_hosted.swift
 swiftc -O -wmo -swift-version 6 -o "$out/appkit_swiftui_linked" appkit_swiftui_linked.swift

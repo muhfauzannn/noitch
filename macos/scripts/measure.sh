@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds Release, runs the real app and checks it against docs/performance.md.
-# Usage: scripts/measure-macos.sh [--hover] [idle seconds]   Exits non-zero if a budget is exceeded.
-# --hover also runs scripts/hover-check.swift, which moves the real cursor for about 25 seconds.
+# Usage: macos/scripts/measure.sh [--hover] [idle seconds]   Exits non-zero if a budget is exceeded.
+# --hover also runs hover-check.swift, which moves the real cursor for about 25 seconds.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,12 +13,16 @@ max_footprint_mb=12
 max_cpu_ms_per_min=20
 max_wakeups_per_s=0.5
 
-build=macos/build
-xcodebuild -project macos/Noitch.xcodeproj -scheme Noitch -configuration Release \
+build=build
+xcodebuild -project Noitch.xcodeproj -scheme Noitch -configuration Release \
     -derivedDataPath "$build" CODE_SIGN_IDENTITY=- -quiet build
 app="$build/Build/Products/Release/Noitch.app"
+if nm "$app/Contents/MacOS/Noitch" | grep -q __llvm_profile; then
+    echo "Release build is coverage-instrumented; its numbers would be wrong" >&2
+    exit 1
+fi
 probe="$build/probe"
-clang -O2 -o "$probe" benchmarks/macos-ui-stack/probe.c
+clang -O2 -o "$probe" scripts/probe.c
 
 pkill -x Noitch 2>/dev/null || true
 sleep 1

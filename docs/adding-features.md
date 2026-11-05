@@ -28,7 +28,8 @@ shared.
    images or text.
 5. **Animate with the compositor.** See below.
 6. **Keep logic pure.** Parsing and layout go in pure types with tests.
-7. **Implement both platforms, or record the gap.** Update "Shared behavior" if behavior is shared.
+7. **Implement both platforms in the same change**, unless the request names one platform. If an OS
+   can't support the feature, record why. Update "Shared behavior" if behavior is shared.
 8. **Measure.** Run the budget script before and after, and report both.
 
 ## Rendering content
@@ -59,9 +60,13 @@ case where something must change over time.
 
 ## SwiftUI
 
-SwiftUI is not allowed in the island. It may be used in **separate, rarely opened windows** such as
-settings, because a linked but unused framework costs little. It must be created only when opened
-and released when closed. The numbers are in [tech-stack.md](tech-stack.md#swiftui).
+SwiftUI is not allowed in the island, where it cost about 39× more CPU per animation. It may be used
+in **separate, rarely opened windows** such as settings, because linking it costs nothing measurable
+until it is used.
+
+The first SwiftUI window adds about 8.4 MB that stays **after the window closes**, so opening settings
+once uses most of the footprint budget's headroom until the app restarts. Weigh that before choosing
+SwiftUI over a small AppKit window. The numbers are in [tech-stack.md](tech-stack.md#swiftui).
 
 ## Where the events come from
 
