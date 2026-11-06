@@ -170,7 +170,11 @@ void IslandWindow::ApplyLayout() {
 void IslandWindow::TransitionTo(IslandState next) {
     if (next == state_) return;
     state_ = next;
-    motion_.Retarget(geometry_.PillFor(next), NowSeconds());
+    // Read each time, so changing the setting applies to the next transition. Reduce Motion keeps
+    // the timing and drops the overshoot.
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    motion_.Retarget(geometry_.PillFor(next), NowSeconds(), animations ? kSpringBounce : kReducedBounce);
     // Grow the hit region before expanding and shrink it after collapsing.
     if (next == IslandState::Expanded) {
         UpdateHitRegion();

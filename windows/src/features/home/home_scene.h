@@ -12,6 +12,7 @@
 #include "home_layout.h"
 #include "home_model.h"
 #include "island/compositor.h"
+#include "island/opacity_motion.h"
 
 namespace noitch {
 
@@ -26,10 +27,20 @@ public:
     bool Exists() const { return surface_ != nullptr; }
 
     void SetArtwork(const std::shared_ptr<const Artwork>& artwork, uint32_t tint);
-    HRESULT Paint(const HomeModel& model, HomeControl hovered, bool isPressed);
+    HRESULT Paint(const HomeModel& model);
+
+    // Fades the plate behind a control. It moves between controls without animating: hover
+    // happens tens of times a day, so it shouldn't be what you watch. Pass None to hide it.
+    HRESULT SetHover(HomeControl control, bool isPressed, const HomeModel& model, double now);
+
+    // Content just changed: ramps its opacity back up from a low start, so the swap reads as a fade.
+    HRESULT FadeInContent(double now);
 
 private:
     HRESULT CreateFormats();
+    HRESULT BeginDraw(IDCompositionSurface* surface);
+    HRESULT EndDraw(IDCompositionSurface* surface);
+    HRESULT DrawPlate(int diameter);
     void PaintText(const std::string& text, IDWriteTextFormat* format, const HomeRect& rect, float opacity);
     void PaintIcon(const wchar_t* glyph, HomeControl control, float opacity, bool isLarge);
 
@@ -37,6 +48,12 @@ private:
     HomeLayout layout_;
     float scale_ = 1;
     Microsoft::WRL::ComPtr<IDCompositionSurface> surface_;
+    Microsoft::WRL::ComPtr<IDCompositionSurface> plateSurface_;
+    float left_ = 0;
+    int plateSize_ = 0;
+    int plateDiameter_ = 0;
+    OpacityMotion contentMotion_;
+    OpacityMotion plateMotion_;
     Microsoft::WRL::ComPtr<ID2D1Factory1> factory_;
     Microsoft::WRL::ComPtr<ID2D1Device> device_;
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> context_;

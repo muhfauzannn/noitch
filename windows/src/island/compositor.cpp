@@ -27,6 +27,9 @@ HRESULT Compositor::BuildScene() {
     body_.Reset();
     fill_.Reset();
     content_.Reset();
+    content3_.Reset();
+    plate_.Reset();
+    plate3_.Reset();
     dxgi_.Reset();
     leftFlare_.Reset();
     rightFlare_.Reset();
@@ -174,6 +177,8 @@ HRESULT Compositor::CreateContentSurface(UINT width, UINT height, float left, ID
     HRESULT hr;
     if (!content_) {
         if (FAILED(hr = device_->CreateVisual(&content_))) return hr;
+        // Optional: an older system just shows the content without fading it.
+        content_.As(&content3_);
         // Above fill_, so the black pill stays behind it.
         if (FAILED(hr = body_->AddVisual(content_.Get(), TRUE, fill_.Get()))) return hr;
     }
@@ -187,9 +192,68 @@ HRESULT Compositor::CreateContentSurface(UINT width, UINT height, float left, ID
 
 HRESULT Compositor::RemoveContent() {
     if (!content_) return S_OK;
+    if (plate_) body_->RemoveVisual(plate_.Get());
+    plate_.Reset();
+    plate3_.Reset();
     HRESULT hr = body_->RemoveVisual(content_.Get());
     content_.Reset();
+    content3_.Reset();
     return FAILED(hr) ? hr : device_->Commit();
+}
+
+// One ease-out ramp, handed to DWM whole. When it ends DWM keeps the final value, so nothing in this
+// process has to clean up after it.
+HRESULT Compositor::AnimateOpacity(IDCompositionVisual3* visual, const OpacityMotion& motion) {
+    if (!visual) return S_OK;
+    HRESULT hr;
+    if (motion.Duration() <= 0) {
+        if (FAILED(hr = visual->SetOpacity(motion.Target()))) return hr;
+        return device_->Commit();
+    }
+    ComPtr<IDCompositionAnimation> animation;
+    if (FAILED(hr = device_->CreateAnimation(&animation))) return hr;
+    const CubicSegment ramp = motion.Segment();
+    if (FAILED(hr = animation->AddCubic(ramp.offset, ramp.c0, ramp.c1, ramp.c2, ramp.c3))) return hr;
+    if (FAILED(hr = animation->End(motion.Duration(), motion.Target()))) return hr;
+    if (FAILED(hr = visual->SetOpacity(animation.Get()))) return hr;
+    return device_->Commit();
+}
+
+HRESULT Compositor::AnimateContentOpacity(const OpacityMotion& motion) {
+    return AnimateOpacity(content3_.Get(), motion);
+}
+
+HRESULT Compositor::AnimatePlateOpacity(const OpacityMotion& motion) {
+    return AnimateOpacity(plate3_.Get(), motion);
+}
+
+HRESULT Compositor::CreatePlateSurface(UINT size, IDCompositionSurface** surface) {
+    if (!content_ || !content3_) return E_NOTIMPL;
+    HRESULT hr;
+    if (!plate_) {
+        ComPtr<IDCompositionVisual> plate;
+        if (FAILED(hr = device_->CreateVisual(&plate))) return hr;
+        ComPtr<IDCompositionVisual3> plate3;
+        if (FAILED(hr = plate.As(&plate3))) return hr;
+        // Starts invisible, so it is never seen before its first ramp.
+        if (FAILED(hr = plate3->SetOpacity(0.0f))) return hr;
+        // Below the content, so the icons draw over it.
+        if (FAILED(hr = body_->AddVisual(plate.Get(), FALSE, content_.Get()))) return hr;
+        plate_ = plate;
+        plate3_ = plate3;
+    }
+    ComPtr<IDCompositionSurface> created;
+    if (FAILED(hr = device_->CreateSurface(size, size, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED, &created))) return hr;
+    if (FAILED(hr = plate_->SetContent(created.Get()))) return hr;
+    *surface = created.Detach();
+    return S_OK;
+}
+
+HRESULT Compositor::SetPlateOffset(float x, float y) {
+    if (!plate_) return S_OK;
+    HRESULT hr;
+    if (FAILED(hr = plate_->SetOffsetX(x))) return hr;
+    return plate_->SetOffsetY(y);
 }
 
 }  // namespace noitch

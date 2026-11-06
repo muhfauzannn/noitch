@@ -24,12 +24,16 @@ struct CubicSegment {
 // Same parameters as the macOS CASpringAnimation(perceptualDuration:bounce:), so the two feel alike.
 inline constexpr double kSpringResponse = 0.38;
 inline constexpr double kSpringBounce = 0.18;
+// What Reduce Motion asks for is no bounce. The closed form below divides by zero at exactly 0, and
+// 0.01 overshoots by far less than a pixel.
+inline constexpr double kReducedBounce = 0.01;
 
 // A critically-damped-or-softer spring toward a fixed target, solved in closed form.
 class ScalarSpring {
 public:
     ScalarSpring() = default;
-    ScalarSpring(double from, double velocity, double target) : target_(target), displacement_(from - target), velocity_(velocity) {}
+    ScalarSpring(double from, double velocity, double target, double bounce = kSpringBounce)
+        : target_(target), displacement_(from - target), velocity_(velocity), bounce_(bounce) {}
 
     double Target() const { return target_; }
 
@@ -68,14 +72,15 @@ public:
 
 private:
     static double NaturalFrequency() { return 2 * 3.14159265358979323846 / kSpringResponse; }
-    static double Damping() { return 1 - kSpringBounce; }
-    static double Decay() { return Damping() * NaturalFrequency(); }
-    static double Frequency() { return NaturalFrequency() * std::sqrt(1 - Damping() * Damping()); }
+    double Damping() const { return 1 - bounce_; }
+    double Decay() const { return Damping() * NaturalFrequency(); }
+    double Frequency() const { return NaturalFrequency() * std::sqrt(1 - Damping() * Damping()); }
     double SineTerm() const { return (velocity_ + Decay() * displacement_) / Frequency(); }
 
     double target_ = 0;
     double displacement_ = 0;
     double velocity_ = 0;
+    double bounce_ = kSpringBounce;
 };
 
 // The four animated pill properties, advanced together. Retarget continues from the current value
@@ -93,12 +98,12 @@ public:
         duration_ = 0;
     }
 
-    void Retarget(const Pill& target, double now) {
+    void Retarget(const Pill& target, double now, double bounce = kSpringBounce) {
         const double elapsed = now - start_;
         const auto values = Channels(target);
         double duration = 0;
         for (int i = 0; i < kChannels; ++i) {
-            springs_[i] = ScalarSpring(springs_[i].Value(elapsed), springs_[i].Velocity(elapsed), values[i]);
+            springs_[i] = ScalarSpring(springs_[i].Value(elapsed), springs_[i].Velocity(elapsed), values[i], bounce);
             duration = std::max(duration, springs_[i].SettleTime(kTolerancePx));
         }
         start_ = now;

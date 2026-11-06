@@ -20,6 +20,7 @@ void HomeController::IslandWillOpen(const HomeLayout& layout, float left, float 
         if (FAILED(scene_.Create(*compositor_, layout, left, scale))) scene_.Release();
         source_.SetArtworkPixels(static_cast<int>(layout.Artwork().width + 0.5f));
         shownArtwork_.reset();
+        hasShown_ = false;
     }
     source_.Start(window_, now_);
     Refresh();
@@ -31,6 +32,7 @@ void HomeController::IslandWillClose() {
     hovered_ = HomeControl::None;
     pressed_ = HomeControl::None;
     scrubFraction_.reset();
+    scene_.SetHover(HomeControl::None, false, shown_, now_());
     // One-shot, not periodic: it fires once, unless the island reopens first.
     SetTimer(window_, kReleaseTimer, kReleaseDelayMs, nullptr);
 }
@@ -41,6 +43,7 @@ void HomeController::Release() {
     source_.Stop();
     scene_.Release();
     shownArtwork_.reset();
+    hasShown_ = false;
     nowPlaying_ = NowPlaying{};
     lyrics_.reset();
     lyricsKey_.clear();
@@ -129,7 +132,13 @@ double HomeController::CurrentPosition() const {
 
 void HomeController::Refresh() {
     if (!isOpen_) return;
-    scene_.Paint(MakeHomeModel(nowPlaying_, lyrics_.get(), isLoadingLyrics_, CurrentPosition(), showsLyricsPanel_, settings_), hovered_, pressed_ != HomeControl::None);
+    const HomeModel model = MakeHomeModel(nowPlaying_, lyrics_.get(), isLoadingLyrics_, CurrentPosition(), showsLyricsPanel_, settings_);
+    // A new track or the lyrics panel opening or closing. The per-second time text never counts.
+    const bool swapped = hasShown_ && (model.showsLyricsPanel != shown_.showsLyricsPanel || model.title != shown_.title || model.artist != shown_.artist);
+    scene_.Paint(model);
+    if (swapped) scene_.FadeInContent(now_());
+    shown_ = model;
+    hasShown_ = true;
     ScheduleTick();
 }
 
@@ -153,7 +162,7 @@ void HomeController::PointerMoved(float x, float y) {
     const HomeControl control = layout_.ControlAt(x, y);
     if (control == hovered_) return;
     hovered_ = control;
-    Refresh();
+    scene_.SetHover(hovered_, false, shown_, now_());
 }
 
 void HomeController::PointerDown(float x, float y) {
@@ -161,8 +170,11 @@ void HomeController::PointerDown(float x, float y) {
     if (control == HomeControl::None) return;
     pressed_ = control;
     hovered_ = control;
-    if (control == HomeControl::Slider && nowPlaying_.HasTrack() && !showsLyricsPanel_) scrubFraction_ = layout_.SliderFraction(x);
-    Refresh();
+    if (control == HomeControl::Slider && nowPlaying_.HasTrack() && !showsLyricsPanel_) {
+        scrubFraction_ = layout_.SliderFraction(x);
+        Refresh();
+    }
+    scene_.SetHover(control, true, shown_, now_());
 }
 
 void HomeController::PointerUp(float x, float y) {
@@ -176,6 +188,7 @@ void HomeController::PointerUp(float x, float y) {
     }
     hovered_ = layout_.ControlAt(x, y);
     Refresh();
+    scene_.SetHover(hovered_, false, shown_, now_());
 }
 
 void HomeController::FinishScrub(double fraction) {

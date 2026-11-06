@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <wrl/client.h>
 
+#include "opacity_motion.h"
 #include "spring.h"
 
 namespace noitch {
@@ -32,6 +33,13 @@ public:
     // reveal and hide it in DWM with nothing else to animate. `left` is the expanded pill's left edge.
     HRESULT CreateContentSurface(UINT width, UINT height, float left, IDCompositionSurface** surface);
     HRESULT RemoveContent();
+
+    // Opacity of the content and of the hover plate beneath it, ramped by DWM. These need
+    // IDCompositionVisual3 (Windows 10 1607). Without it they do nothing, and the plate isn't created.
+    HRESULT AnimateContentOpacity(const OpacityMotion& motion);
+    HRESULT CreatePlateSurface(UINT size, IDCompositionSurface** surface);
+    HRESULT SetPlateOffset(float x, float y);
+    HRESULT AnimatePlateOpacity(const OpacityMotion& motion);
     HRESULT Commit() { return device_->Commit(); }
 
     // For Direct2D, which draws on the same device as the composition surfaces.
@@ -44,6 +52,7 @@ private:
     HRESULT BuildScene();
     HRESULT BuildFlare(IDCompositionVisual* visual, bool mirrored);
     HRESULT Paint(IDCompositionSurface* surface, UINT width, UINT height, const void* pixels);
+    HRESULT AnimateOpacity(IDCompositionVisual3* visual, const OpacityMotion& motion);
     HRESULT BuildAnimation(const PillMotion& motion, int channel, float bias, IDCompositionAnimation** animation);
 
     HWND hwnd_ = nullptr;
@@ -57,6 +66,9 @@ private:
     Microsoft::WRL::ComPtr<IDCompositionVisual> body_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> fill_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> content_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual3> content3_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual> plate_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual3> plate3_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> leftFlare_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> rightFlare_;
     Microsoft::WRL::ComPtr<IDCompositionRectangleClip> clip_;

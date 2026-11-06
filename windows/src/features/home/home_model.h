@@ -13,6 +13,7 @@
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
 #include "features/settings/app_settings.h"
+#include "home_layout.h"
 
 namespace noitch {
 
@@ -43,6 +44,21 @@ struct HomeModel {
     bool showsLyricsButton = true;
     bool showsShuffleAndRepeat = true;
 };
+
+// Whether hovering a control shows the plate behind it. The slider and artwork have none, and a
+// button the settings turned off isn't there to hover.
+inline bool ControlHasPlate(HomeControl control, const HomeModel& model) {
+    switch (control) {
+        case HomeControl::Settings:
+        case HomeControl::Previous:
+        case HomeControl::PlayPause:
+        case HomeControl::Next: return true;
+        case HomeControl::Lyrics: return model.showsLyricsButton;
+        case HomeControl::Shuffle:
+        case HomeControl::Repeat: return model.showsShuffleAndRepeat;
+        default: return false;
+    }
+}
 
 inline std::string LyricStatus(const Lyrics* lyrics, bool isLoading) {
     if (isLoading) return "Looking for lyrics…";

@@ -10,6 +10,7 @@
 #include "features/now_playing/now_playing.h"
 #include "island/flare.h"
 #include "island/island_geometry.h"
+#include "island/opacity_motion.h"
 #include "island/spring.h"
 
 using namespace noitch;
@@ -309,6 +310,72 @@ void TestArtworkTintIsAverageAndLifted() {
     assert(ArtworkTint(nullptr, 0) == 0xFFFFFFFF);
 }
 
+void TestOpacityRampsFromStartToTargetAndEasesOut() {
+    OpacityMotion motion;
+    motion.Jump(0);
+    motion.Start(0.35f, 1, 0.15, 10);
+    assert(Near(motion.Value(9), 0.35, 1e-6));
+    assert(Near(motion.Value(10), 0.35, 1e-6));
+    assert(Near(motion.Value(10.15), 1, 1e-6));
+    assert(Near(motion.Value(99), 1, 1e-6));
+    // Ease-out: more than half of the change has happened by half of the time.
+    assert(motion.Value(10.075) > 0.35 + 0.65 / 2);
+}
+
+void TestOpacityCubicSegmentMatchesTheCurve() {
+    OpacityMotion motion;
+    motion.Start(0.2f, 0.9f, 0.1, 0);
+    const CubicSegment segment = motion.Segment();
+    for (double t : {0.0, 0.02, 0.05, 0.08, 0.1}) {
+        assert(Near(Evaluate(segment, t), motion.Value(t), 1e-5));
+    }
+}
+
+void TestOpacityRetargetContinuesFromWhereItWas() {
+    OpacityMotion motion;
+    motion.Start(0, 1, 0.1, 0);
+    const float midway = motion.Value(0.04);
+    motion.Retarget(0, 0.1, 0.04);
+    assert(Near(motion.Value(0.04), midway, 1e-6));
+    assert(Near(motion.Value(0.2), 0, 1e-6));
+}
+
+void TestReducedBounceSettlesWithoutVisibleOvershoot() {
+    const ScalarSpring spring(0, 0, 300, kReducedBounce);
+    double peak = 0;
+    for (double t = 0; t < 1.5; t += 0.001) peak = std::max(peak, spring.Value(t));
+    assert(peak - 300 < 0.5);
+    assert(Near(spring.Value(1.5), 300, 0.01));
+    // Full bounce does overshoot, or the test above proves nothing.
+    const ScalarSpring bouncy(0, 0, 300);
+    double bouncyPeak = 0;
+    for (double t = 0; t < 1.5; t += 0.001) bouncyPeak = std::max(bouncyPeak, bouncy.Value(t));
+    assert(bouncyPeak - 300 > 1);
+}
+
+void TestPillMotionTakesTheBounceItIsGiven() {
+    PillMotion plain;
+    PillMotion reduced;
+    const IslandGeometry geometry;
+    plain.Jump(geometry.PillFor(IslandState::Collapsed));
+    reduced.Jump(geometry.PillFor(IslandState::Collapsed));
+    plain.Retarget(geometry.PillFor(IslandState::Expanded), 0);
+    reduced.Retarget(geometry.PillFor(IslandState::Expanded), 0, kReducedBounce);
+    assert(plain.Channel(1).Value(plain.Duration() / 3) != reduced.Channel(1).Value(reduced.Duration() / 3));
+}
+
+void TestPlatesBelongToButtonsThatExist() {
+    HomeModel model;
+    assert(ControlHasPlate(HomeControl::PlayPause, model));
+    assert(!ControlHasPlate(HomeControl::Slider, model));
+    assert(!ControlHasPlate(HomeControl::Artwork, model));
+    model.showsLyricsButton = false;
+    model.showsShuffleAndRepeat = false;
+    assert(!ControlHasPlate(HomeControl::Lyrics, model));
+    assert(!ControlHasPlate(HomeControl::Repeat, model));
+    assert(ControlHasPlate(HomeControl::Settings, model));
+}
+
 }  // namespace
 
 int main() {
@@ -338,6 +405,12 @@ int main() {
     TestNextTickIsTheNextSecondOrAnEarlierLyric();
     TestHomeModelShowsThePlaceholderAndFollowsLyrics();
     TestArtworkTintIsAverageAndLifted();
+    TestOpacityRampsFromStartToTargetAndEasesOut();
+    TestOpacityCubicSegmentMatchesTheCurve();
+    TestOpacityRetargetContinuesFromWhereItWas();
+    TestReducedBounceSettlesWithoutVisibleOvershoot();
+    TestPillMotionTakesTheBounceItIsGiven();
+    TestPlatesBelongToButtonsThatExist();
     std::puts("island_tests: all passed");
     return 0;
 }

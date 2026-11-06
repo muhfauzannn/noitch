@@ -7,6 +7,13 @@ final class HomeScene {
     private static let artworkRadius: CGFloat = 14
     private static let dimmedOpacity: Float = 0.35
     private static let idleOpacity: Float = 0.55
+    // One set of values, so every change in Home moves the same way. All are ease-out.
+    private static let panelSwapDuration: CFTimeInterval = 0.15
+    private static let textSwapDuration: CFTimeInterval = 0.2
+    private static let plateFadeDuration: CFTimeInterval = 0.1
+    private static let pressDuration: CFTimeInterval = 0.1
+    private static let releaseDuration: CFTimeInterval = 0.16
+    private static let pressedScale: CGFloat = 0.92
 
     /// Pinned to the pill's top edge by the view.
     let root = CALayer()
@@ -26,6 +33,7 @@ final class HomeScene {
     private let hoverPlate = CALayer()
     private var icons: [HomeControl: CAShapeLayer] = [:]
     private var shownModel: HomeModel?
+    private var pressedIcon: CALayer?
 
     init(layout: HomeLayout, scale: CGFloat) {
         self.layout = layout
@@ -36,7 +44,7 @@ final class HomeScene {
         root.opacity = 0
 
         hoverPlate.backgroundColor = NSColor.white.withAlphaComponent(0.22).cgColor
-        hoverPlate.isHidden = true
+        hoverPlate.opacity = 0
         root.addSublayer(hoverPlate)
 
         artwork.frame = layout.artwork
@@ -96,6 +104,12 @@ final class HomeScene {
         guard model != shownModel else { return }
         let previous = shownModel
         shownModel = model
+        if let previous {
+            if previous.title != model.title { Self.addFade(to: title, duration: Self.textSwapDuration) }
+            if previous.artist != model.artist { Self.addFade(to: artist, duration: Self.textSwapDuration) }
+            // The container, since it is the parent whose children appear and disappear.
+            if previous.showsLyricsPanel != model.showsLyricsPanel { Self.addFade(to: root, duration: Self.panelSwapDuration) }
+        }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         title.string = model.title
@@ -164,20 +178,33 @@ final class HomeScene {
         CATransaction.commit()
     }
 
+    /// The plate fades but never glides between buttons: hover happens tens of times a day, so it
+    /// shouldn't be the thing you watch. Pressing shrinks the icon a little, unless Reduce Motion is on.
     func setHover(_ control: HomeControl?, isPressed: Bool) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
         let plateControls: Set<HomeControl> = [.settings, .lyrics, .shuffle, .previous, .playPause, .next, .repeatMode]
-        if let control, plateControls.contains(control), icons[control]?.isHidden == false {
-            let frame = layout.frame(of: control)
-            hoverPlate.frame = frame
-            hoverPlate.cornerRadius = frame.width / 2
-            hoverPlate.opacity = isPressed ? 1 : 0.55
-            hoverPlate.isHidden = false
-        } else {
-            hoverPlate.isHidden = true
+        let target = control.flatMap { plateControls.contains($0) && icons[$0]?.isHidden == false ? $0 : nil }
+        if let target {
+            let frame = layout.frame(of: target)
+            Self.withoutActions {
+                hoverPlate.frame = frame
+                hoverPlate.cornerRadius = frame.width / 2
+            }
         }
-        CATransaction.commit()
+        Self.animated(duration: Self.plateFadeDuration) {
+            hoverPlate.opacity = target == nil ? 0 : (isPressed ? 1 : 0.55)
+        }
+
+        let pressing = isPressed ? target.flatMap { icons[$0] } : nil
+        guard pressing !== pressedIcon else { return }
+        if let released = pressedIcon {
+            Self.animated(duration: Self.releaseDuration) { released.transform = CATransform3DIdentity }
+        }
+        if let pressing, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            Self.animated(duration: Self.pressDuration) {
+                pressing.transform = CATransform3DMakeScale(Self.pressedScale, Self.pressedScale, 1)
+            }
+        }
+        pressedIcon = pressing
     }
 
     func fadeIn() { fade(to: 1, duration: 0.2, delay: 0.08) }
@@ -216,11 +243,29 @@ final class HomeScene {
         layer.lineJoin = .round
     }
 
-    private static func addFade(to layer: CALayer) {
+    private static func addFade(to layer: CALayer, duration: CFTimeInterval = HomeScene.textSwapDuration) {
         let transition = CATransition()
         transition.type = .fade
-        transition.duration = 0.2
+        transition.duration = duration
+        transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
         layer.add(transition, forKey: "contentFade")
+    }
+
+    /// Changes made inside animate with the given duration and ease-out. Everything else in the
+    /// scene is set with actions disabled, so only what is asked to move does.
+    private static func animated(duration: CFTimeInterval, _ body: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(duration)
+        CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeOut))
+        body()
+        CATransaction.commit()
+    }
+
+    private static func withoutActions(_ body: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        body()
+        CATransaction.commit()
     }
 
     private static func makeText(size: CGFloat, weight: NSFont.Weight, opacity: Float) -> CATextLayer {

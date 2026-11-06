@@ -179,7 +179,10 @@ final class IslandView: NSView {
     }
 
     private func addSpring(to layer: CALayer, keyPath: String, from: Any, to: Any) {
-        let spring = CASpringAnimation(perceptualDuration: 0.38, bounce: 0.18)
+        // Read each time, so changing the setting applies to the next transition. Reduce Motion
+        // keeps the timing and drops the overshoot.
+        let bounce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
+        let spring = CASpringAnimation(perceptualDuration: 0.38, bounce: bounce)
         spring.keyPath = keyPath
         spring.fromValue = from
         spring.toValue = to

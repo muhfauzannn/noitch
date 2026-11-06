@@ -139,6 +139,25 @@ The grace period means hovering in and out doesn't restart the source each time.
 - On Windows the bar is redrawn with the time label, once per second. There is no fade: the surface
   sits inside the pill's clip, so the spring reveals and hides it in DWM.
 
+### Motion inside Home
+
+All of it is handed to the compositor, with no timer and no per-frame work. Every ease is ease-out.
+
+| Change | Duration | macOS | Windows |
+| --- | --- | --- | --- |
+| Lyrics panel opens or closes | 150 ms | `CATransition` fade on the container | Content opacity ramps 0.35 to 1 |
+| New track (title, artist) | 200 ms | `CATransition` fade on each text layer | Same ramp as above |
+| Hover plate | 100 ms | Opacity fade, no glide between buttons | Own visual, opacity ramp |
+| Press | 100 ms down, 160 ms up | Icon scales to 0.92 | **Not implemented**: icons share one surface |
+
+On Windows a swap is a dip rather than a crossfade, because a crossfade needs two surfaces. Opacity ramps
+need `IDCompositionVisual3`; where it is missing, content just swaps and there is no hover plate.
+
+**Reduce Motion:** the island's spring loses its bounce and keeps its 0.38 s response. Fades stay, since they
+move nothing, and the press scale is dropped. macOS reads `accessibilityDisplayShouldReduceMotion` and
+Windows reads `SPI_GETCLIENTAREAANIMATION`, both at the start of each transition. Windows uses a bounce of
+0.01 rather than 0, which its closed-form spring can't take and which overshoots by under a pixel.
+
 Home has no data while the island is closed, so there is no now playing indicator on the collapsed
 pill. Adding one would mean keeping the source running at rest, which needs measuring first.
 
@@ -193,7 +212,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Top flares | Concave curve on each side where the island meets the screen edge, 8 pt, same size in both states |
 | Corner shape | macOS: continuous. Windows: circular (DirectComposition has no continuous corner) |
 | Overshoot margin | 16 pt |
-| Spring | Response 0.38 s, bounce 0.18 |
+| Spring | Response 0.38 s, bounce 0.18, or none with Reduce Motion |
 | Expand / collapse | Expand immediately when the pointer reaches the real notch, including at the screen top edge; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |

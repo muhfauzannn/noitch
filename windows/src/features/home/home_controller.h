@@ -77,6 +77,9 @@ private:
     bool showsLyricsPanel_ = false;
     std::shared_ptr<const Artwork> shownArtwork_;
     bool isOpen_ = false;
+    // What is on screen, to tell a swap from a plain update.
+    HomeModel shown_;
+    bool hasShown_ = false;
 
     HomeControl hovered_ = HomeControl::None;
     HomeControl pressed_ = HomeControl::None;

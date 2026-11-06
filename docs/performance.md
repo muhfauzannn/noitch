@@ -7,10 +7,10 @@ one needs an explicit decision, not a quiet increase.
 
 | Metric | Budget | macOS now | Windows now |
 | --- | --- | --- | --- |
-| Memory at rest | 12 MB macOS, 30 MB Windows | 9.14 MB, 10.13 MB after Home and seek were used | Not measured |
-| CPU at rest | 20 ms per minute | 1.48–2.87 ms | Not measured |
+| Memory at rest | 12 MB macOS, 30 MB Windows | 9.28 MB, 10.17 MB after Home was used | Not measured |
+| CPU at rest | 20 ms per minute | 1.48–2.87 ms (1.63 latest) | Not measured |
 | Wakeups at rest | 0.5 per second | 0.13–0.17 | Not measured |
-| CPU per transition | 10 ms | 4.83 ms | Not measured |
+| CPU per transition | 10 ms | 4.93 ms | Not measured |
 | Threads at rest | None runnable | Holds, per the CPU figures | Not measured |
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |

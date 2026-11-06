@@ -91,6 +91,8 @@ Keep this honest and up to date.
 | Check | Status |
 | --- | --- |
 | Builds; 33 unit tests | Passing |
+| Home fades and press scale | Code runs under real clicks and hovering; **the motion itself has not been watched or captured** |
+| Reduce Motion | **Not tested**: the setting was never switched on |
 | Budgets at rest | Passing |
 | Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Passing on a notched MacBook, on the clean Release build |
 | Pill and flare shape, collapsed and expanded | Checked by screenshot |
@@ -112,8 +114,8 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Spring, geometry, Home, lyrics and JSON tests | Passing on macOS, under ASan and UBSan |
-| Compiles | With Zig and mingw, using a stub for the WinRT header. It no longer links there |
+| Spring, geometry, Home, lyrics, JSON and opacity tests | Passing on macOS, under ASan and UBSan |
+| Compiles | With Zig and mingw, using stubs for the WinRT and `IDCompositionVisual3` headers. It no longer links there |
 | `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |
 | **Built with MSVC** | **Never**; `windows.yml` will do this on its first run |
