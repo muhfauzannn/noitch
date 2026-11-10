@@ -104,8 +104,10 @@ final class UsageController {
             if limits.problem == nil {
                 claudeLimits = limits
                 remember("claude", limits, asOf: now)
-            } else if limits.problem == .unavailable, let known = rememberedLimits()["claude"] {
-                // Offline or refused for now: the last good numbers beat a blank page.
+            } else if limits.problem == .unavailable || limits.problem == .expired, var known = rememberedLimits()["claude"] {
+                // Offline, refused or logged out for now: the last good numbers beat a blank page. An
+                // expired login still says so, because only the user can renew it.
+                if limits.problem == .expired { known.problem = .expired }
                 claudeLimits = known
             } else {
                 claudeLimits = limits

@@ -141,9 +141,12 @@ bool UsageController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             if (limits->problem == LimitProblem::None) {
                 claudeLimits_ = *limits;
                 Remember("claude", *limits, UnixNow());
-            } else if (limits->problem == LimitProblem::Unavailable && Remembered("claude")) {
-                // Offline or refused for now: the last good numbers beat a blank page.
+            } else if ((limits->problem == LimitProblem::Unavailable || limits->problem == LimitProblem::Expired) &&
+                       Remembered("claude")) {
+                // Offline, refused or logged out for now: the last good numbers beat a blank page. An
+                // expired login still says so, because only the user can renew it.
                 claudeLimits_ = *Remembered("claude");
+                if (limits->problem == LimitProblem::Expired) claudeLimits_.problem = LimitProblem::Expired;
             } else {
                 claudeLimits_ = *limits;
             }

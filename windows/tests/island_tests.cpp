@@ -504,6 +504,12 @@ void TestTheLastGoodLimitsSurviveARoundTrip() {
     assert(mac && mac->fiveHour->usedPercent == 72.5 && !mac->week->resetsAt);
     const UsageModel model = MakeUsageModel(*claude, ToolLimits::Failed(LimitProblem::NoData), UsageSummary{}, 1794323000, [](double) { return std::string("Tue 14:00"); });
     assert(model.claude.today == "As of Tue 14:00");
+    // An expired login keeps the remembered rings but says what to do.
+    ToolLimits expired = *claude;
+    expired.problem = LimitProblem::Expired;
+    const UsageModel stale = MakeUsageModel(expired, ToolLimits::Failed(LimitProblem::NoData), UsageSummary{}, 1794323000, [](double) { return std::string("Tue 14:00"); });
+    assert(stale.claude.inner && stale.claude.center == "73%" && stale.claude.today == "As of Tue 14:00");
+    assert(stale.claude.headline == "Login expired" && stale.claude.detail == "Run claude in a terminal");
 }
 
 void TestThePageSaysWhatMattersInAFewWords() {

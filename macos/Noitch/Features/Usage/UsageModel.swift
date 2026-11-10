@@ -108,7 +108,7 @@ struct UsageModel: Equatable {
             switch problem {
             case .loading: return ("Checking limits…", "Asking Anthropic")
             case .signedOut: return ("Not signed in", "Sign in to Claude Code")
-            case .expired: return ("Login expired", "Open Claude Code to renew")
+            case .expired: return ("Login expired", "Run claude in a terminal")
             case .keychainDenied: return ("No Keychain access", "Reopen Noitch to retry")
             case .unavailable: return ("Limits unavailable", "Trying again in a minute")
             case .noData: return ("No limits yet", "Use it once to see them")

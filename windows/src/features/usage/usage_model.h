@@ -120,7 +120,7 @@ inline std::pair<std::string, std::string> InsightText(const LimitInsight& insig
             switch (insight.problem) {
                 case LimitProblem::Loading: return {"Checking limits\xE2\x80\xA6", "Asking Anthropic"};
                 case LimitProblem::SignedOut: return {"Not signed in", "Sign in to Claude Code"};
-                case LimitProblem::Expired: return {"Login expired", "Open Claude Code to renew"};
+                case LimitProblem::Expired: return {"Login expired", "Run claude in a terminal"};
                 case LimitProblem::NoData: return {"No limits yet", "Use it once to see them"};
                 default: return {"Limits unavailable", "Trying again in a minute"};
             }

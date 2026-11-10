@@ -232,7 +232,7 @@ and will it last? For Claude Code and Codex side by side:
 - **Remembered.** The last good numbers per tool are kept in a small cache file (`Caches/Noitch/limits`
   on macOS, `%LOCALAPPDATA%\Noitch\limits` on Windows, one line per tool in the same format). They
   show at once when the page opens, while the request is out, and in place of "Limits unavailable"
-  when offline; Codex's are used when its logs have aged out of the day the page reads. Remembered
+  when offline and under "Login expired"; Codex's are used when its logs have aged out of the day the page reads. Remembered
   numbers say "As of" and when in place of today's totals. A window whose reset has passed shows
   0%. Written only when the numbers change or are ten minutes older, and only while the page shows.
 
@@ -248,7 +248,10 @@ Where the numbers come from:
   app's credential, approved by the owner on 2026-11-10 with these limits:
   - One request when the page is shown, and one a minute while it stays shown. None otherwise.
   - The token is read for each request and never stored, logged or refreshed. Refreshing would
-    replace Claude Code's own login and sign it out, so an expired token shows "Login expired".
+    replace Claude Code's own login and sign it out, so an expired token shows "Login expired"
+    and "Run claude in a terminal" over the remembered numbers. Only the `claude` CLI renews this
+    login: the Claude desktop app passes its sessions a token of its own and leaves it alone, so
+    someone who only uses the desktop app sees this about eight hours after the last CLI run.
   - macOS asks once, through the system's Keychain prompt. After a refusal Noitch stops asking
     until it is opened again.
   - If Anthropic changes the endpoint, the page says "Limits unavailable"; nothing else breaks.

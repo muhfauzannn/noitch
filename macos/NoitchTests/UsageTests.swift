@@ -193,6 +193,12 @@ struct UsageTests {
         #expect(LimitCache.decode("claude nonsense", tool: "claude") == nil)
         let model = UsageModel(claude: claude!, codex: .failed(.noData), summary: UsageSummary(log: UsageLog(), now: 0, dayStart: 0), now: 1_794_323_000) { _ in "Tue 14:00" }
         #expect(model.claude.today == "As of Tue 14:00")
+        // An expired login keeps the remembered rings but says what to do.
+        var expired = claude!
+        expired.problem = .expired
+        let stale = UsageModel(claude: expired, codex: .failed(.noData), summary: UsageSummary(log: UsageLog(), now: 0, dayStart: 0), now: 1_794_323_000) { _ in "Tue 14:00" }
+        #expect(stale.claude.inner != nil && stale.claude.center == "73%" && stale.claude.today == "As of Tue 14:00")
+        #expect(stale.claude.headline == "Login expired" && stale.claude.detail == "Run claude in a terminal")
     }
 
     @Test func `the page says what matters in a few words`() {
