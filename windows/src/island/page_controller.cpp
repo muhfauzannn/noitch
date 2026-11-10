@@ -139,7 +139,7 @@ void PageController::Scrolled(double delta, double time) {
 
 bool PageController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (home_.HandleMessage(message, wparam, lparam)) return true;
-    if (usage_.HandleMessage(message, wparam)) return true;
+    if (usage_.HandleMessage(message, wparam, lparam)) return true;
     if (message != WM_TIMER) return false;
     if (wparam == kSettleTimer) {
         KillTimer(window_, kSettleTimer);

@@ -2,12 +2,12 @@ import Foundation
 
 /// Token usage read from the local logs of AI coding tools. Pure values in, values out: the source
 /// hands it bytes and the time, so all of it is unit-tested. The Windows app uses the same rules.
-enum AITool: Equatable, Sendable {
+nonisolated enum AITool: Equatable, Sendable {
     case claude
     case codex
 }
 
-struct UsageEntry: Equatable, Sendable {
+nonisolated struct UsageEntry: Equatable, Sendable {
     var tool: AITool
     /// Seconds since 1970.
     var time: Double
@@ -30,14 +30,9 @@ struct UsageEntry: Equatable, Sendable {
     }
 }
 
-/// Codex reports its own five-hour limit, so it isn't estimated.
-struct RateLimit: Equatable, Sendable {
-    var usedPercent: Double
-    var resetsAt: Double
-}
 
 /// Dollars per million tokens. Cache writes cost 1.25× input for five minutes and 2× for an hour.
-struct ModelPrice: Equatable, Sendable {
+nonisolated struct ModelPrice: Equatable, Sendable {
     var input: Double
     var output: Double
     var cacheRead: Double
@@ -75,19 +70,18 @@ struct ModelPrice: Equatable, Sendable {
 }
 
 /// What Codex remembers between lines of one file.
-struct CodexFileState: Equatable, Sendable {
+nonisolated struct CodexFileState: Equatable, Sendable {
     var model = ""
     /// Codex repeats a usage event when only the limits change; a total that didn't grow is a repeat.
     var lastTotal = 0
 }
 
 /// Entries from the last day, kept small: a few numbers per request, never the log text.
-struct UsageLog: Sendable {
-    static let blockLength: Double = 5 * 3600
+nonisolated struct UsageLog: Sendable {
 
     private(set) var entries: [UsageEntry] = []
-    private(set) var codexLimit: RateLimit?
-    private var codexLimitTime = -Double.infinity
+    /// Codex writes its limits with every turn, so their history gives a recent pace.
+    private(set) var codexSamples: [LimitSample] = []
     /// Claude Code writes one line per content block, each repeating the request's usage.
     private var seenClaude: [String: Double] = [:]
 
@@ -114,13 +108,13 @@ struct UsageLog: Sendable {
             }
             guard let payload = JSONScan.value("payload", in: line),
                   let time = JSONScan.value("timestamp", in: line).flatMap(JSONScan.string).flatMap(Self.parseTime) else { return }
-            if let limits = JSONScan.value("rate_limits", in: payload),
-               let primary = JSONScan.value("primary", in: limits),
-               let used = JSONScan.value("used_percent", in: primary).flatMap(JSONScan.number),
-               let resets = JSONScan.value("resets_at", in: primary).flatMap(JSONScan.number),
-               time >= codexLimitTime {
-                codexLimitTime = time
-                codexLimit = RateLimit(usedPercent: used, resetsAt: resets)
+            if let limits = JSONScan.value("rate_limits", in: payload), time >= (codexSamples.last?.time ?? -.infinity) {
+                let sample = LimitSample(
+                    time: time,
+                    fiveHour: Self.codexWindow(JSONScan.value("primary", in: limits)),
+                    week: Self.codexWindow(JSONScan.value("secondary", in: limits))
+                )
+                if sample.fiveHour != nil || sample.week != nil { codexSamples.append(sample) }
             }
             guard let info = JSONScan.value("info", in: payload),
                   let total = JSONScan.value("total_token_usage", in: info)
@@ -141,9 +135,22 @@ struct UsageLog: Sendable {
         }
     }
 
-    mutating func prune(before cutoff: Double) {
+    mutating func prune(before cutoff: Double, samplesBefore sampleCutoff: Double) {
         entries.removeAll { $0.time < cutoff }
         seenClaude = seenClaude.filter { $0.value >= cutoff }
+        // The latest sample stays however old it is: it still says where the week stands.
+        if let last = codexSamples.last {
+            codexSamples.removeAll { $0.time < sampleCutoff }
+            if codexSamples.isEmpty { codexSamples = [last] }
+        }
+    }
+
+    private static func codexWindow<C: ByteSlice>(_ object: C?) -> LimitWindow? {
+        guard let object,
+              let used = JSONScan.value("used_percent", in: object).flatMap(JSONScan.number),
+              let minutes = JSONScan.value("window_minutes", in: object).flatMap(JSONScan.number), minutes > 0 else { return nil }
+        let resets = JSONScan.value("resets_at", in: object).flatMap(JSONScan.number)
+        return LimitWindow(usedPercent: used, resetsAt: resets, length: minutes * 60)
     }
 
     typealias Line = Slice<UnsafeBufferPointer<UInt8>>
@@ -262,7 +269,7 @@ struct UsageLog: Sendable {
 }
 
 /// What the page shows for one tool.
-struct ToolUsage: Equatable, Sendable {
+nonisolated struct ToolUsage: Equatable, Sendable {
     struct Model: Equatable, Sendable {
         var name: String
         var tokens: Int
@@ -290,53 +297,26 @@ struct ToolUsage: Equatable, Sendable {
     }
 }
 
-struct UsageBlock: Equatable, Sendable {
-    var start: Double
-    var usage: ToolUsage
-    var end: Double { start + UsageLog.blockLength }
-}
-
-struct UsageSummary: Equatable, Sendable {
+/// Today's totals per tool, for the line under each tool's name.
+nonisolated struct UsageSummary: Equatable, Sendable {
     var claudeToday: ToolUsage
     var codexToday: ToolUsage
-    /// Claude Code's five-hour window, estimated the way ccusage does: a block starts on the hour of
-    /// its first request and ends five hours later, or after five idle hours.
-    var claudeBlock: UsageBlock?
-    var codexLimit: RateLimit?
 
     init(log: UsageLog, now: Double, dayStart: Double) {
         let today = log.entries.filter { $0.time >= dayStart && $0.time <= now }
         claudeToday = ToolUsage(today.lazy.filter { $0.tool == .claude })
         codexToday = ToolUsage(today.lazy.filter { $0.tool == .codex })
-        claudeBlock = Self.currentBlock(log.entries.filter { $0.tool == .claude }, now: now)
-        codexLimit = log.codexLimit.flatMap { $0.resetsAt > now ? $0 : nil }
-    }
-
-    static func currentBlock(_ entries: [UsageEntry], now: Double) -> UsageBlock? {
-        var start: Double?
-        var last = -Double.infinity
-        var members: [UsageEntry] = []
-        for entry in entries.sorted(by: { $0.time < $1.time }) where entry.time <= now {
-            if start == nil || entry.time >= start! + UsageLog.blockLength || entry.time - last >= UsageLog.blockLength {
-                start = (entry.time / 3600).rounded(.down) * 3600
-                members = []
-            }
-            members.append(entry)
-            last = entry.time
-        }
-        guard let start, now < start + UsageLog.blockLength else { return nil }
-        return UsageBlock(start: start, usage: ToolUsage(members))
     }
 }
 
 /// Bytes from a log line: an array slice in tests, a mapped file in the app.
-protocol ByteSlice: RandomAccessCollection where Element == UInt8, Index == Int, SubSequence == Self {}
+nonisolated protocol ByteSlice: RandomAccessCollection, SendableMetatype where Element == UInt8, Index == Int, SubSequence == Self {}
 extension ArraySlice<UInt8>: ByteSlice {}
 extension Slice<UnsafeBufferPointer<UInt8>>: ByteSlice {}
 
 /// Finds one field of a JSON object without building the whole object. Log lines can hold large
 /// tool output, and only a few numbers are needed from each.
-enum JSONScan {
+nonisolated enum JSONScan {
     /// The raw value of `key` among the object's own fields, not those of nested objects.
     static func value<C: ByteSlice>(_ key: String, in object: C) -> C? {
         let key = Array(key.utf8)

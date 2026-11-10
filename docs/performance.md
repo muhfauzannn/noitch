@@ -15,6 +15,12 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the limits page (2026-11-10, same M5): two idle runs read 9.16 and 9.27 MB, 1.84 and 4.89
+ms/min, 0.10 and 0.07 wakeups/s. Two runs started straight after a test run or another measurement
+read 10.09 and 10.58 MB, 24.15 and 37.56 ms/min, over budget, so their hover checks did not run; the
+cursor was in use on another display at the time. Repeat with the machine idle before trusting
+either. The binary is 751 KB.
+
 With pages and the usage page (2026-11-10, same M5): 8.91 MB, 1.43 ms/min, 0.10 wakeups/s and
 3.91 ms per transition, all hover checks passing; the binary grew from 478 KB to 711 KB. One earlier
 run of the same build failed every hover check with a collapsed window 177 pt wide instead of 195,

@@ -30,6 +30,9 @@ public:
     void Text(std::string_view utf8, IDWriteTextFormat* format, const HomeRect& rect, D2D1_COLOR_F color);
     void Glyph(const wchar_t* glyph, IDWriteTextFormat* format, const HomeRect& rect, D2D1_COLOR_F color);
     void Fill(const HomeRect& rect, float radius, D2D1_COLOR_F color);
+    // A ring stroke filled from the top clockwise up to `fraction` of the circle, with round ends.
+    void Arc(D2D1_POINT_2F center, float radius, float width, double fraction, D2D1_COLOR_F color);
+    void Dot(D2D1_POINT_2F center, float radius, D2D1_COLOR_F color);
 
 private:
     Microsoft::WRL::ComPtr<ID2D1Factory1> factory_;
@@ -37,6 +40,7 @@ private:
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> context_;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush_;
     Microsoft::WRL::ComPtr<IDWriteFactory> writeFactory_;
+    Microsoft::WRL::ComPtr<ID2D1StrokeStyle> roundStroke_;
 };
 
 }  // namespace noitch

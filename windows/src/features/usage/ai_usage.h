@@ -71,10 +71,44 @@ struct UsageEntry {
     }
 };
 
-// Codex reports its own five-hour limit, so it isn't estimated.
-struct RateLimit {
-    double usedPercent = 0;
-    double resetsAt = 0;
+// One usage window, such as five hours or a week, as the provider reports it.
+struct LimitWindow {
+    static constexpr double kFiveHours = 5 * 3600;
+    static constexpr double kWeek = 7 * 86400;
+
+    double usedPercent = 0;  // 0 to 100, and can pass 100 when a provider allows overage.
+    std::optional<double> resetsAt;  // Seconds since 1970.
+    double length = 0;
+
+    bool operator==(const LimitWindow&) const = default;
+
+    // How much of the window's time has gone, from 0 to 1.
+    std::optional<double> Elapsed(double now) const {
+        if (!resetsAt) return std::nullopt;
+        return std::clamp(1 - (*resetsAt - now) / length, 0.0, 1.0);
+    }
+    std::optional<double> Remaining(double now) const {
+        if (!resetsAt) return std::nullopt;
+        return std::max(*resetsAt - now, 0.0);
+    }
+    // A window whose reset has passed starts again from nothing.
+    LimitWindow Current(double now) const {
+        if (!resetsAt || *resetsAt > now) return *this;
+        return {0, std::nullopt, length};
+    }
+    // Percent per second, averaged over the window so far. Too early in a window says nothing.
+    std::optional<double> AverageRate(double now) const {
+        const auto elapsed = Elapsed(now);
+        if (!elapsed || *elapsed * length < 600) return std::nullopt;
+        return usedPercent / (*elapsed * length);
+    }
+};
+
+// A snapshot of one provider's limits at a moment, from Codex's logs.
+struct LimitSample {
+    double time = 0;
+    std::optional<LimitWindow> fiveHour;
+    std::optional<LimitWindow> week;
 };
 
 // What Codex remembers between lines of one file.
@@ -220,10 +254,10 @@ inline std::optional<double> ParseTime(std::string_view text) {
 // Entries from the last day, kept small: a few numbers per request, never the log text.
 class UsageLog {
 public:
-    static constexpr double kBlockLength = 5 * 3600;
 
     const std::vector<UsageEntry>& Entries() const { return entries_; }
-    const std::optional<RateLimit>& CodexLimit() const { return codexLimit_; }
+    // Codex writes its limits with every turn, so their history gives a recent pace.
+    const std::vector<LimitSample>& CodexSamples() const { return codexSamples_; }
 
     // Reads whole lines and returns how many bytes it used, so a half-written last line is read later.
     size_t ReadClaude(std::string_view bytes, double cutoff) {
@@ -252,13 +286,9 @@ public:
             const auto time = stamp ? ParseTime(*stamp) : std::nullopt;
             if (!time) return;
             if (const auto limits = Value("rate_limits", *payload)) {
-                if (const auto primary = Value("primary", *limits)) {
-                    const auto used = Number(Value("used_percent", *primary));
-                    const auto resets = Number(Value("resets_at", *primary));
-                    if (used && resets && *time >= codexLimitTime_) {
-                        codexLimitTime_ = *time;
-                        codexLimit_ = RateLimit{*used, *resets};
-                    }
+                if (codexSamples_.empty() || *time >= codexSamples_.back().time) {
+                    LimitSample sample{*time, CodexWindow(Value("primary", *limits)), CodexWindow(Value("secondary", *limits))};
+                    if (sample.fiveHour || sample.week) codexSamples_.push_back(sample);
                 }
             }
             const auto info = Value("info", *payload);
@@ -285,7 +315,13 @@ public:
         });
     }
 
-    void Prune(double cutoff) {
+    void Prune(double cutoff, double sampleCutoff) {
+        // The latest sample stays however old it is: it still says where the week stands.
+        if (!codexSamples_.empty()) {
+            const LimitSample last = codexSamples_.back();
+            codexSamples_.erase(std::remove_if(codexSamples_.begin(), codexSamples_.end(), [&](const LimitSample& s) { return s.time < sampleCutoff; }), codexSamples_.end());
+            if (codexSamples_.empty()) codexSamples_.push_back(last);
+        }
         entries_.erase(std::remove_if(entries_.begin(), entries_.end(), [&](const UsageEntry& e) { return e.time < cutoff; }), entries_.end());
         for (auto it = seenClaude_.begin(); it != seenClaude_.end();) {
             it = it->second < cutoff ? seenClaude_.erase(it) : std::next(it);
@@ -293,6 +329,15 @@ public:
     }
 
 private:
+    static std::optional<LimitWindow> CodexWindow(std::optional<std::string_view> object) {
+        using namespace json_scan;
+        if (!object) return std::nullopt;
+        const auto used = Number(Value("used_percent", *object));
+        const auto minutes = Number(Value("window_minutes", *object));
+        if (!used || !minutes || *minutes <= 0) return std::nullopt;
+        return LimitWindow{*used, Number(Value("resets_at", *object)), *minutes * 60};
+    }
+
     // Calls `body` for each complete line holding one of the patterns, in file order, with the index
     // of the first pattern found. memchr and find skip the rest quickly: most of a log is tool output.
     template <typename Body>
@@ -360,8 +405,7 @@ private:
     }
 
     std::vector<UsageEntry> entries_;
-    std::optional<RateLimit> codexLimit_;
-    double codexLimitTime_ = -std::numeric_limits<double>::infinity();
+    std::vector<LimitSample> codexSamples_;
     // Claude Code writes one line per content block, each repeating the request's usage.
     std::unordered_map<std::string, double> seenClaude_;
 };
@@ -407,37 +451,10 @@ struct ToolUsage {
     }
 };
 
-struct UsageBlock {
-    double start = 0;
-    ToolUsage usage;
-    double End() const { return start + UsageLog::kBlockLength; }
-};
-
-// Claude Code's five-hour window, estimated the way ccusage does: a block starts on the hour of its
-// first request and ends five hours later, or after five idle hours.
-inline std::optional<UsageBlock> CurrentBlock(std::vector<UsageEntry> entries, double now) {
-    std::sort(entries.begin(), entries.end(), [](const UsageEntry& a, const UsageEntry& b) { return a.time < b.time; });
-    std::optional<double> start;
-    double last = -std::numeric_limits<double>::infinity();
-    std::vector<UsageEntry> members;
-    for (UsageEntry& entry : entries) {
-        if (entry.time > now) break;
-        if (!start || entry.time >= *start + UsageLog::kBlockLength || entry.time - last >= UsageLog::kBlockLength) {
-            start = std::floor(entry.time / 3600) * 3600;
-            members.clear();
-        }
-        last = entry.time;
-        members.push_back(std::move(entry));
-    }
-    if (!start || now >= *start + UsageLog::kBlockLength) return std::nullopt;
-    return UsageBlock{*start, ToolUsage::From(members, [](const UsageEntry&) { return true; })};
-}
-
+// Today's totals per tool, for the line under each tool's name.
 struct UsageSummary {
     ToolUsage claudeToday;
     ToolUsage codexToday;
-    std::optional<UsageBlock> claudeBlock;
-    std::optional<RateLimit> codexLimit;
 };
 
 inline UsageSummary Summarize(const UsageLog& log, double now, double dayStart) {
@@ -445,12 +462,6 @@ inline UsageSummary Summarize(const UsageLog& log, double now, double dayStart) 
     const auto& entries = log.Entries();
     summary.claudeToday = ToolUsage::From(entries, [&](const UsageEntry& e) { return e.tool == AITool::Claude && e.time >= dayStart && e.time <= now; });
     summary.codexToday = ToolUsage::From(entries, [&](const UsageEntry& e) { return e.tool == AITool::Codex && e.time >= dayStart && e.time <= now; });
-    std::vector<UsageEntry> claude;
-    for (const UsageEntry& e : entries) {
-        if (e.tool == AITool::Claude) claude.push_back(e);
-    }
-    summary.claudeBlock = CurrentBlock(std::move(claude), now);
-    if (log.CodexLimit() && log.CodexLimit()->resetsAt > now) summary.codexLimit = log.CodexLimit();
     return summary;
 }
 

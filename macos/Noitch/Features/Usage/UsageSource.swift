@@ -36,7 +36,7 @@ final class UsageSource {
         for root in codexRoots { scan(root, tool: .codex, cutoff: cutoff, seen: &seen) }
         // A file that has gone quiet for a day can't add anything inside the window.
         files = files.filter { seen.contains($0.key) }
-        log.prune(before: cutoff)
+        log.prune(before: cutoff, samplesBefore: now - 2 * LimitRates.recentSpan)
         Self.logger.debug("Usage read in \(ContinuousClock.now - start)")
         return log
     }

@@ -2,6 +2,7 @@
 
 #include <d2d1_1helper.h>
 
+#include <cmath>
 #include <string>
 
 using Microsoft::WRL::ComPtr;
@@ -22,11 +23,16 @@ HRESULT Painter::Create(IDXGIDevice* dxgi) {
     // Pixels are the unit everywhere here, so Direct2D must not scale again.
     context_->SetDpi(96, 96);
     if (FAILED(hr = context_->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 1), &brush_))) return hr;
+    const D2D1_STROKE_STYLE_PROPERTIES round = D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND);
+    ComPtr<ID2D1StrokeStyle> stroke;
+    if (FAILED(hr = factory_->CreateStrokeStyle(round, nullptr, 0, &stroke))) return hr;
+    roundStroke_ = stroke;
     return DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(writeFactory_.GetAddressOf()));
 }
 
 void Painter::Release() {
     writeFactory_.Reset();
+    roundStroke_.Reset();
     brush_.Reset();
     context_.Reset();
     device_.Reset();
@@ -94,6 +100,33 @@ void Painter::Glyph(const wchar_t* glyph, IDWriteTextFormat* format, const HomeR
 void Painter::Fill(const HomeRect& rect, float radius, D2D1_COLOR_F color) {
     brush_->SetColor(color);
     context_->FillRoundedRectangle(D2D1::RoundedRect(ToD2D(rect), radius, radius), brush_.Get());
+}
+
+void Painter::Arc(D2D1_POINT_2F center, float radius, float width, double fraction, D2D1_COLOR_F color) {
+    if (fraction <= 0) return;
+    brush_->SetColor(color);
+    if (fraction >= 0.999) {
+        context_->DrawEllipse(D2D1::Ellipse(center, radius, radius), brush_.Get(), width);
+        return;
+    }
+    // Zero is the top, and pixel y grows downward, so increasing angles run clockwise.
+    const double angle = fraction * 2 * 3.14159265358979323846;
+    const D2D1_POINT_2F start = D2D1::Point2F(center.x, center.y - radius);
+    const D2D1_POINT_2F end = D2D1::Point2F(center.x + radius * static_cast<float>(std::sin(angle)), center.y - radius * static_cast<float>(std::cos(angle)));
+    ComPtr<ID2D1PathGeometry> path;
+    ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(factory_->CreatePathGeometry(&path)) || FAILED(path->Open(&sink))) return;
+    sink->BeginFigure(start, D2D1_FIGURE_BEGIN_HOLLOW);
+    sink->AddArc(D2D1::ArcSegment(end, D2D1::SizeF(radius, radius), 0, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                                  fraction > 0.5 ? D2D1_ARC_SIZE_LARGE : D2D1_ARC_SIZE_SMALL));
+    sink->EndFigure(D2D1_FIGURE_END_OPEN);
+    if (FAILED(sink->Close())) return;
+    context_->DrawGeometry(path.Get(), brush_.Get(), width, roundStroke_.Get());
+}
+
+void Painter::Dot(D2D1_POINT_2F center, float radius, D2D1_COLOR_F color) {
+    brush_->SetColor(color);
+    context_->FillEllipse(D2D1::Ellipse(center, radius, radius), brush_.Get());
 }
 
 }  // namespace noitch

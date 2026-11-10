@@ -75,50 +75,14 @@ struct UsageTests {
         #expect(UsageEntry(tool: .codex, time: 0, model: "gpt-6.1-sol").cost == nil)
     }
 
-    @Test func `codex counts each turn once and splits cached input`() {
-        var log = UsageLog()
-        var state = CodexFileState()
-        let context = #"{"timestamp":"2026-11-10T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}}"#
-        func count(_ total: Int, time: String) -> String {
-            #"{"timestamp":"\#(time)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":\#(total)},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":600,"output_tokens":50,"total_tokens":1050}},"rate_limits":{"primary":{"used_percent":32.0,"window_minutes":300,"resets_at":2000000000}}}}"#
-        }
-        let text = [context, count(1050, time: "2026-11-10T01:00:01Z"), count(1050, time: "2026-11-10T01:00:02Z"),
-                    count(2100, time: "2026-11-10T01:00:03Z")].joined(separator: "\n") + "\n"
-        _ = Self.readCodex(text, into: &log, state: &state)
-        #expect(log.entries.count == 2)
-        #expect(log.entries[0].model == "gpt-5-codex")
-        #expect(log.entries[0].input == 400 && log.entries[0].cacheRead == 600 && log.entries[0].output == 50)
-        #expect(log.codexLimit == RateLimit(usedPercent: 32, resetsAt: 2_000_000_000))
-        #expect(state.lastTotal == 2100)
-    }
-
-    @Test func `a block starts on the hour and ends five hours later`() throws {
-        let hour = 3600.0
-        func entry(_ time: Double) -> UsageEntry {
-            var entry = UsageEntry(tool: .claude, time: time, model: "claude-opus-5-5")
-            entry.output = 1
-            return entry
-        }
-        let block = try #require(UsageSummary.currentBlock([entry(10 * hour + 900), entry(11 * hour)], now: 12 * hour))
-        #expect(block.start == 10 * hour)
-        #expect(block.end == 15 * hour)
-        #expect(block.usage.tokens == 2)
-        // Past its end, a new request starts a new block on its own hour.
-        let next = try #require(UsageSummary.currentBlock([entry(10 * hour), entry(15 * hour + 60)], now: 16 * hour))
-        #expect(next.start == 15 * hour && next.usage.tokens == 1)
-        #expect(UsageSummary.currentBlock([entry(hour)], now: 7 * hour) == nil)
-    }
-
     @Test func `numbers read the way the page shows them`() {
         #expect(UsageModel.tokens(512) == "512")
+        #expect(UsageModel.duration(3 * 86400 + 4 * 3600) == "3d 4h")
         #expect(UsageModel.tokens(12_000) == "12K")
         #expect(UsageModel.tokens(12_430_000) == "12.4M")
         #expect(UsageModel.dollars(8.214) == "$8.21")
         #expect(UsageModel.duration(2 * 3600 + 13 * 60) == "2h 13m")
         #expect(UsageModel.duration(30) == "1m")
-        #expect(UsageModel.displayName("claude-opus-5-5") == "Opus 5.5")
-        #expect(UsageModel.displayName("claude-sonnet-4-5-20250929") == "Sonnet 4.5")
-        #expect(UsageModel.displayName("gpt-5-codex") == "gpt-5-codex")
     }
 
     @Test func `unpriced models make the cost a lower bound`() {
@@ -130,13 +94,119 @@ struct UsageTests {
         #expect(UsageModel.cost(ToolUsage([unknown])) == "—")
     }
 
+    @Test func `codex counts each turn once and keeps its limits`() {
+        var log = UsageLog()
+        var state = CodexFileState()
+        let context = #"{"timestamp":"2026-11-10T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}}"#
+        func count(_ total: Int, time: String) -> String {
+            #"{"timestamp":"\#(time)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":\#(total)},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":600,"output_tokens":50,"total_tokens":1050}},"rate_limits":{"primary":{"used_percent":32.0,"window_minutes":300,"resets_at":2000000000},"secondary":{"used_percent":6.0,"window_minutes":10080,"resets_at":2000300000}}}}"#
+        }
+        let text = [context, count(1050, time: "2026-11-10T01:00:01Z"), count(1050, time: "2026-11-10T01:00:02Z"),
+                    count(2100, time: "2026-11-10T01:00:03Z")].joined(separator: "\n") + "\n"
+        _ = Self.readCodex(text, into: &log, state: &state)
+        #expect(log.entries.count == 2)
+        #expect(log.entries[0].model == "gpt-5-codex")
+        #expect(log.entries[0].input == 400 && log.entries[0].cacheRead == 600 && log.entries[0].output == 50)
+        #expect(log.codexSamples.count == 3)
+        #expect(log.codexSamples.last?.fiveHour == LimitWindow(usedPercent: 32, resetsAt: 2_000_000_000, length: 18000))
+        #expect(log.codexSamples.last?.week?.length == 604_800)
+    }
+
+    @Test func `pace compares use with the time gone`() {
+        let window = LimitWindow(usedPercent: 60, resetsAt: 10_000 + 3.5 * 3600, length: LimitWindow.fiveHours)
+        // 1.5 of 5 hours gone is 30%: using 60% is ahead.
+        #expect(Pace(window, at: 10_000) == .ahead)
+        #expect(Pace(LimitWindow(usedPercent: 30, resetsAt: window.resetsAt, length: window.length), at: 10_000) == .even)
+        #expect(Pace(LimitWindow(usedPercent: 5, resetsAt: window.resetsAt, length: window.length), at: 10_000) == .under)
+        #expect(window.current(at: window.resetsAt! + 1).usedPercent == 0)
+    }
+
+    @Test func `a fast pace warns before the five hour reset`() {
+        let now = 100_000.0
+        let five = LimitWindow(usedPercent: 70, resetsAt: now + 2 * 3600, length: LimitWindow.fiveHours)
+        // 1% a minute leaves 30 minutes, long before the reset in two hours.
+        let insight = LimitInsight(ToolLimits(fiveHour: five, week: nil, recentRate: 1.0 / 60), at: now)
+        #expect(insight == .runsOut(window: LimitWindow.fiveHours, in: 1800, resetsIn: 7200))
+        #expect(insight.severity == .watch)
+        let calm = LimitInsight(ToolLimits(fiveHour: five, week: nil, recentRate: 0), at: now)
+        #expect(calm == .onTrack(projected: 70))
+        let reached = LimitInsight(ToolLimits(fiveHour: LimitWindow(usedPercent: 100, resetsAt: now + 60, length: LimitWindow.fiveHours)), at: now)
+        #expect(reached.severity == .critical)
+        #expect(LimitInsight(.failed(.expired), at: now) == .problem(.expired))
+    }
+
+    @Test func `the week warns when its average pace runs out early`() {
+        let now = 1_000_000.0
+        // Two days into the week and 60% used: at that average it runs out on day 3.3.
+        let week = LimitWindow(usedPercent: 60, resetsAt: now + 5 * 86400, length: LimitWindow.week)
+        guard case let .runsOut(length, time, _) = LimitInsight(ToolLimits(fiveHour: nil, week: week), at: now) else {
+            Issue.record("expected a warning")
+            return
+        }
+        #expect(length == LimitWindow.week)
+        #expect(abs(time - 40.0 * 2 * 86400 / 60) < 1)
+    }
+
+    @Test func `codex pace comes from its own percentages`() {
+        let resets = 50_000.0
+        func sample(_ time: Double, _ used: Double) -> LimitSample {
+            LimitSample(time: time, fiveHour: LimitWindow(usedPercent: used, resetsAt: resets, length: LimitWindow.fiveHours), week: nil)
+        }
+        let now = 40_000.0
+        let samples = [sample(now - 2400, 10), sample(now - 600, 25), sample(now - 60, 28)]
+        let rate = LimitRates.codex(samples, now: now)
+        #expect(rate.map { abs($0 - 18.0 / 1800) < 1e-9 } == true)
+    }
+
+    @Test func `claude pace is its share of the window's recent cost`() throws {
+        let now = 100_000.0
+        let window = LimitWindow(usedPercent: 40, resetsAt: now + 3 * 3600, length: LimitWindow.fiveHours)
+        func entry(_ time: Double) -> UsageEntry {
+            var entry = UsageEntry(tool: .claude, time: time, model: "claude-opus-5-5")
+            entry.output = 100_000
+            return entry
+        }
+        // Half the window's cost came in the last half hour, so half of 40% did.
+        let rate = try #require(LimitRates.claude([entry(now - 3600), entry(now - 600)], window: window, now: now))
+        #expect(abs(rate - 20.0 / 1800) < 1e-9)
+    }
+
+    @Test func `the usage response and stored login parse`() throws {
+        let response = #"{"five_hour":{"utilization":72.0,"resets_at":"2026-11-10T15:00:00.123456+00:00"},"seven_day":{"utilization":41,"resets_at":null},"seven_day_opus":null}"#
+        let limits = try #require(ClaudeUsageFormat.limits(fromResponse: Array(response.utf8)[...]))
+        #expect(limits.fiveHour?.usedPercent == 72)
+        #expect(limits.fiveHour?.resetsAt.map { abs($0 - 1_794_322_800.123456) < 1e-3 } == true)
+        #expect(limits.week == LimitWindow(usedPercent: 41, resetsAt: nil, length: LimitWindow.week))
+        #expect(ClaudeUsageFormat.limits(fromResponse: Array("{}".utf8)[...]) == nil)
+        let credentials = #"{"claudeAiOauth":{"accessToken":"token-value","refreshToken":"r","expiresAt":1794326400000}}"#
+        let login = try #require(ClaudeUsageFormat.login(fromCredentials: Array(credentials.utf8)[...]))
+        #expect(login.accessToken == "token-value" && login.expiresAt == 1_794_326_400)
+    }
+
+    @Test func `the page says what matters in a few words`() {
+        let now = 100_000.0
+        let five = LimitWindow(usedPercent: 70, resetsAt: now + 2 * 3600, length: LimitWindow.fiveHours)
+        let week = LimitWindow(usedPercent: 20, resetsAt: now + 4 * 86400, length: LimitWindow.week)
+        var log = UsageLog()
+        _ = Self.read(Self.claudeLine(id: "msg_1", time: "1970-01-02T03:00:00Z") + "\n", into: &log)
+        let model = UsageModel(claude: ToolLimits(fiveHour: five, week: week, recentRate: 1.0 / 60), codex: .failed(.noData),
+                               summary: UsageSummary(log: log, now: now, dayStart: 0), now: now) { _ in "Thu 14:00" }
+        #expect(model.claude.center == "70%" && model.claude.caption == "5h")
+        #expect(model.claude.headline == "5h runs out in ~30m")
+        #expect(model.claude.detail == "1h 30m before its reset")
+        #expect(model.claude.rows[1].reset == "Thu 14:00")
+        #expect(model.claude.inner?.fraction == 0.7)
+        #expect(model.codex.headline == "No limits yet" && model.codex.center == "—")
+    }
+
     @Test(arguments: [CGFloat(24), 32, 38])
     func `the usage page fits under the header`(headerHeight: CGFloat) {
         let layout = UsageLayout(size: IslandGeometry.expandedSize, headerHeight: headerHeight)
-        let last = layout.row(1, UsageModel.maxRows - 1)
-        #expect(last.maxY <= IslandGeometry.expandedSize.height - 12)
-        #expect(layout.title(0).maxX < layout.title(1).minX)
-        #expect(layout.title(1).maxX <= IslandGeometry.expandedSize.width - UsageLayout.sidePadding)
+        let bottom = IslandGeometry.expandedSize.height - 8
+        #expect(layout.detail(1).maxY <= bottom && layout.gauge(1).maxY <= bottom)
+        #expect(layout.gauge(0).minY >= headerHeight)
+        #expect(layout.rowReset(0, 0).maxX <= layout.gauge(1).minX)
+        #expect(layout.detail(1).maxX <= IslandGeometry.expandedSize.width - UsageLayout.sidePadding)
     }
 
     @Test func `header controls stay clear of Home's controls`() {

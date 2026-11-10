@@ -53,7 +53,9 @@ The app must have **no runnable threads at rest**, and our process must do **no 
 
 MediaRemoteAdapter on macOS is the one approved exception for dependencies, extra processes and
 private APIs. Its limits are in [docs/architecture.md](docs/architecture.md#now-playing-on-macos);
-don't widen them without asking.
+don't widen them without asking. The usage page's Claude limits use an undocumented Anthropic
+endpoint with Claude Code's login, also approved within the limits in
+[docs/architecture.md](docs/architecture.md#usage).
 
 Moving to a shared cross-platform layer is out of scope. The duplication is deliberate.
 

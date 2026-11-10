@@ -25,6 +25,7 @@ add_executable(Noitch WIN32
     src/island/painter.cpp
     src/features/home/home_controller.cpp
     src/features/home/home_scene.cpp
+    src/features/usage/claude_limit_source.cpp
     src/features/usage/usage_controller.cpp
     src/features/usage/usage_scene.cpp
     src/features/usage/usage_source.cpp

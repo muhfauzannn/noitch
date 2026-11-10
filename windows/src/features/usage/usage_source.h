@@ -20,6 +20,7 @@ public:
 
     UsageSource();
     const UsageLog& Refresh(double now);
+    const UsageLog& Log() const { return log_; }
 
 private:
     struct FileState {
@@ -40,5 +41,7 @@ private:
 // Seconds since 1970, and the start of today in local time, as UsageSummary wants them.
 double UnixNow();
 double LocalDayStart();
+// A short local label such as "Thu 14:00".
+std::string LocalClock(double time);
 
 }  // namespace noitch

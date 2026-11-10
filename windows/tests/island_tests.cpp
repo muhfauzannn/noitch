@@ -9,6 +9,7 @@
 #include "features/home/home_model.h"
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
+#include "features/usage/ai_limits.h"
 #include "features/usage/ai_usage.h"
 #include "features/usage/usage_layout.h"
 #include "features/usage/usage_model.h"
@@ -381,48 +382,11 @@ void TestOpusIsPricedFromTheList() {
     assert(!entry.Cost());
 }
 
-void TestCodexCountsEachTurnOnceAndSplitsCachedInput() {
-    const auto count = [](int total, const char* time) {
-        return std::string("{\"timestamp\":\"") + time + "\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"total_tokens\":" +
-               std::to_string(total) + "},\"last_token_usage\":{\"input_tokens\":1000,\"cached_input_tokens\":600,\"output_tokens\":50,\"total_tokens\":1050}},"
-               "\"rate_limits\":{\"primary\":{\"used_percent\":32.0,\"window_minutes\":300,\"resets_at\":2000000000}}}}";
-    };
-    const std::string text = std::string(R"({"timestamp":"2026-11-10T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}})") + "\n" +
-                             count(1050, "2026-11-10T01:00:01Z") + "\n" + count(1050, "2026-11-10T01:00:02Z") + "\n" + count(2100, "2026-11-10T01:00:03Z") + "\n";
-    UsageLog log;
-    CodexFileState state;
-    log.ReadCodex(text, state, 0);
-    assert(log.Entries().size() == 2);
-    assert(log.Entries()[0].model == "gpt-5-codex");
-    assert(log.Entries()[0].input == 400 && log.Entries()[0].cacheRead == 600 && log.Entries()[0].output == 50);
-    assert(log.CodexLimit() && log.CodexLimit()->usedPercent == 32 && log.CodexLimit()->resetsAt == 2000000000);
-    assert(state.lastTotal == 2100);
-}
-
-void TestBlockStartsOnTheHourAndEndsFiveHoursLater() {
-    const double hour = 3600;
-    const auto entry = [](double time) {
-        UsageEntry e;
-        e.time = time;
-        e.model = "claude-opus-5-5";
-        e.output = 1;
-        return e;
-    };
-    const auto block = CurrentBlock({entry(10 * hour + 900), entry(11 * hour)}, 12 * hour);
-    assert(block && block->start == 10 * hour && block->End() == 15 * hour && block->usage.tokens == 2);
-    const auto next = CurrentBlock({entry(10 * hour), entry(15 * hour + 60)}, 16 * hour);
-    assert(next && next->start == 15 * hour && next->usage.tokens == 1);
-    assert(!CurrentBlock({entry(hour)}, 7 * hour));
-}
-
 void TestUsageNumbersReadTheWayThePageShowsThem() {
     using namespace usage_text;
     assert(Tokens(512) == "512" && Tokens(12000) == "12K" && Tokens(12430000) == "12.4M");
     assert(Dollars(8.214) == "$8.21");
-    assert(Duration(2 * 3600 + 13 * 60) == "2h 13m" && Duration(30) == "1m");
-    assert(DisplayName("claude-opus-5-5") == "Opus 5.5");
-    assert(DisplayName("claude-sonnet-4-5-20250929") == "Sonnet 4.5");
-    assert(DisplayName("gpt-5-codex") == "gpt-5-codex");
+    assert(Duration(2 * 3600 + 13 * 60) == "2h 13m" && Duration(30) == "1m" && Duration(3 * 86400 + 4 * 3600) == "3d 4h");
     UsageEntry known;
     known.model = "gpt-5";
     known.output = 1000000;
@@ -434,11 +398,109 @@ void TestUsageNumbersReadTheWayThePageShowsThem() {
     assert(Cost(ToolUsage::From({unknown}, all)) == "\xE2\x80\x94");
 }
 
+void TestCodexCountsEachTurnOnceAndKeepsItsLimits() {
+    const auto count = [](int total, const char* time) {
+        return std::string("{\"timestamp\":\"") + time + "\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"total_tokens\":" +
+               std::to_string(total) + "},\"last_token_usage\":{\"input_tokens\":1000,\"cached_input_tokens\":600,\"output_tokens\":50,\"total_tokens\":1050}},"
+               "\"rate_limits\":{\"primary\":{\"used_percent\":32.0,\"window_minutes\":300,\"resets_at\":2000000000},"
+               "\"secondary\":{\"used_percent\":6.0,\"window_minutes\":10080,\"resets_at\":2000300000}}}}";
+    };
+    const std::string text = std::string(R"({"timestamp":"2026-11-10T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}})") + "\n" +
+                             count(1050, "2026-11-10T01:00:01Z") + "\n" + count(1050, "2026-11-10T01:00:02Z") + "\n" + count(2100, "2026-11-10T01:00:03Z") + "\n";
+    UsageLog log;
+    CodexFileState state;
+    log.ReadCodex(text, state, 0);
+    assert(log.Entries().size() == 2);
+    assert(log.Entries()[0].model == "gpt-5-codex");
+    assert(log.Entries()[0].input == 400 && log.Entries()[0].cacheRead == 600 && log.Entries()[0].output == 50);
+    assert(log.CodexSamples().size() == 3);
+    assert(*log.CodexSamples().back().fiveHour == (LimitWindow{32, 2000000000.0, 18000}));
+    assert(log.CodexSamples().back().week->length == 604800);
+}
+
+void TestPaceComparesUseWithTheTimeGone() {
+    const LimitWindow window{60, 10000 + 3.5 * 3600, LimitWindow::kFiveHours};
+    assert(PaceOf(window, 10000) == Pace::Ahead);
+    assert(PaceOf({30, window.resetsAt, window.length}, 10000) == Pace::Even);
+    assert(PaceOf({5, window.resetsAt, window.length}, 10000) == Pace::Under);
+    assert(window.Current(*window.resetsAt + 1).usedPercent == 0);
+}
+
+void TestAFastPaceWarnsBeforeTheFiveHourReset() {
+    const double now = 100000;
+    ToolLimits limits;
+    limits.fiveHour = LimitWindow{70, now + 2 * 3600, LimitWindow::kFiveHours};
+    limits.recentRate = 1.0 / 60;
+    const LimitInsight insight = InsightOf(limits, now);
+    assert(insight.kind == LimitInsight::Kind::RunsOut && Near(insight.time, 1800, 1e-6) && Near(*insight.resetsIn, 7200, 1e-6));
+    assert(insight.Level() == Severity::Watch);
+    limits.recentRate = 0.0;
+    const LimitInsight calm = InsightOf(limits, now);
+    assert(calm.kind == LimitInsight::Kind::OnTrack && Near(calm.value, 70, 1e-9));
+    ToolLimits reached;
+    reached.fiveHour = LimitWindow{100, now + 60, LimitWindow::kFiveHours};
+    assert(InsightOf(reached, now).Level() == Severity::Critical);
+    assert(InsightOf(ToolLimits::Failed(LimitProblem::Expired), now).kind == LimitInsight::Kind::Problem);
+}
+
+void TestTheWeekWarnsWhenItsAveragePaceRunsOutEarly() {
+    const double now = 1000000;
+    ToolLimits limits;
+    limits.week = LimitWindow{60, now + 5 * 86400, LimitWindow::kWeek};
+    const LimitInsight insight = InsightOf(limits, now);
+    assert(insight.kind == LimitInsight::Kind::RunsOut && insight.window == LimitWindow::kWeek);
+    assert(Near(insight.time, 40.0 * 2 * 86400 / 60, 1));
+}
+
+void TestPacesComeFromCodexPercentagesAndClaudeCost() {
+    const double resets = 50000;
+    const auto sample = [&](double time, double used) { return LimitSample{time, LimitWindow{used, resets, LimitWindow::kFiveHours}, std::nullopt}; };
+    const double now = 40000;
+    const auto codex = CodexRate({sample(now - 2400, 10), sample(now - 600, 25), sample(now - 60, 28)}, now);
+    assert(codex && Near(*codex, 18.0 / 1800, 1e-12));
+    const LimitWindow window{40, 100000 + 3 * 3600, LimitWindow::kFiveHours};
+    const auto entry = [](double time) {
+        UsageEntry e;
+        e.time = time;
+        e.model = "claude-opus-5-5";
+        e.output = 100000;
+        return e;
+    };
+    const auto claude = ClaudeRate({entry(100000 - 3600), entry(100000 - 600)}, window, 100000);
+    assert(claude && Near(*claude, 20.0 / 1800, 1e-12));
+}
+
+void TestUsageResponseAndStoredLoginParse() {
+    const auto limits = ClaudeLimitsFromResponse(R"({"five_hour":{"utilization":72.0,"resets_at":"2026-11-10T15:00:00.123456+00:00"},"seven_day":{"utilization":41,"resets_at":null},"seven_day_opus":null})");
+    assert(limits && limits->fiveHour->usedPercent == 72 && Near(*limits->fiveHour->resetsAt, 1794322800.123456, 1e-3));
+    assert(limits->week->usedPercent == 41 && !limits->week->resetsAt);
+    assert(!ClaudeLimitsFromResponse("{}"));
+    const auto login = ClaudeLoginFromCredentials(R"({"claudeAiOauth":{"accessToken":"token-value","refreshToken":"r","expiresAt":1794326400000}})");
+    assert(login && login->accessToken == "token-value" && *login->expiresAt == 1794326400);
+}
+
+void TestThePageSaysWhatMattersInAFewWords() {
+    const double now = 100000;
+    ToolLimits claude;
+    claude.fiveHour = LimitWindow{70, now + 2 * 3600, LimitWindow::kFiveHours};
+    claude.week = LimitWindow{20, now + 4 * 86400, LimitWindow::kWeek};
+    claude.recentRate = 1.0 / 60;
+    const UsageModel model = MakeUsageModel(claude, ToolLimits::Failed(LimitProblem::NoData), UsageSummary{}, now, [](double) { return std::string("Thu 14:00"); });
+    assert(model.claude.center == "70%" && model.claude.caption == "5h");
+    assert(model.claude.headline == "5h runs out in ~30m");
+    assert(model.claude.detail == "1h 30m before its reset");
+    assert(model.claude.rows[1].reset == "Thu 14:00");
+    assert(model.claude.inner->fraction == 0.7);
+    assert(model.codex.headline == "No limits yet" && model.codex.center == "\xE2\x80\x94");
+}
+
 void TestUsagePageFitsUnderTheHeader() {
     for (float header : {24.0f, 32.0f, 38.0f}) {
         const UsageLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
-        assert(layout.Row(1, kUsageRows - 1).Bottom() <= IslandGeometry::ExpandedHeight() - 12);
-        assert(layout.Title(0).Right() < layout.Title(1).x);
+        const float bottom = IslandGeometry::ExpandedHeight() - 8;
+        assert(layout.Detail(1).Bottom() <= bottom && layout.Gauge(1).Bottom() <= bottom);
+        assert(layout.Gauge(0).y >= header);
+        assert(layout.RowReset(0, 0).Right() <= layout.Gauge(1).x);
     }
 }
 
@@ -472,8 +534,13 @@ int main() {
     TestScannerReadsOnlyTheObjectsOwnFields();
     TestClaudeLinesGiveOneEntryPerRequest();
     TestOpusIsPricedFromTheList();
-    TestCodexCountsEachTurnOnceAndSplitsCachedInput();
-    TestBlockStartsOnTheHourAndEndsFiveHoursLater();
+    TestCodexCountsEachTurnOnceAndKeepsItsLimits();
+    TestPaceComparesUseWithTheTimeGone();
+    TestAFastPaceWarnsBeforeTheFiveHourReset();
+    TestTheWeekWarnsWhenItsAveragePaceRunsOutEarly();
+    TestPacesComeFromCodexPercentagesAndClaudeCost();
+    TestUsageResponseAndStoredLoginParse();
+    TestThePageSaysWhatMattersInAFewWords();
     TestUsageNumbersReadTheWayThePageShowsThem();
     TestUsagePageFitsUnderTheHeader();
     TestHeaderControlsStayClearOfHomesControls();

@@ -33,6 +33,7 @@ passing or to frames drawn. The spec for "at rest" is simple: **zero threads run
 | Now playing | MediaRemote adapter child process, only while open | `GlobalSystemMediaTransportControlsSessionManager`, only while open |
 | Text and images | `CATextLayer`, layer `contents` | One Direct2D + DirectWrite surface |
 | Settings | AppKit window, `UserDefaults` | Win32 window, `HKCU\Software\Noitch` |
+| Claude limits | Undocumented usage endpoint, Keychain login, only while the usage page shows | Same endpoint, `.credentials.json` login |
 | Dependencies | MediaRemoteAdapter (BSD 3-Clause, vendored) | None beyond the OS and Windows SDK |
 
 Why each technology was chosen, and the evidence, is in [tech-stack.md](tech-stack.md).
@@ -194,28 +195,60 @@ A macOS update could break the adapter. Home then shows "Nothing playing"; nothi
 
 ### Usage
 
-The second page shows token usage of Claude Code and Codex on this machine, read from their local
-logs: `~/.claude/projects` (and `~/.config/claude/projects`, or `CLAUDE_CONFIG_DIR`) and
-`~/.codex/sessions` (or `CODEX_HOME`). Nothing is sent anywhere.
+The second page answers one question per tool: how much of my five-hour and weekly limit is left,
+and will it last? For Claude Code and Codex side by side:
 
-- **What it shows.** Per tool: tokens and estimated cost today, a five-hour window, and the top three
-  models. Claude Code's window is estimated the way ccusage does it: a block starts on the hour of
-  its first request and lasts five hours. Codex reports its own limit (`rate_limits.primary`), so
-  that is shown as reported, with the percentage used.
+- **Gauge.** Two rings: five hours inside, the week outside, in the tool's colour (Claude coral, Codex
+  blue; the week lighter). A white dot on each ring marks how much of that window's *time* has
+  passed, so fill running past the dot means usage is ahead of the clock. The middle shows the
+  five-hour percentage. On macOS the rings sweep up from empty as the page appears.
+- **Rows.** Percentage, pace (▲ ahead, ● even, ▼ under, comparing use with time gone, ±10 points)
+  and when each window resets: a countdown for five hours, a day and time for the week.
+- **Insight.** The one thing worth knowing, most urgent first: a limit reached and when it comes
+  back; a limit that runs out before its reset at the current pace, and how long before the reset
+  it does; otherwise the five-hour use projected at its reset ("Plenty of room", "On track",
+  "Cutting it close"). Rings and text turn yellow, then red, as it gets urgent.
+- **Pace.** The five-hour projection uses the last half hour, the week its average so far. Codex's
+  recent pace comes from the percentages it logs with every turn. Claude reports only a percentage,
+  so its recent pace is that percentage times the share of the window's cost (from local logs)
+  spent in the last half hour.
+- **Today.** Tokens and estimated cost today, under each name, from the local logs.
+
+Where the numbers come from:
+
+- **Codex** writes `rate_limits` (five hours and a week, with reset times) into its session logs,
+  `~/.codex/sessions` or `CODEX_HOME`. Nothing is sent anywhere.
+- **Claude Code** keeps no percentages on disk. Its logs record a limit only when one is hit. The
+  numbers come from the endpoint its own `/usage` command calls, `GET
+  https://api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20`, using Claude
+  Code's login: the Keychain item "Claude Code-credentials" on macOS, `.credentials.json` in the
+  Claude folder on Windows. This is an undocumented API, a network request and a read of another
+  app's credential, approved by the owner on 2026-11-10 with these limits:
+  - One request when the page is shown, and one a minute while it stays shown. None otherwise.
+  - The token is read for each request and never stored, logged or refreshed. Refreshing would
+    replace Claude Code's own login and sign it out, so an expired token shows "Login expired".
+  - macOS asks once, through the system's Keychain prompt. After a refusal Noitch stops asking
+    until it is opened again.
+  - If Anthropic changes the endpoint, the page says "Limits unavailable"; nothing else breaks.
+- Local logs: `~/.claude/projects` (and `~/.config/claude/projects`, or `CLAUDE_CONFIG_DIR`) for
+  today's totals and Claude's recent pace.
+
+Reading the logs:
+
 - **Counting.** Claude Code repeats a request's usage on each content block, so entries are
   deduplicated by message and request id. Codex repeats a usage event when only its limits change,
   so an event counts only when the running total grows; its cached input is split out of input.
 - **Cost.** A built-in price list (`ModelPrice` / `FindPrice`), Anthropic list prices as of 2026-11
   and the OpenAI models whose price is known. A model without a price adds tokens but no cost, and
-  the cost then shows as a lower bound (`$4.20+`), or a dash if nothing is priced. Update the list
-  when prices change.
-- **Reading.** There is no event to wait for, so it reads when the page is shown and at each whole
+  the cost then shows as a lower bound (`$4.20+`), or a dash if nothing is priced.
+- **When.** There is no event to wait for, so it reads when the page is shown and at each whole
   minute while it stays shown, then nothing. Only `.jsonl` files changed in the last 24 hours are
   opened, each mapped, and only bytes appended since the last read are parsed. Lines are found with
   `memchr` and `memmem`; because quotes inside JSON strings are escaped, a `"key":` pattern only
   matches a real key, so the fields are found without parsing the large response text.
 - It runs on the main thread. On an M5 the first read of a day's logs (21 MB) took 24 to 59 ms in a
-  Release build; later reads took about 3 ms.
+  Release build; later reads took about 3 ms. The request runs off the main thread: a Swift task on
+  macOS, a short-lived pool thread on Windows, as lyrics do.
 
 ### Lyrics
 
@@ -255,6 +288,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Pages | Home, Usage. Tabs left in the header band, settings right; header numbers in `HeaderLayout` and `island_page.h` |
 | Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
+| Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand immediately when the pointer reaches the real notch, including at the screen top edge; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |

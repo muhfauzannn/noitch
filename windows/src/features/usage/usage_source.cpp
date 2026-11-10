@@ -1,5 +1,7 @@
 #include "usage_source.h"
 
+#include "ai_limits.h"
+
 namespace noitch {
 
 namespace {
@@ -35,6 +37,23 @@ double LocalDayStart() {
     return FromFileTime(start);
 }
 
+std::string LocalClock(double time) {
+    const uint64_t ticks = static_cast<uint64_t>(time * 1e7) + kUnixEpochTicks;
+    const FILETIME utc{static_cast<DWORD>(ticks), static_cast<DWORD>(ticks >> 32)};
+    SYSTEMTIME universal;
+    SYSTEMTIME local;
+    if (!FileTimeToSystemTime(&utc, &universal) || !SystemTimeToTzSpecificLocalTime(nullptr, &universal, &local)) return {};
+    wchar_t day[16];
+    wchar_t clock[16];
+    if (!GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, 0, &local, L"ddd", day, 16, nullptr) ||
+        !GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS | TIME_FORCE24HOURFORMAT, &local, nullptr, clock, 16)) return {};
+    const std::wstring text = std::wstring(day) + L" " + clock;
+    const int count = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    std::string result(static_cast<size_t>(count), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), static_cast<int>(text.size()), result.data(), count, nullptr, nullptr);
+    return result;
+}
+
 UsageSource::UsageSource() {
     const std::wstring home = Environment(L"USERPROFILE");
     const std::wstring claude = Environment(L"CLAUDE_CONFIG_DIR");
@@ -68,7 +87,7 @@ const UsageLog& UsageSource::Refresh(double now) {
     for (auto it = files_.begin(); it != files_.end();) {
         it = it->second.seen ? std::next(it) : files_.erase(it);
     }
-    log_.Prune(cutoff);
+    log_.Prune(cutoff, now - 2 * kRecentSpan);
     return log_;
 }
 

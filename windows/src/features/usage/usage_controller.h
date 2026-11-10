@@ -6,6 +6,8 @@
 
 #include "island/compositor.h"
 #include "island/painter.h"
+#include "ai_limits.h"
+#include "claude_limit_source.h"
 #include "usage_layout.h"
 #include "usage_scene.h"
 #include "usage_source.h"
@@ -30,16 +32,20 @@ public:
     bool Exists() const { return scene_.Exists(); }
 
     // True for a message the usage page owns.
-    bool HandleMessage(UINT message, WPARAM wparam);
+    bool HandleMessage(UINT message, WPARAM wparam, LPARAM lparam);
 
 private:
     void Release();
     void Refresh();
+    void Render();
 
     HWND window_ = nullptr;
     Compositor* compositor_ = nullptr;
     UsageScene scene_;
     std::unique_ptr<UsageSource> source_;
+    ToolLimits claudeLimits_ = ToolLimits::Failed(LimitProblem::Loading);
+    // A result from an earlier request, posted after the page was hidden or asked again, is dropped.
+    uintptr_t claudeGeneration_ = 0;
 };
 
 }  // namespace noitch
