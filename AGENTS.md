@@ -98,6 +98,13 @@ and both apps together.
 - Avoid heavy standard headers in the app: no `<iostream>`, `<regex>`, `<thread>` or `<filesystem>`.
 - Keep pure logic free of `windows.h`, so its tests run on any host.
 
+## Git
+
+- No AI attribution anywhere in git: no `Co-Authored-By` lines for an assistant, no "Generated with"
+  footers in pull requests, and no tool-named branches such as `claude/...`. Use `feat/...`,
+  `fix/...` or `chore/...`, and rename an auto-named branch before committing.
+- Commit or push only when asked.
+
 ## Before you finish
 
 macOS changes:
