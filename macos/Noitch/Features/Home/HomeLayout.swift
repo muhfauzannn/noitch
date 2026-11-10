@@ -2,7 +2,6 @@ import CoreGraphics
 
 /// Something in Home that reacts to the pointer.
 enum HomeControl: CaseIterable {
-    case settings
     case lyrics
     case artwork
     case slider
@@ -62,7 +61,7 @@ struct HomeLayout: Equatable {
 
     func frame(of control: HomeControl) -> CGRect {
         switch control {
-        case .settings: headerButton(slot: 0)
+        // Slot 0 is the shared header's settings button.
         case .lyrics: headerButton(slot: 1)
         case .artwork: artwork
         case .slider: sliderTrack.insetBy(dx: 0, dy: -6)

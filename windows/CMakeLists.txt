@@ -20,8 +20,14 @@ add_executable(Noitch WIN32
     src/noitch.manifest
     src/island/compositor.cpp
     src/island/island_window.cpp
+    src/island/header_scene.cpp
+    src/island/page_controller.cpp
+    src/island/painter.cpp
     src/features/home/home_controller.cpp
     src/features/home/home_scene.cpp
+    src/features/usage/usage_controller.cpp
+    src/features/usage/usage_scene.cpp
+    src/features/usage/usage_source.cpp
     src/features/lyrics/lyrics_source.cpp
     src/features/now_playing/media_session_source.cpp
     src/features/settings/settings_store.cpp

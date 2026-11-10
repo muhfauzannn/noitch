@@ -90,7 +90,9 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 33 unit tests | Passing |
+| Builds; 47 unit tests | Passing |
+| Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |
+| Tab switch, swipe, page animation, usage page layout | **Not checked on screen** |
 | Budgets at rest | Passing |
 | Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Passing on a notched MacBook, on the clean Release build |
 | Pill and flare shape, collapsed and expanded | Checked by screenshot |
@@ -113,6 +115,8 @@ Keep this honest and up to date.
 | Check | Status |
 | --- | --- |
 | Spring, geometry, Home, lyrics and JSON tests | Passing on macOS, under ASan and UBSan |
+| Usage parser, five-hour block, pager and swipe tests | Passing on macOS with clang; not run under ASan/UBSan |
+| Pages, header, usage page, shared painter, `WM_MOUSEHWHEEL` swipe | **Never compiled**: no Windows toolchain was available |
 | Compiles | With Zig and mingw, using a stub for the WinRT header. It no longer links there |
 | `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |

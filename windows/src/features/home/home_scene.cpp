@@ -1,5 +1,7 @@
 #include "home_scene.h"
 
+#include "island/island_page.h"
+
 #include <d2d1_1helper.h>
 
 #include <string>
@@ -22,7 +24,6 @@ constexpr wchar_t kGlyphNext[] = L"\xE893";
 constexpr wchar_t kGlyphShuffle[] = L"\xE8B1";
 constexpr wchar_t kGlyphRepeatAll[] = L"\xE8EE";
 constexpr wchar_t kGlyphRepeatOne[] = L"\xE8ED";
-constexpr wchar_t kGlyphSettings[] = L"\xE713";
 constexpr wchar_t kGlyphLyrics[] = L"\xE8BD";
 constexpr wchar_t kGlyphMusic[] = L"\xEC4F";
 
@@ -57,7 +58,7 @@ HRESULT HomeScene::Create(Compositor& compositor, const HomeLayout& layout, floa
     if (FAILED(hr = context_->CreateSolidColorBrush(White(1), &brush_))) return hr;
     if (FAILED(hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(writeFactory_.GetAddressOf())))) return hr;
     if (FAILED(hr = CreateFormats())) return hr;
-    return compositor.CreateContentSurface(static_cast<UINT>(layout.Width() + 0.5f), static_cast<UINT>(layout.Height() + 0.5f), left, &surface_);
+    return compositor.CreateLayerSurface(PageLayer(IslandPage::Home), static_cast<UINT>(layout.Width() + 0.5f), static_cast<UINT>(layout.Height() + 0.5f), left, &surface_);
 }
 
 HRESULT HomeScene::CreateFormats() {
@@ -89,7 +90,7 @@ HRESULT HomeScene::CreateFormats() {
 }
 
 void HomeScene::Release() {
-    if (compositor_ && surface_) compositor_->RemoveContent();
+    if (compositor_ && surface_) compositor_->RemoveLayer(PageLayer(IslandPage::Home));
     surface_.Reset();
     artworkBrush_.Reset();
     titleFormat_.Reset();
@@ -158,7 +159,7 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
     context_->Clear(D2D1::ColorF(0, 0, 0, 0));
 
     // Hover plate, under the icon.
-    const bool plate = hovered == HomeControl::Settings || (hovered == HomeControl::Lyrics && model.showsLyricsButton) ||
+    const bool plate = (hovered == HomeControl::Lyrics && model.showsLyricsButton) ||
                        hovered == HomeControl::Previous || hovered == HomeControl::PlayPause || hovered == HomeControl::Next ||
                        ((hovered == HomeControl::Shuffle || hovered == HomeControl::Repeat) && model.showsShuffleAndRepeat);
     if (plate) {
@@ -202,7 +203,6 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
     }
 
     const float transport = model.hasTrack ? 1 : kDimmedOpacity;
-    PaintIcon(kGlyphSettings, HomeControl::Settings, 1, false);
     if (model.showsLyricsButton) PaintIcon(kGlyphLyrics, HomeControl::Lyrics, model.showsLyricsPanel ? 1 : kIdleOpacity, false);
     PaintIcon(kGlyphPrevious, HomeControl::Previous, transport, false);
     PaintIcon(model.isPlaying ? kGlyphPause : kGlyphPlay, HomeControl::PlayPause, transport, true);

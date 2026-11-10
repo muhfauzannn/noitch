@@ -189,9 +189,6 @@ void HomeController::FinishScrub(double fraction) {
 
 void HomeController::Activate(HomeControl control) {
     switch (control) {
-        case HomeControl::Settings:
-            if (onOpenSettings) onOpenSettings(onOpenSettingsContext);
-            break;
         case HomeControl::Artwork:
             source_.OpenApp();
             break;

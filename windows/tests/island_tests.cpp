@@ -3,13 +3,18 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 #include "features/home/home_layout.h"
 #include "features/home/home_model.h"
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
+#include "features/usage/ai_usage.h"
+#include "features/usage/usage_layout.h"
+#include "features/usage/usage_model.h"
 #include "island/flare.h"
 #include "island/island_geometry.h"
+#include "island/island_page.h"
 #include "island/spring.h"
 
 using namespace noitch;
@@ -50,11 +55,33 @@ void TestSpringSettlesOnTarget() {
 }
 
 void TestSpringOvershootFitsTheWindowMargin() {
-    const ScalarSpring spring(0, 0, 130);  // The largest half-width travel, at scale 1.
-    double peak = 0;
-    for (double t = 0; t < 1; t += 0.001) peak = std::fmax(peak, spring.Value(t));
-    assert(peak > 130);
-    assert(peak - 130 < 16);
+    for (const SpringParameters parameters : {kExpandSpring, kCollapseSpring}) {
+        const ScalarSpring spring(0, 0, 130, parameters);  // The largest half-width travel, at scale 1.
+        double peak = 0;
+        for (double t = 0; t < 1.5; t += 0.001) peak = std::fmax(peak, spring.Value(t));
+        assert(peak > 130);
+        assert(peak - 130 < 16);
+    }
+}
+
+void TestOpeningIsSlowerThanClosing() {
+    const ScalarSpring open(0, 0, 300, kExpandSpring);
+    const ScalarSpring close(0, 0, 300, kCollapseSpring);
+    assert(open.SettleTime(0.25) > close.SettleTime(0.25));
+    assert(open.Value(0.1) < close.Value(0.1));
+}
+
+void TestContentFadeCurveMatchesItsValues() {
+    const ContentFade fade{2.0, 0.06, 0.3, -16, 0};
+    assert(Near(fade.ValueAt(1.0), -16, 1e-9));
+    assert(Near(fade.ValueAt(2.06), -16, 1e-9));
+    assert(Near(fade.ValueAt(fade.End()), 0, 1e-9));
+    const CubicSegment s = fade.Curve();
+    assert(Near(s.offset, 0.06, 1e-9));
+    for (double t = 0; t <= 0.3; t += 0.01) {
+        const double cubic = s.c0 + s.c1 * t + s.c2 * t * t + s.c3 * t * t * t;
+        assert(Near(cubic, fade.ValueAt(2.06 + t), 1e-3));
+    }
 }
 
 void TestVelocityIsTheDerivativeOfValue() {
@@ -70,7 +97,7 @@ void TestCubicSegmentsTrackTheSpring() {
     const IslandGeometry geometry(2.0f);
     PillMotion motion;
     motion.Jump(geometry.PillFor(IslandState::Collapsed));
-    motion.Retarget(geometry.PillFor(IslandState::Expanded), 0);
+    motion.Retarget(geometry.PillFor(IslandState::Expanded), 0, kExpandSpring);
 
     const int count = motion.SegmentCount();
     assert(count > 0);
@@ -111,11 +138,11 @@ void TestRetargetContinuesFromCurrentMotion() {
     const IslandGeometry geometry;
     PillMotion motion;
     motion.Jump(geometry.PillFor(IslandState::Collapsed));
-    motion.Retarget(geometry.PillFor(IslandState::Expanded), 10.0);
+    motion.Retarget(geometry.PillFor(IslandState::Expanded), 10.0, kExpandSpring);
 
     const Pill before = motion.ValueAt(10.1);
     const double velocity = motion.Channel(2).Velocity(0.1);
-    motion.Retarget(geometry.PillFor(IslandState::Collapsed), 10.1);
+    motion.Retarget(geometry.PillFor(IslandState::Collapsed), 10.1, kCollapseSpring);
     const Pill after = motion.ValueAt(10.1);
 
     assert(Near(before.left, after.left, 1e-3));
@@ -309,13 +336,154 @@ void TestArtworkTintIsAverageAndLifted() {
     assert(ArtworkTint(nullptr, 0) == 0xFFFFFFFF);
 }
 
+std::string ClaudeLine(const std::string& id, const std::string& time) {
+    return "{\"parentUuid\":\"x\",\"message\":{\"model\":\"claude-opus-5-5\",\"id\":\"" + id +
+           "\",\"content\":[{\"type\":\"text\",\"text\":\"a \\\"usage\\\" {\\\"input_tokens\\\":999}\"}],"
+           "\"usage\":{\"input_tokens\":10,\"cache_creation_input_tokens\":40,\"cache_read_input_tokens\":100,\"output_tokens\":20,"
+           "\"cache_creation\":{\"ephemeral_1h_input_tokens\":30,\"ephemeral_5m_input_tokens\":10},"
+           "\"iterations\":[{\"input_tokens\":5,\"output_tokens\":5}]}},\"requestId\":\"req_1\",\"type\":\"assistant\",\"timestamp\":\"" + time + "\"}";
+}
+
+void TestTimesParseInUtcAndWithAnOffset() {
+    assert(*ParseTime("1970-01-01T00:00:00Z") == 0);
+    assert(*ParseTime("2026-11-10T08:26:36.5Z") == 1794299196.5);
+    assert(*ParseTime("2026-11-10T09:26:36+01:00") == 1794299196);
+    assert(!ParseTime("yesterday"));
+}
+
+void TestScannerReadsOnlyTheObjectsOwnFields() {
+    const std::string json = R"({"a":{"input_tokens":1},"text":"\"input_tokens\":2","input_tokens":3})";
+    assert(json_scan::Int("input_tokens", json) == 3);
+    assert(!json_scan::Value("missing", json));
+}
+
+void TestClaudeLinesGiveOneEntryPerRequest() {
+    UsageLog log;
+    const std::string text = ClaudeLine("msg_1", "2026-11-10T08:00:00Z") + "\n" + ClaudeLine("msg_1", "2026-11-10T08:00:01Z") + "\n" +
+                             ClaudeLine("msg_2", "2026-11-10T08:01:00Z") + "\n" + ClaudeLine("msg_3", "2026-11-10T08:01:00Z").substr(0, 40);
+    assert(log.ReadClaude(text, 0) == text.rfind('\n') + 1);
+    assert(log.Entries().size() == 2);
+    const UsageEntry& entry = log.Entries()[0];
+    assert(entry.input == 10 && entry.output == 20 && entry.cacheRead == 100);
+    assert(entry.cacheWrite1h == 30 && entry.cacheWrite5m == 10 && entry.Tokens() == 170);
+    UsageLog old;
+    old.ReadClaude(ClaudeLine("msg_1", "1970-01-01T00:00:10Z") + "\n", 100);
+    assert(old.Entries().empty());
+}
+
+void TestOpusIsPricedFromTheList() {
+    UsageEntry entry;
+    entry.model = "claude-opus-5-5";
+    entry.input = entry.output = entry.cacheRead = entry.cacheWrite5m = entry.cacheWrite1h = 1000000;
+    assert(Near(*entry.Cost(), 4 + 20 + 0.2 + 5 + 8, 1e-9));
+    assert(FindPrice("claude-opus-5")->input == 5);
+    entry.model = "gpt-6.1-sol";
+    assert(!entry.Cost());
+}
+
+void TestCodexCountsEachTurnOnceAndSplitsCachedInput() {
+    const auto count = [](int total, const char* time) {
+        return std::string("{\"timestamp\":\"") + time + "\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\",\"info\":{\"total_token_usage\":{\"total_tokens\":" +
+               std::to_string(total) + "},\"last_token_usage\":{\"input_tokens\":1000,\"cached_input_tokens\":600,\"output_tokens\":50,\"total_tokens\":1050}},"
+               "\"rate_limits\":{\"primary\":{\"used_percent\":32.0,\"window_minutes\":300,\"resets_at\":2000000000}}}}";
+    };
+    const std::string text = std::string(R"({"timestamp":"2026-11-10T01:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}})") + "\n" +
+                             count(1050, "2026-11-10T01:00:01Z") + "\n" + count(1050, "2026-11-10T01:00:02Z") + "\n" + count(2100, "2026-11-10T01:00:03Z") + "\n";
+    UsageLog log;
+    CodexFileState state;
+    log.ReadCodex(text, state, 0);
+    assert(log.Entries().size() == 2);
+    assert(log.Entries()[0].model == "gpt-5-codex");
+    assert(log.Entries()[0].input == 400 && log.Entries()[0].cacheRead == 600 && log.Entries()[0].output == 50);
+    assert(log.CodexLimit() && log.CodexLimit()->usedPercent == 32 && log.CodexLimit()->resetsAt == 2000000000);
+    assert(state.lastTotal == 2100);
+}
+
+void TestBlockStartsOnTheHourAndEndsFiveHoursLater() {
+    const double hour = 3600;
+    const auto entry = [](double time) {
+        UsageEntry e;
+        e.time = time;
+        e.model = "claude-opus-5-5";
+        e.output = 1;
+        return e;
+    };
+    const auto block = CurrentBlock({entry(10 * hour + 900), entry(11 * hour)}, 12 * hour);
+    assert(block && block->start == 10 * hour && block->End() == 15 * hour && block->usage.tokens == 2);
+    const auto next = CurrentBlock({entry(10 * hour), entry(15 * hour + 60)}, 16 * hour);
+    assert(next && next->start == 15 * hour && next->usage.tokens == 1);
+    assert(!CurrentBlock({entry(hour)}, 7 * hour));
+}
+
+void TestUsageNumbersReadTheWayThePageShowsThem() {
+    using namespace usage_text;
+    assert(Tokens(512) == "512" && Tokens(12000) == "12K" && Tokens(12430000) == "12.4M");
+    assert(Dollars(8.214) == "$8.21");
+    assert(Duration(2 * 3600 + 13 * 60) == "2h 13m" && Duration(30) == "1m");
+    assert(DisplayName("claude-opus-5-5") == "Opus 5.5");
+    assert(DisplayName("claude-sonnet-4-5-20250929") == "Sonnet 4.5");
+    assert(DisplayName("gpt-5-codex") == "gpt-5-codex");
+    UsageEntry known;
+    known.model = "gpt-5";
+    known.output = 1000000;
+    UsageEntry unknown;
+    unknown.model = "gpt-6.1-sol";
+    unknown.output = 10;
+    const auto all = [](const UsageEntry&) { return true; };
+    assert(Cost(ToolUsage::From({known, unknown}, all)) == "$10.00+");
+    assert(Cost(ToolUsage::From({unknown}, all)) == "\xE2\x80\x94");
+}
+
+void TestUsagePageFitsUnderTheHeader() {
+    for (float header : {24.0f, 32.0f, 38.0f}) {
+        const UsageLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
+        assert(layout.Row(1, kUsageRows - 1).Bottom() <= IslandGeometry::ExpandedHeight() - 12);
+        assert(layout.Title(0).Right() < layout.Title(1).x);
+    }
+}
+
+void TestHeaderControlsStayClearOfHomesControls() {
+    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1);
+    const HomeLayout home(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 32, 1);
+    for (const HomeControl control : kHomeControls) {
+        for (const HeaderControl tab : {HeaderControl::HomeTab, HeaderControl::UsageTab, HeaderControl::Settings}) {
+            assert(!header.Frame(tab).Intersects(home.Frame(control)));
+        }
+    }
+    const HomeRect usage = header.Frame(HeaderControl::UsageTab);
+    assert(header.ControlAt(usage.x + 1, usage.y + 1) == HeaderControl::UsageTab);
+}
+
+void TestSwipeStepsOnePageHoweverLongItRuns() {
+    PageSwipe swipe;
+    assert(swipe.Add(20, 0) == 0);
+    assert(swipe.Add(25, 0.02) == 1);
+    assert(swipe.Add(200, 0.04) == 0);
+    assert(swipe.Add(-50, 0.5) == -1);
+    IslandPage next = IslandPage::Home;
+    assert(!NeighborPage(IslandPage::Home, -1, &next));
+    assert(NeighborPage(IslandPage::Home, 1, &next) && next == IslandPage::Usage);
+}
+
 }  // namespace
 
 int main() {
+    TestTimesParseInUtcAndWithAnOffset();
+    TestScannerReadsOnlyTheObjectsOwnFields();
+    TestClaudeLinesGiveOneEntryPerRequest();
+    TestOpusIsPricedFromTheList();
+    TestCodexCountsEachTurnOnceAndSplitsCachedInput();
+    TestBlockStartsOnTheHourAndEndsFiveHoursLater();
+    TestUsageNumbersReadTheWayThePageShowsThem();
+    TestUsagePageFitsUnderTheHeader();
+    TestHeaderControlsStayClearOfHomesControls();
+    TestSwipeStepsOnePageHoweverLongItRuns();
     TestPillStaysCenteredAndInsideTheWindow();
     TestSpringStartsWhereItWasAskedTo();
     TestSpringSettlesOnTarget();
     TestSpringOvershootFitsTheWindowMargin();
+    TestOpeningIsSlowerThanClosing();
+    TestContentFadeCurveMatchesItsValues();
     TestVelocityIsTheDerivativeOfValue();
     TestCubicSegmentsTrackTheSpring();
     TestEverySegmentIsAcceptedByDirectComposition();

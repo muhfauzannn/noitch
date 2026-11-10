@@ -14,8 +14,9 @@ enum HomeIcon {
     case lyrics
     case lyricsFilled
     case music
+    case usage
 
-    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .lyrics, .lyricsFilled, .music]
+    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .lyrics, .lyricsFilled, .music, .usage]
 
     /// Only the gear relies on the even-odd rule. Others have overlapping parts that it would punch out.
     var hasHole: Bool {
@@ -70,6 +71,11 @@ enum HomeIcon {
             path.move(to: CGPoint(x: 8, y: 17))
             path.addLine(to: CGPoint(x: 8, y: 21))
             path.addLine(to: CGPoint(x: 13, y: 17))
+        case .usage:
+            // Three bars, a usage chart.
+            path.addRoundedRect(in: CGRect(x: 4, y: 12, width: 4, height: 8), cornerWidth: 1, cornerHeight: 1)
+            path.addRoundedRect(in: CGRect(x: 10, y: 5, width: 4, height: 15), cornerWidth: 1, cornerHeight: 1)
+            path.addRoundedRect(in: CGRect(x: 16, y: 9, width: 4, height: 11), cornerWidth: 1, cornerHeight: 1)
         case .music:
             path.addEllipse(in: CGRect(x: 4, y: 15, width: 8, height: 6.5))
             path.addRect(CGRect(x: 10, y: 4, width: 2, height: 14))

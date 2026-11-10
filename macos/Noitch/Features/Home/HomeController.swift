@@ -9,7 +9,6 @@ final class HomeController {
 
     /// Set by the island, which owns the panel and adds the layers to its view.
     var onSceneCreated: ((CALayer) -> Void)?
-    var onOpenSettings: (() -> Void)?
 
     private var settings: AppSettings
     private var layout: HomeLayout?
@@ -70,8 +69,12 @@ final class HomeController {
         }
         if isDemo { loadDemo() } else { source.start() }
         refresh()
-        scene?.fadeIn()
     }
+
+    /// The scene's layers, if they are still alive, so a new pager can take them back.
+    var sceneRoot: CALayer? { scene?.root }
+
+    func reveal(begin: CFTimeInterval) { scene?.reveal(begin: begin) }
 
     func islandWillClose() {
         isOpen = false
@@ -81,7 +84,6 @@ final class HomeController {
         pressed = nil
         scrubFraction = nil
         scene?.setHover(nil, isPressed: false)
-        scene?.fadeOut()
         let timer = Timer(timeInterval: Self.releaseDelay, repeats: false) { [unowned self] _ in
             MainActor.assumeIsolated { release() }
         }
@@ -278,8 +280,6 @@ final class HomeController {
 
     private func activate(_ control: HomeControl) {
         switch control {
-        case .settings:
-            onOpenSettings?()
         case .lyrics:
             guard settings.showLyrics else { return }
             showsLyricsPanel.toggle()

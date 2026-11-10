@@ -19,10 +19,10 @@ struct HomeRect {
     bool Intersects(const HomeRect& o) const { return x < o.Right() && o.x < Right() && y < o.Bottom() && o.y < Bottom(); }
 };
 
-enum class HomeControl { None, Settings, Lyrics, Artwork, Slider, Shuffle, Previous, PlayPause, Next, Repeat };
+enum class HomeControl { None, Lyrics, Artwork, Slider, Shuffle, Previous, PlayPause, Next, Repeat };
 
 inline constexpr HomeControl kHomeControls[] = {
-    HomeControl::Settings, HomeControl::Lyrics, HomeControl::Artwork, HomeControl::Slider, HomeControl::Shuffle,
+    HomeControl::Lyrics, HomeControl::Artwork, HomeControl::Slider, HomeControl::Shuffle,
     HomeControl::Previous, HomeControl::PlayPause, HomeControl::Next, HomeControl::Repeat,
 };
 
@@ -54,7 +54,7 @@ public:
 
     HomeRect Frame(HomeControl control) const {
         switch (control) {
-            case HomeControl::Settings: return HeaderButton(0);
+            // Slot 0 is the shared header's settings button.
             case HomeControl::Lyrics: return HeaderButton(1);
             case HomeControl::Artwork: return Artwork();
             case HomeControl::Slider: {

@@ -8,7 +8,7 @@ final class HomeScene {
     private static let dimmedOpacity: Float = 0.35
     private static let idleOpacity: Float = 0.55
 
-    /// Pinned to the pill's top edge by the view.
+    /// Placed by the pager, which owns its fade and slide.
     let root = CALayer()
 
     private let layout: HomeLayout
@@ -25,19 +25,23 @@ final class HomeScene {
     /// One plate that moves to whichever button is under the pointer.
     private let hoverPlate = CALayer()
     private var icons: [HomeControl: CAShapeLayer] = [:]
+    /// Artwork and lyrics button, text, slider, transport: revealed one after another, so the eye
+    /// reads top-left to bottom instead of everything popping in at once.
+    private let groups = (0..<4).map { _ in CALayer() }
     private var shownModel: HomeModel?
 
     init(layout: HomeLayout, scale: CGFloat) {
         self.layout = layout
+        // The pager places it and flips its geometry, so the shared y-down numbers hold.
         root.bounds = CGRect(origin: .zero, size: layout.size)
-        root.anchorPoint = CGPoint(x: 0.5, y: 1)
-        // Keeps the shared y-down layout numbers as they are.
-        root.isGeometryFlipped = true
-        root.opacity = 0
 
         hoverPlate.backgroundColor = NSColor.white.withAlphaComponent(0.22).cgColor
         hoverPlate.isHidden = true
         root.addSublayer(hoverPlate)
+        for group in groups {
+            group.frame = root.bounds
+            root.addSublayer(group)
+        }
 
         artwork.frame = layout.artwork
         artwork.cornerRadius = Self.artworkRadius
@@ -45,16 +49,16 @@ final class HomeScene {
         artwork.masksToBounds = true
         artwork.contentsGravity = .resizeAspectFill
         artwork.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
-        root.addSublayer(artwork)
+        groups[0].addSublayer(artwork)
         artworkPlaceholder.frame = layout.artwork.insetBy(dx: layout.artwork.width * 0.3, dy: layout.artwork.height * 0.3)
         Self.show(.music, on: artworkPlaceholder)
         artworkPlaceholder.opacity = Self.dimmedOpacity
-        root.addSublayer(artworkPlaceholder)
+        groups[0].addSublayer(artworkPlaceholder)
 
-        for (layer, frame) in [(title, layout.title), (artist, layout.artist), (lyricLine, layout.lyricLine), (elapsed, layout.elapsedTime), (remaining, layout.remainingTime)] {
+        for (layer, frame, group) in [(title, layout.title, 1), (artist, layout.artist, 1), (lyricLine, layout.lyricLine, 1), (elapsed, layout.elapsedTime, 2), (remaining, layout.remainingTime, 2)] {
             layer.frame = frame
             layer.contentsScale = scale
-            root.addSublayer(layer)
+            groups[group].addSublayer(layer)
         }
         elapsed.alignmentMode = .left
         remaining.alignmentMode = .right
@@ -64,13 +68,13 @@ final class HomeScene {
             let height = (layer.fontSize + 6).rounded()
             layer.frame = CGRect(x: row.minX, y: row.midY - height / 2, width: row.width, height: height)
             layer.contentsScale = scale
-            root.addSublayer(layer)
+            groups[1].addSublayer(layer)
         }
 
         track.frame = layout.sliderTrack
         track.cornerRadius = layout.sliderTrack.height / 2
         track.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
-        root.addSublayer(track)
+        groups[2].addSublayer(track)
         fill.anchorPoint = .zero
         fill.position = .zero
         fill.bounds = CGRect(x: 0, y: 0, width: 0, height: layout.sliderTrack.height)
@@ -78,15 +82,14 @@ final class HomeScene {
         fill.backgroundColor = NSColor.white.cgColor
         track.addSublayer(fill)
 
-        for control in [HomeControl.settings, .lyrics, .shuffle, .previous, .playPause, .next, .repeatMode] {
+        for control in [HomeControl.lyrics, .shuffle, .previous, .playPause, .next, .repeatMode] {
             let icon = CAShapeLayer()
             let frame = layout.frame(of: control)
             let inset = frame.width * (control == .playPause ? 0.14 : 0.2)
             icon.frame = frame.insetBy(dx: inset, dy: inset)
-            root.addSublayer(icon)
+            groups[control == .lyrics ? 0 : 3].addSublayer(icon)
             icons[control] = icon
         }
-        setIcon(.settings, for: .settings)
         setIcon(.previous, for: .previous)
         setIcon(.next, for: .next)
         setIcon(.shuffle, for: .shuffle)
@@ -167,7 +170,7 @@ final class HomeScene {
     func setHover(_ control: HomeControl?, isPressed: Bool) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let plateControls: Set<HomeControl> = [.settings, .lyrics, .shuffle, .previous, .playPause, .next, .repeatMode]
+        let plateControls: Set<HomeControl> = [.lyrics, .shuffle, .previous, .playPause, .next, .repeatMode]
         if let control, plateControls.contains(control), icons[control]?.isHidden == false {
             let frame = layout.frame(of: control)
             hoverPlate.frame = frame
@@ -180,23 +183,11 @@ final class HomeScene {
         CATransaction.commit()
     }
 
-    func fadeIn() { fade(to: 1, duration: 0.2, delay: 0.08) }
-
-    func fadeOut() { fade(to: 0, duration: 0.12, delay: 0) }
-
-    private func fade(to opacity: Float, duration: CFTimeInterval, delay: CFTimeInterval) {
-        let start = root.presentation()?.opacity ?? root.opacity
-        let animation = CABasicAnimation(keyPath: "opacity")
-        animation.fromValue = start
-        animation.toValue = opacity
-        animation.duration = duration
-        animation.beginTime = CACurrentMediaTime() + delay
-        animation.fillMode = .backwards
-        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    /// Staggers the groups in from `begin`. The pager owns the whole page's fade and slide.
+    func reveal(begin: CFTimeInterval) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        root.opacity = opacity
-        root.add(animation, forKey: "fade")
+        Motion.reveal(groups, begin: begin)
         CATransaction.commit()
     }
 

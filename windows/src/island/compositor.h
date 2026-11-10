@@ -28,10 +28,19 @@ public:
     // Rebuilds the tree if the GPU device was lost. Call on display changes, never on a timer.
     HRESULT RecoverIfLost(const Pill& pill);
 
-    // A surface for what sits on the pill. Its visual is inside the pill's clip, so transitions
-    // reveal and hide it in DWM with nothing else to animate. `left` is the expanded pill's left edge.
-    HRESULT CreateContentSurface(UINT width, UINT height, float left, IDCompositionSurface** surface);
-    HRESULT RemoveContent();
+    // What sits on the pill is a container inside the pill's clip, holding one visual per layer:
+    // the shared header above the pages. `left` is the expanded pill's left edge.
+    static constexpr int kHeaderLayer = 0;
+    static constexpr int kLayerCount = 1 + 2;  // The header, then one per page.
+    HRESULT CreateLayerSurface(int layer, UINT width, UINT height, float left, IDCompositionSurface** surface);
+    HRESULT RemoveLayer(int layer);
+    // Fades and slides the whole container: the open reveal. Does not commit: the pill transition
+    // that follows commits both, so they start on the same DWM frame. No-op until content exists.
+    HRESULT AnimateContent(const ContentFade& opacity, const ContentFade& offsetY);
+    HRESULT SettleContent(float opacity, float offsetY);
+    // Fades and slides one layer sideways: a page switch. Does not commit.
+    HRESULT AnimateLayer(int layer, const ContentFade& opacity, const ContentFade& offsetX);
+    HRESULT SetLayer(int layer, float opacity, float offsetX);
     HRESULT Commit() { return device_->Commit(); }
 
     // For Direct2D, which draws on the same device as the composition surfaces.
@@ -45,6 +54,7 @@ private:
     HRESULT BuildFlare(IDCompositionVisual* visual, bool mirrored);
     HRESULT Paint(IDCompositionSurface* surface, UINT width, UINT height, const void* pixels);
     HRESULT BuildAnimation(const PillMotion& motion, int channel, float bias, IDCompositionAnimation** animation);
+    HRESULT BuildFade(const ContentFade& fade, IDCompositionAnimation** animation);
 
     HWND hwnd_ = nullptr;
     int flareRadius_ = 0;
@@ -57,6 +67,9 @@ private:
     Microsoft::WRL::ComPtr<IDCompositionVisual> body_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> fill_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> content_;
+    Microsoft::WRL::ComPtr<IDCompositionEffectGroup> contentEffect_;
+    Microsoft::WRL::ComPtr<IDCompositionVisual> layers_[kLayerCount];
+    Microsoft::WRL::ComPtr<IDCompositionEffectGroup> layerEffects_[kLayerCount];
     Microsoft::WRL::ComPtr<IDCompositionVisual> leftFlare_;
     Microsoft::WRL::ComPtr<IDCompositionVisual> rightFlare_;
     Microsoft::WRL::ComPtr<IDCompositionRectangleClip> clip_;

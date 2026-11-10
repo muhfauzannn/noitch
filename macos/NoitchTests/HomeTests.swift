@@ -23,7 +23,7 @@ struct HomeTests {
 
     @Test func `header buttons fit on a display without a notch`() {
         let short = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: 24)
-        #expect(short.frame(of: .settings).minY >= 0)
+        #expect(short.frame(of: .lyrics).minY >= 0)
     }
 
     @Test func `points find their control`() {

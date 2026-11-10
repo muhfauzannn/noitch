@@ -15,6 +15,13 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With pages and the usage page (2026-11-10, same M5): 8.91 MB, 1.43 ms/min, 0.10 wakeups/s and
+3.91 ms per transition, all hover checks passing; the binary grew from 478 KB to 711 KB. One earlier
+run of the same build failed every hover check with a collapsed window 177 pt wide instead of 195,
+and a run with a 5 s window read 13.53 MB and 1007 ms/min; neither recurred, and their cause is
+unknown. Reading the usage logs is not in these figures: it happens only while the usage page is
+shown (24 to 59 ms for the first read of a day's logs, about 3 ms after).
+
 Current macOS figures are from two Release runs on an Apple M5, macOS 26.6, with Home, Settings and
 the adapter in place, while a browser played media. Immediately before this change, the same machine
 read 9.20 MB, 1.27 ms/min and 0.10 wakeups/s. With the adapter held out, the same build read 1.01

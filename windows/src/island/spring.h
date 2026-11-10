@@ -22,14 +22,25 @@ struct CubicSegment {
 };
 
 // Same parameters as the macOS CASpringAnimation(perceptualDuration:bounce:), so the two feel alike.
-inline constexpr double kSpringResponse = 0.38;
-inline constexpr double kSpringBounce = 0.18;
+struct SpringParameters {
+    double response;
+    double bounce;
+};
+
+// Opening is slower and softer than closing: the eye follows content in, but wants it gone fast.
+inline constexpr SpringParameters kExpandSpring{0.5, 0.14};
+inline constexpr SpringParameters kCollapseSpring{0.38, 0.18};
+
+inline constexpr SpringParameters SpringFor(IslandState state) {
+    return state == IslandState::Expanded ? kExpandSpring : kCollapseSpring;
+}
 
 // A critically-damped-or-softer spring toward a fixed target, solved in closed form.
 class ScalarSpring {
 public:
     ScalarSpring() = default;
-    ScalarSpring(double from, double velocity, double target) : target_(target), displacement_(from - target), velocity_(velocity) {}
+    ScalarSpring(double from, double velocity, double target, SpringParameters parameters = kCollapseSpring)
+        : parameters_(parameters), target_(target), displacement_(from - target), velocity_(velocity) {}
 
     double Target() const { return target_; }
 
@@ -67,12 +78,13 @@ public:
     }
 
 private:
-    static double NaturalFrequency() { return 2 * 3.14159265358979323846 / kSpringResponse; }
-    static double Damping() { return 1 - kSpringBounce; }
-    static double Decay() { return Damping() * NaturalFrequency(); }
-    static double Frequency() { return NaturalFrequency() * std::sqrt(1 - Damping() * Damping()); }
+    double NaturalFrequency() const { return 2 * 3.14159265358979323846 / parameters_.response; }
+    double Damping() const { return 1 - parameters_.bounce; }
+    double Decay() const { return Damping() * NaturalFrequency(); }
+    double Frequency() const { return NaturalFrequency() * std::sqrt(1 - Damping() * Damping()); }
     double SineTerm() const { return (velocity_ + Decay() * displacement_) / Frequency(); }
 
+    SpringParameters parameters_ = kCollapseSpring;
     double target_ = 0;
     double displacement_ = 0;
     double velocity_ = 0;
@@ -93,12 +105,14 @@ public:
         duration_ = 0;
     }
 
-    void Retarget(const Pill& target, double now) {
+    // Each channel keeps the parameters it was started with, so a reversal hands over the old
+    // spring's value and velocity even when the new direction uses a different spring.
+    void Retarget(const Pill& target, double now, SpringParameters parameters) {
         const double elapsed = now - start_;
         const auto values = Channels(target);
         double duration = 0;
         for (int i = 0; i < kChannels; ++i) {
-            springs_[i] = ScalarSpring(springs_[i].Value(elapsed), springs_[i].Velocity(elapsed), values[i]);
+            springs_[i] = ScalarSpring(springs_[i].Value(elapsed), springs_[i].Velocity(elapsed), values[i], parameters);
             duration = std::max(duration, springs_[i].SettleTime(kTolerancePx));
         }
         start_ = now;
@@ -145,6 +159,33 @@ private:
     std::array<ScalarSpring, kChannels> springs_;
     double start_ = 0;
     double duration_ = 0;
+};
+
+// An ease-out cubic from `from` to `to`, starting `delay` after `start`. 1 - (1 - u)^3 is itself a
+// cubic, so DirectComposition runs it as one exact segment, and reversing needs only ValueAt.
+struct ContentFade {
+    double start = 0;
+    double delay = 0;
+    double duration = 0;
+    float from = 0;
+    float to = 0;
+
+    double End() const { return start + delay + duration; }
+
+    double ValueAt(double now) const {
+        const double t = now - start - delay;
+        if (t <= 0) return from;
+        if (t >= duration) return to;
+        const double rest = 1 - t / duration;
+        return from + (to - from) * (1 - rest * rest * rest);
+    }
+
+    // The moving part, with t measured from the start of the delay.
+    CubicSegment Curve() const {
+        const double d = duration;
+        const double delta = to - from;
+        return {delay, from, static_cast<float>(3 * delta / d), static_cast<float>(-3 * delta / (d * d)), static_cast<float>(delta / (d * d * d))};
+    }
 };
 
 }  // namespace noitch

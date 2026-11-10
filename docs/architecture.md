@@ -48,7 +48,7 @@ macos/
   Noitch.xcodeproj         Synchronized folders: new files need no project edits
   Noitch/App/              Process entry and lifecycle
   Noitch/Island/           The island: window, layers, geometry, state
-  Noitch/Features/         Home, NowPlaying, Lyrics, Settings
+  Noitch/Features/         Home, NowPlaying, Lyrics, Usage, Settings
   Vendor/MediaRemoteAdapter/ Third-party adapter, embedded in the app bundle
   NoitchTests/             Swift Testing, pure logic
   scripts/                 Budget and hover checks against the real app
@@ -57,7 +57,7 @@ windows/
   CMakeLists.txt
   src/main.cpp             Process entry and message loop
   src/island/              The island: window, compositor, geometry, spring
-  src/features/            home, now_playing, lyrics, settings
+  src/features/            home, now_playing, lyrics, usage, settings
   tests/                   Pure logic tests; run on any host
   scripts/                 Budget check against the real app
 ```
@@ -71,12 +71,13 @@ The two apps have the same shape, with three kinds of module:
 
 | Role | macOS | Windows | Rule |
 | --- | --- | --- | --- |
-| Controller: owns state, reacts to events | `IslandController`, `HomeController` | `IslandWindow`, `HomeController` | The only places state changes |
-| Scene: owns compositor objects | `IslandView`, `IslandPanel`, `HomeScene` | `Compositor`, `HomeScene` | Makes no decisions |
-| Pure logic: values in, values out | `IslandGeometry`, `IslandState`, `HomeLayout`, `HomeModel`, `NowPlaying`, `Lyrics` | `island_geometry.h`, `spring.h`, `home_layout.h`, `home_model.h`, `now_playing.h`, `lyrics.h` | No OS headers, fully tested |
+| Controller: owns state, reacts to events | `IslandController`, `PageController`, `HomeController`, `UsageController` | `IslandWindow`, `PageController`, `HomeController`, `UsageController` | The only places state changes |
+| Scene: owns compositor objects | `IslandView`, `IslandPanel`, `PagerScene`, `HomeScene`, `UsageScene` | `Compositor`, `Painter`, `HeaderScene`, `HomeScene`, `UsageScene` | Makes no decisions |
+| Pure logic: values in, values out | `IslandGeometry`, `IslandState`, `IslandPage`, `HomeLayout`, `HomeModel`, `NowPlaying`, `Lyrics`, `AIUsage`, `UsageModel`, `UsageLayout` | `island_geometry.h`, `spring.h`, `island_page.h`, `home_layout.h`, `home_model.h`, `now_playing.h`, `lyrics.h`, `ai_usage.h`, `usage_model.h`, `usage_layout.h` | No OS headers, fully tested |
 
-`HomeController` owns what Home knows. The island tells it when it opens and closes, and forwards
-pointer events.
+`PageController` owns which page is showing. The island tells it when it opens and closes and
+forwards pointer and scroll events; it passes them on to the current page. Each feature controller
+owns what its page knows, and is told "open" only while its page is the one on screen.
 
 Data flows one way: **OS event → controller → new state → scene**. The scene never reads state back
 from the compositor, except to start a transition from what is on screen.
@@ -118,6 +119,27 @@ still on screen. A state check cannot catch this, because the state is already c
 transition therefore has a number, and only the latest may shrink the click area. On Windows the
 single settle timer is simply reset, so a stale completion cannot occur.
 
+## Pages
+
+The expanded island has pages, in tab order: Home, then Usage. A shared header in the band beside the
+notch holds a tab per page at the left and settings at the right; pages keep their own buttons clear
+of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
+
+- **Switching.** Click a tab, or swipe two fingers sideways: fingers moving left bring the next page.
+  `PageSwipe` turns a gesture into at most one step, so momentum can't skip a page. A pause of
+  0.25 s starts a new gesture. macOS ignores momentum events; Windows reads `WM_MOUSEHWHEEL`.
+- **Animation.** Slide plus crossfade, all in the compositor. The old page fades out in 0.2 s while
+  sliding 24 pt toward its side in 0.32 s; the new one slides in from the other side over 0.42 s and
+  fades in over 0.3 s after 0.04 s, on the shared ease-out curve. Each starts from its on-screen
+  value, so a quick second switch reverses smoothly. On macOS the tab plate follows with a short
+  spring; on Windows the header is redrawn with the plate in place. Reduce Motion drops the slide on
+  macOS.
+- **Lifecycle.** Only the current page is open. Leaving a page closes it exactly as closing the
+  island would, so its source stops and it is released 10 s later. The header and, on Windows, the
+  shared Direct2D painter are released 11 s after the island closes.
+- On Windows the content is a container visual inside the pill's clip with one child per layer:
+  the header on top, pages below, each with its own opacity effect and X offset.
+
 ## Home
 
 Home is what the expanded island shows: artwork, title, artist, the current lyric line, a progress
@@ -135,9 +157,20 @@ Nothing about it runs at rest. On each platform:
 The grace period means hovering in and out doesn't restart the source each time.
 
 - On macOS the progress bar is a linear `CABasicAnimation`, set once per playback change, so the
-  render server moves it. Content fades in and out.
-- On Windows the bar is redrawn with the time label, once per second. There is no fade: the surface
-  sits inside the pill's clip, so the spring reveals and hides it in DWM.
+  render server moves it.
+- On Windows the bar is redrawn with the time label, once per second.
+
+Opening reveals the current page after a 0.06 s head start for the pill: it fades in over 0.3 s and drops
+8 pt out of the notch over 0.42 s, on an ease-out curve. Closing fades it out in 0.14 s. Reopening
+mid-fade continues from what is on screen.
+
+- macOS reveals the header first, then the page's groups 0.045 s apart (Home: artwork and lyrics
+  button, text, slider, transport; Usage: one per column), and scales the whole of it from 0.94
+  with the opening spring. Reduce Motion drops the slide.
+- Windows draws each layer into one surface, so the content fades and slides as a whole: no
+  stagger and no scale. The
+  ease-out is an exact cubic, one `IDCompositionAnimation` segment each for an effect group's
+  opacity and the visual's Y offset.
 
 Home has no data while the island is closed, so there is no now playing indicator on the collapsed
 pill. Adding one would mean keeping the source running at rest, which needs measuring first.
@@ -158,6 +191,31 @@ no-private-API and no-dependency rules, limited as follows.
 - If the child exits it isn't restarted until the next opening, so a broken adapter can't spin.
 
 A macOS update could break the adapter. Home then shows "Nothing playing"; nothing else is affected.
+
+### Usage
+
+The second page shows token usage of Claude Code and Codex on this machine, read from their local
+logs: `~/.claude/projects` (and `~/.config/claude/projects`, or `CLAUDE_CONFIG_DIR`) and
+`~/.codex/sessions` (or `CODEX_HOME`). Nothing is sent anywhere.
+
+- **What it shows.** Per tool: tokens and estimated cost today, a five-hour window, and the top three
+  models. Claude Code's window is estimated the way ccusage does it: a block starts on the hour of
+  its first request and lasts five hours. Codex reports its own limit (`rate_limits.primary`), so
+  that is shown as reported, with the percentage used.
+- **Counting.** Claude Code repeats a request's usage on each content block, so entries are
+  deduplicated by message and request id. Codex repeats a usage event when only its limits change,
+  so an event counts only when the running total grows; its cached input is split out of input.
+- **Cost.** A built-in price list (`ModelPrice` / `FindPrice`), Anthropic list prices as of 2026-11
+  and the OpenAI models whose price is known. A model without a price adds tokens but no cost, and
+  the cost then shows as a lower bound (`$4.20+`), or a dash if nothing is priced. Update the list
+  when prices change.
+- **Reading.** There is no event to wait for, so it reads when the page is shown and at each whole
+  minute while it stays shown, then nothing. Only `.jsonl` files changed in the last 24 hours are
+  opened, each mapped, and only bytes appended since the last read are parsed. Lines are found with
+  `memchr` and `memmem`; because quotes inside JSON strings are escaped, a `"key":` pattern only
+  matches a real key, so the fields are found without parsing the large response text.
+- It runs on the main thread. On an M5 the first read of a day's logs (21 MB) took 24 to 59 ms in a
+  Release build; later reads took about 3 ms.
 
 ### Lyrics
 
@@ -193,15 +251,20 @@ The spec both apps follow. Change it here and in both apps together.
 | Top flares | Concave curve on each side where the island meets the screen edge, 8 pt, same size in both states |
 | Corner shape | macOS: continuous. Windows: circular (DirectComposition has no continuous corner) |
 | Overshoot margin | 16 pt |
-| Spring | Response 0.38 s, bounce 0.18 |
+| Spring | Expand: response 0.5 s, bounce 0.14. Collapse: response 0.38 s, bounce 0.18 |
+| Pages | Home, Usage. Tabs left in the header band, settings right; header numbers in `HeaderLayout` and `island_page.h` |
+| Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
+| Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
+| Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand immediately when the pointer reaches the real notch, including at the screen top edge; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
 | Release after closing | 10 s |
 
-The Windows spring is computed from the same two parameters. Its stiffness (273.4) and damping
-(27.12) match the values `CASpringAnimation` reports, and it settles in 0.56 s against 0.575 s. The
-two have not yet been compared side by side on screen.
+The Windows spring is computed from the same parameters. For the collapse spring its stiffness
+(273.4) and damping (27.12) match the values `CASpringAnimation` reports, and it settles in 0.56 s
+against 0.575 s. The expand spring has not been compared numerically, and neither has been compared
+side by side on screen.
 
 ## Patterns worth keeping
 

@@ -45,9 +45,6 @@ public:
     // True during a slider drag, which may leave the island without closing it.
     bool IsInteracting() const { return pressed_ == HomeControl::Slider; }
 
-    // Set by the island, which owns the settings window.
-    void (*onOpenSettings)(void* context) = nullptr;
-    void* onOpenSettingsContext = nullptr;
 
 private:
     void Release();

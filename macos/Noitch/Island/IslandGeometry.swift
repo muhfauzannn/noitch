@@ -24,6 +24,18 @@ struct IslandGeometry: Equatable {
     static let overshootMargin: CGFloat = 16
     /// Lets the hover target include the screen's topmost cursor position.
     static let topEdgeHitMargin: CGFloat = 1
+    /// Opening is slower and softer than closing: the eye follows content in, but wants it gone fast.
+    static let expandSpring = Spring(response: 0.5, bounce: 0.14)
+    static let collapseSpring = Spring(response: 0.38, bounce: 0.18)
+
+    struct Spring: Equatable {
+        var response: Double
+        var bounce: Double
+    }
+
+    static func spring(for state: IslandState) -> Spring {
+        state == .expanded ? expandSpring : collapseSpring
+    }
 
     let display: Display
 

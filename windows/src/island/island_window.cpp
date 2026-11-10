@@ -13,6 +13,13 @@ constexpr wchar_t kClassName[] = L"NoitchIsland";
 constexpr UINT_PTR kSettleTimer = 1;
 constexpr UINT kQuitCommand = 1;
 constexpr UINT kSettingsCommand = 2;
+// Lets the pill open far enough that content lands inside it, not at its edge.
+constexpr double kRevealDelay = 0.06;
+constexpr double kRevealFade = 0.3;
+constexpr double kRevealSlide = 0.42;
+constexpr double kHideFade = 0.14;
+// Dips, before scaling: content drops this far out of the notch while it fades in.
+constexpr float kRevealLift = 8;
 
 double NowSeconds() {
     LARGE_INTEGER frequency;
@@ -43,15 +50,15 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
 
     const HRESULT hr = compositor_.Create(hwnd_);
     if (FAILED(hr)) return hr;
-    home_.Initialize(hwnd_, &compositor_, NowSeconds);
-    home_.Apply(settings_);
-    home_.onOpenSettings = [](void* context) { static_cast<IslandWindow*>(context)->OpenSettings(); };
-    home_.onOpenSettingsContext = this;
+    pages_.Initialize(hwnd_, &compositor_, NowSeconds);
+    pages_.Apply(settings_);
+    pages_.onOpenSettings = [](void* context) { static_cast<IslandWindow*>(context)->OpenSettings(); };
+    pages_.onOpenSettingsContext = this;
     settingsWindow_.context = this;
     settingsWindow_.onChange = [](void* context, const AppSettings& settings) {
         auto* self = static_cast<IslandWindow*>(context);
         self->settings_ = settings;
-        self->home_.Apply(settings);
+        self->pages_.Apply(settings);
     };
     ApplyLayout();
 
@@ -83,19 +90,19 @@ float IslandWindow::PointerY(LPARAM lparam) const {
 }
 
 LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
-    if (home_.HandleMessage(message, wparam, lparam)) return 0;
+    if (pages_.HandleMessage(message, wparam, lparam)) return 0;
     switch (message) {
         case WM_LBUTTONDOWN:
             if (state_ == IslandState::Expanded) {
                 // Keeps a slider drag ours when the pointer leaves the island.
                 SetCapture(hwnd_);
-                home_.PointerDown(PointerX(lparam), PointerY(lparam));
+                pages_.PointerDown(PointerX(lparam), PointerY(lparam));
             }
             return 0;
         case WM_LBUTTONUP:
             if (GetCapture() == hwnd_) ReleaseCapture();
             if (state_ == IslandState::Expanded) {
-                home_.PointerUp(PointerX(lparam), PointerY(lparam));
+                pages_.PointerUp(PointerX(lparam), PointerY(lparam));
                 // A slider drag can end outside the island, where no leave message will follow.
                 if (!CursorInWindow()) TransitionTo(IslandState::Collapsed);
             } else if (!settings_.openOnHover) {
@@ -103,7 +110,15 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             }
             return 0;
         case WM_MOUSEMOVE:
-            if (state_ == IslandState::Expanded) home_.PointerMoved(PointerX(lparam), PointerY(lparam));
+            if (state_ == IslandState::Expanded) pages_.PointerMoved(PointerX(lparam), PointerY(lparam));
+            [[fallthrough]];
+        case WM_MOUSEHWHEEL:
+            if (message == WM_MOUSEHWHEEL && state_ == IslandState::Expanded) {
+                // A notch is 120; a third of one is the swipe threshold's worth of points. Precision
+                // touchpads send small steps that add up the same way.
+                const double delta = GET_WHEEL_DELTA_WPARAM(wparam) / 3.0;
+                pages_.Scrolled(delta, static_cast<double>(GetMessageTime()) / 1000.0);
+            }
             [[fallthrough]];
         case WM_MOUSEWHEEL:
             if (!trackingLeave_) {
@@ -115,7 +130,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             return 0;
         case WM_MOUSELEAVE:
             trackingLeave_ = false;
-            if (home_.IsInteracting()) return 0;
+            if (pages_.IsInteracting()) return 0;
             TransitionTo(IslandState::Collapsed);
             if (CursorInCollapsedHitRegion()) OpenIfPointerInNotch();
             return 0;
@@ -133,7 +148,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             compositor_.RecoverIfLost(geometry_.PillFor(state_));
             if (compositor_.Generation() != compositorGeneration_) {
                 compositorGeneration_ = compositor_.Generation();
-                home_.DeviceLost();
+                pages_.DeviceLost();
             }
             return 0;
         case WM_DESTROY:
@@ -170,23 +185,47 @@ void IslandWindow::ApplyLayout() {
 void IslandWindow::TransitionTo(IslandState next) {
     if (next == state_) return;
     state_ = next;
-    motion_.Retarget(geometry_.PillFor(next), NowSeconds());
+    const double now = NowSeconds();
+    motion_.Retarget(geometry_.PillFor(next), now, SpringFor(next));
     // Grow the hit region before expanding and shrink it after collapsing.
     if (next == IslandState::Expanded) {
         UpdateHitRegion();
-        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(), geometry_.Scale());
-        home_.IslandWillOpen(layout, geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale());
+        pages_.IslandWillOpen(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(),
+                              geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale());
+        AnimateContent(true, now);
     } else {
-        home_.IslandWillClose();
+        pages_.IslandWillClose();
+        AnimateContent(false, now);
     }
     compositor_.AnimatePill(motion_);
-    // One-shot, not periodic: it fires once, when DWM has finished the curve.
-    SetTimer(hwnd_, kSettleTimer, static_cast<UINT>(motion_.Duration() * 1000) + 1, nullptr);
+    // One-shot, not periodic: it fires once, when DWM has finished every curve.
+    const double end = std::max({motion_.Duration(), contentOpacity_.End() - now, contentOffset_.End() - now});
+    SetTimer(hwnd_, kSettleTimer, static_cast<UINT>(end * 1000) + 1, nullptr);
+}
+
+// Windows cannot read values back from DWM, so a reversal starts from the analytic value.
+void IslandWindow::AnimateContent(bool show, double now) {
+    const float opacity = static_cast<float>(contentOpacity_.ValueAt(now));
+    const float offset = static_cast<float>(contentOffset_.ValueAt(now));
+    if (show) {
+        // From hidden, reveal after the pill has a head start. Reopened mid-fade, continue from what
+        // is on screen instead of flashing back to empty.
+        const bool fromHidden = opacity < 0.05f;
+        const double delay = fromHidden ? kRevealDelay : 0;
+        const float lift = -kRevealLift * geometry_.Scale();
+        contentOpacity_ = {now, delay, kRevealFade, fromHidden ? 0.0f : opacity, 1.0f};
+        contentOffset_ = {now, delay, kRevealSlide, fromHidden ? lift : offset, 0.0f};
+    } else {
+        contentOpacity_ = {now, 0, kHideFade, opacity, 0.0f};
+        contentOffset_ = {now, 0, kHideFade, offset, offset};
+    }
+    compositor_.AnimateContent(contentOpacity_, contentOffset_);
 }
 
 void IslandWindow::FinishTransition() {
     KillTimer(hwnd_, kSettleTimer);
-    // Replacing the animations with constants lets DWM release them.
+    // Replacing the animations with constants lets DWM release them. ShowPill commits both.
+    compositor_.SettleContent(contentOpacity_.to, contentOffset_.to);
     compositor_.ShowPill(motion_.Target());
     if (state_ == IslandState::Collapsed) {
         UpdateHitRegion();

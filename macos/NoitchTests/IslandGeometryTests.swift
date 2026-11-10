@@ -42,6 +42,13 @@ struct IslandGeometryTests {
         #expect(frame.height == pill.height + IslandGeometry.overshootMargin + IslandGeometry.topEdgeHitMargin)
     }
 
+    @Test func `opening is slower and no bouncier than closing`() {
+        let open = IslandGeometry.spring(for: .expanded)
+        let close = IslandGeometry.spring(for: .collapsed)
+        #expect(open.response > close.response)
+        #expect(open.bounce <= close.bounce)
+    }
+
     @Test(arguments: [IslandState.collapsed, .expanded])
     func `the window is centered and its hit area reaches the display top edge`(state: IslandState) {
         for geometry in [notched, external] {

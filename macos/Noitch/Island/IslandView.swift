@@ -11,6 +11,8 @@ final class IslandView: NSView {
     var onPrimaryDown: ((CGPoint) -> Void)?
     var onPrimaryDragged: ((CGPoint) -> Void)?
     var onPrimaryUp: ((CGPoint) -> Void)?
+    /// Horizontal trackpad scroll in points, positive toward the next page, and the event time.
+    var onHorizontalScroll: ((Double, Double) -> Void)?
 
     /// Flares reach this far into the pill, so no seam shows at a fractional position.
     private static let flareOverlap: CGFloat = 1
@@ -120,6 +122,12 @@ final class IslandView: NSView {
 
     override func scrollWheel(with event: NSEvent) {
         onHoverChange?(true, screenLocation(of: event))
+        // Momentum after the fingers lift would carry on to the page after next.
+        if event.momentumPhase.isEmpty, abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) {
+            let points = event.scrollingDeltaX * (event.hasPreciseScrollingDeltas ? 1 : 10)
+            // Fingers moving left bring the next page in, whichever scroll direction is set.
+            onHorizontalScroll?(Double(event.isDirectionInvertedFromDevice ? -points : points), event.timestamp)
+        }
         super.scrollWheel(with: event)
     }
 
@@ -156,7 +164,7 @@ final class IslandView: NSView {
 
     /// Hands the transition to the render server. This process does no work until `completion`.
     /// Starts from the on-screen values, so reversing mid-flight does not jump.
-    func animatePill(to size: CGSize, cornerRadius: CGFloat, completion: @escaping () -> Void) {
+    func animatePill(to size: CGSize, cornerRadius: CGFloat, spring: IslandGeometry.Spring, completion: @escaping () -> Void) {
         let current = pill.presentation() ?? pill
         // Derived from the pill, not read from the flares: the window may have just resized, and
         // their on-screen positions would still be in the old coordinates.
@@ -164,11 +172,11 @@ final class IslandView: NSView {
         let flaresTo = flarePositions(pillWidth: size.width)
         CATransaction.begin()
         CATransaction.setCompletionBlock(completion)
-        addSpring(to: pill, keyPath: "bounds", from: NSValue(rect: current.bounds), to: NSValue(rect: CGRect(origin: .zero, size: size)))
-        addSpring(to: pill, keyPath: "cornerRadius", from: current.cornerRadius, to: cornerRadius)
+        addSpring(spring, to: pill, keyPath: "bounds", from: NSValue(rect: current.bounds), to: NSValue(rect: CGRect(origin: .zero, size: size)))
+        addSpring(spring, to: pill, keyPath: "cornerRadius", from: current.cornerRadius, to: cornerRadius)
         // The same spring over half the distance keeps each flare on the pill's edge throughout.
-        addSpring(to: leftFlare, keyPath: "position.x", from: flaresFrom.left, to: flaresTo.left)
-        addSpring(to: rightFlare, keyPath: "position.x", from: flaresFrom.right, to: flaresTo.right)
+        addSpring(spring, to: leftFlare, keyPath: "position.x", from: flaresFrom.left, to: flaresTo.left)
+        addSpring(spring, to: rightFlare, keyPath: "position.x", from: flaresFrom.right, to: flaresTo.right)
         setPill(size: size, cornerRadius: cornerRadius)
         CATransaction.commit()
     }
@@ -178,8 +186,8 @@ final class IslandView: NSView {
         return (bounds.midX - halfWidth, bounds.midX + halfWidth)
     }
 
-    private func addSpring(to layer: CALayer, keyPath: String, from: Any, to: Any) {
-        let spring = CASpringAnimation(perceptualDuration: 0.38, bounce: 0.18)
+    private func addSpring(_ parameters: IslandGeometry.Spring, to layer: CALayer, keyPath: String, from: Any, to: Any) {
+        let spring = CASpringAnimation(perceptualDuration: parameters.response, bounce: parameters.bounce)
         spring.keyPath = keyPath
         spring.fromValue = from
         spring.toValue = to

@@ -20,6 +20,10 @@ Don't add a `Feature` protocol, plugin registry, event bus or dependency injecti
 feature. Write it concretely. Extract an abstraction when a second feature shows what is actually
 shared.
 
+A feature that needs its own page adds a case to `IslandPage` (both platforms), a tab in the header,
+and a branch in `PageController`'s show, hide and reveal switches. With two pages that is still
+simpler than a protocol; reconsider at the third.
+
 ## Checklist
 
 1. **Find the event.** Identify the OS notification or callback before writing anything. Polling is
@@ -73,7 +77,7 @@ SwiftUI over a small AppKit window. The numbers are in [tech-stack.md](tech-stac
 ## Where the events come from
 
 Starting points for likely features. Verify each against current OS documentation before relying on
-it. Only now playing and launch at login are implemented so far.
+it. Only now playing, AI usage and launch at login are implemented so far.
 
 | Feature | macOS | Windows |
 | --- | --- | --- |
@@ -83,6 +87,7 @@ it. Only now playing and launch at login are implemented so far.
 | Timers (focus, reminders) | One-shot `DispatchSourceTimer`, tolerance set | One-shot waitable timer |
 | File shelf | `NSDraggingDestination`; keep URLs, not file data | `IDropTarget`; keep paths |
 | Now playing | [Implemented](architecture.md#now-playing-on-macos) | `GlobalSystemMediaTransportControlsSessionManager` |
+| AI usage | [Implemented](architecture.md#usage): reads local logs when shown | Same |
 | Launch at login | `SMAppService` | Run registry key or Startup task |
 | Full-screen detection | `NSWorkspace` and Space notifications | `SHQueryUserNotificationState` on foreground change |
 

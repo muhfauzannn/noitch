@@ -3,10 +3,10 @@
 #include <windows.h>
 
 #include "compositor.h"
-#include "features/home/home_controller.h"
 #include "features/settings/app_settings.h"
 #include "features/settings/settings_window.h"
 #include "island_geometry.h"
+#include "page_controller.h"
 #include "spring.h"
 
 namespace noitch {
@@ -23,6 +23,7 @@ private:
     void ApplyLayout();
     void TransitionTo(IslandState next);
     void FinishTransition();
+    void AnimateContent(bool show, double now);
     void UpdateHitRegion();
     void ShowMenu();
     void OpenIfPointerInNotch();
@@ -37,11 +38,14 @@ private:
     Compositor compositor_;
     IslandGeometry geometry_;
     PillMotion motion_;
+    // Content starts hidden; the open reveal fades it in and drops it out of the notch.
+    ContentFade contentOpacity_;
+    ContentFade contentOffset_;
     IslandState state_ = IslandState::Collapsed;
     bool trackingLeave_ = false;
     int compositorGeneration_ = 0;
     AppSettings settings_;
-    HomeController home_;
+    PageController pages_;
     SettingsWindow settingsWindow_;
 };
 

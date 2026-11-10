@@ -8,35 +8,36 @@ final class IslandController: NSObject {
     private var state = IslandState.collapsed
     private var latestTransition = 0
     private var settings = AppSettings.load()
-    private let home: HomeController
+    private let pages: PageController
     private var settingsWindow: SettingsWindowController?
 
     override init() {
         geometry = IslandGeometry(display: Self.preferredScreen().islandDisplay)
-        home = HomeController(settings: settings)
+        pages = PageController(settings: settings)
         super.init()
         panel.contentView = view
-        home.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: IslandGeometry.expandedSize) }
-        home.onOpenSettings = { [unowned self] in openSettings() }
-        view.onPointerMoved = { [unowned self] point in if state == .expanded { home.pointerMoved(to: point) } }
+        pages.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: IslandGeometry.expandedSize) }
+        pages.onOpenSettings = { [unowned self] in openSettings() }
+        view.onHorizontalScroll = { [unowned self] delta, time in if state == .expanded { pages.scrolled(by: delta, at: time) } }
+        view.onPointerMoved = { [unowned self] point in if state == .expanded { pages.pointerMoved(to: point) } }
         view.onPrimaryDown = { [unowned self] point in
             if state == .expanded {
-                home.pointerDown(at: point)
+                pages.pointerDown(at: point)
             } else if !settings.openOnHover {
                 transition(to: .expanded)
             }
         }
-        view.onPrimaryDragged = { [unowned self] point in if state == .expanded { home.pointerDragged(to: point) } }
+        view.onPrimaryDragged = { [unowned self] point in if state == .expanded { pages.pointerDragged(to: point) } }
         view.onPrimaryUp = { [unowned self] point in
             guard state == .expanded else { return }
-            home.pointerUp(at: point)
+            pages.pointerUp(at: point)
             // A slider drag can end outside the island, where no exit event will follow.
             if !panel.frame.contains(NSEvent.mouseLocation) { transition(to: .collapsed) }
         }
         view.onHoverChange = { [unowned self] isInside, eventLocation in
             if isInside {
                 if geometry.panelFrame(for: .collapsed).contains(eventLocation) { openIfPointerInNotch() }
-            } else if !home.isInteracting {
+            } else if !pages.isInteracting {
                 transition(to: .collapsed)
             }
         }
@@ -73,13 +74,14 @@ final class IslandController: NSObject {
         // round trip instead of on every frame.
         if newState == .expanded {
             resizePanel(for: .expanded)
-            home.islandWillOpen(layout: homeLayout, scale: panel.backingScaleFactor)
+            pages.islandWillOpen(size: IslandGeometry.expandedSize, headerHeight: geometry.collapsedSize.height, scale: panel.backingScaleFactor)
         } else {
-            home.islandWillClose()
+            pages.islandWillClose()
         }
         view.animatePill(
             to: geometry.pillSize(for: newState),
-            cornerRadius: geometry.cornerRadius(for: newState)
+            cornerRadius: geometry.cornerRadius(for: newState),
+            spring: IslandGeometry.spring(for: newState)
         ) { [unowned self] in
             // Replacing a running animation fires its completion at once, while the new one is
             // still on screen. Shrinking then would cut it off, so only the latest may finish.
@@ -88,10 +90,6 @@ final class IslandController: NSObject {
                 if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }
             }
         }
-    }
-
-    private var homeLayout: HomeLayout {
-        HomeLayout(size: IslandGeometry.expandedSize, headerHeight: geometry.collapsedSize.height)
     }
 
     private func resizePanel(for state: IslandState) {
@@ -126,7 +124,7 @@ final class IslandController: NSObject {
             let window = SettingsWindowController(settings: settings)
             window.onChange = { [unowned self] updated in
                 settings = updated
-                home.apply(updated)
+                pages.apply(updated)
             }
             window.onClose = { [unowned self] in settingsWindow = nil }
             settingsWindow = window
@@ -136,7 +134,7 @@ final class IslandController: NSObject {
 
     /// The adapter would otherwise outlive the app until its next write.
     func stop() {
-        home.stop()
+        pages.stop()
     }
 
     private static func preferredScreen() -> NSScreen {

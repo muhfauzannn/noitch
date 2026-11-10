@@ -27,6 +27,9 @@ HRESULT Compositor::BuildScene() {
     body_.Reset();
     fill_.Reset();
     content_.Reset();
+    contentEffect_.Reset();
+    for (auto& layer : layers_) layer.Reset();
+    for (auto& effect : layerEffects_) effect.Reset();
     dxgi_.Reset();
     leftFlare_.Reset();
     rightFlare_.Reset();
@@ -170,26 +173,95 @@ HRESULT Compositor::RecoverIfLost(const Pill& pill) {
     return ShowPill(pill);
 }
 
-HRESULT Compositor::CreateContentSurface(UINT width, UINT height, float left, IDCompositionSurface** surface) {
+HRESULT Compositor::CreateLayerSurface(int layer, UINT width, UINT height, float left, IDCompositionSurface** surface) {
+    if (layer < 0 || layer >= kLayerCount) return E_INVALIDARG;
     HRESULT hr;
     if (!content_) {
         if (FAILED(hr = device_->CreateVisual(&content_))) return hr;
         // Above fill_, so the black pill stays behind it.
         if (FAILED(hr = body_->AddVisual(content_.Get(), TRUE, fill_.Get()))) return hr;
     }
+    if (FAILED(hr = content_->SetOffsetX(left))) return hr;
+    auto& visual = layers_[layer];
+    if (!visual) {
+        if (FAILED(hr = device_->CreateVisual(&visual))) return hr;
+        if (FAILED(hr = device_->CreateEffectGroup(&layerEffects_[layer]))) return hr;
+        if (FAILED(hr = visual->SetEffect(layerEffects_[layer].Get()))) return hr;
+        // The header goes on top and pages at the bottom, whatever order they are made in.
+        if (FAILED(hr = content_->AddVisual(visual.Get(), layer == kHeaderLayer ? FALSE : TRUE, nullptr))) return hr;
+    }
     ComPtr<IDCompositionSurface> created;
     if (FAILED(hr = device_->CreateSurface(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED, &created))) return hr;
-    if (FAILED(hr = content_->SetOffsetX(left))) return hr;
-    if (FAILED(hr = content_->SetContent(created.Get()))) return hr;
+    if (FAILED(hr = visual->SetContent(created.Get()))) return hr;
     *surface = created.Detach();
     return S_OK;
 }
 
-HRESULT Compositor::RemoveContent() {
-    if (!content_) return S_OK;
-    HRESULT hr = body_->RemoveVisual(content_.Get());
+HRESULT Compositor::RemoveLayer(int layer) {
+    if (layer < 0 || layer >= kLayerCount || !layers_[layer]) return S_OK;
+    HRESULT hr = content_->RemoveVisual(layers_[layer].Get());
+    layers_[layer].Reset();
+    layerEffects_[layer].Reset();
+    for (const auto& remaining : layers_) {
+        if (remaining) return FAILED(hr) ? hr : device_->Commit();
+    }
+    // The last layer is gone, so the container and its reveal effect go too.
+    const HRESULT removed = body_->RemoveVisual(content_.Get());
     content_.Reset();
-    return FAILED(hr) ? hr : device_->Commit();
+    contentEffect_.Reset();
+    if (FAILED(hr)) return hr;
+    return FAILED(removed) ? removed : device_->Commit();
 }
+
+HRESULT Compositor::AnimateLayer(int layer, const ContentFade& opacity, const ContentFade& offsetX) {
+    if (layer < 0 || layer >= kLayerCount || !layers_[layer]) return S_OK;
+    ComPtr<IDCompositionAnimation> fade, slide;
+    HRESULT hr;
+    if (FAILED(hr = BuildFade(opacity, &fade))) return hr;
+    if (FAILED(hr = BuildFade(offsetX, &slide))) return hr;
+    if (FAILED(hr = layerEffects_[layer]->SetOpacity(fade.Get()))) return hr;
+    return layers_[layer]->SetOffsetX(slide.Get());
+}
+
+HRESULT Compositor::SetLayer(int layer, float opacity, float offsetX) {
+    if (layer < 0 || layer >= kLayerCount || !layers_[layer]) return S_OK;
+    HRESULT hr = layerEffects_[layer]->SetOpacity(opacity);
+    return FAILED(hr) ? hr : layers_[layer]->SetOffsetX(offsetX);
+}
+
+HRESULT Compositor::BuildFade(const ContentFade& fade, IDCompositionAnimation** animation) {
+    ComPtr<IDCompositionAnimation> result;
+    HRESULT hr = device_->CreateAnimation(&result);
+    if (FAILED(hr)) return hr;
+    // Holds the start value through the delay, then runs the exact ease-out cubic.
+    if (fade.delay > 0 && FAILED(hr = result->AddCubic(0, fade.from, 0, 0, 0))) return hr;
+    const CubicSegment s = fade.Curve();
+    if (FAILED(hr = result->AddCubic(s.offset, s.c0, s.c1, s.c2, s.c3))) return hr;
+    if (FAILED(hr = result->End(fade.delay + fade.duration, fade.to))) return hr;
+    *animation = result.Detach();
+    return S_OK;
+}
+
+HRESULT Compositor::AnimateContent(const ContentFade& opacity, const ContentFade& offsetY) {
+    if (!content_) return S_OK;
+    HRESULT hr;
+    if (!contentEffect_) {
+        if (FAILED(hr = device_->CreateEffectGroup(&contentEffect_))) return hr;
+        if (FAILED(hr = content_->SetEffect(contentEffect_.Get()))) return hr;
+    }
+    ComPtr<IDCompositionAnimation> fade, slide;
+    if (FAILED(hr = BuildFade(opacity, &fade))) return hr;
+    if (FAILED(hr = BuildFade(offsetY, &slide))) return hr;
+    if (FAILED(hr = contentEffect_->SetOpacity(fade.Get()))) return hr;
+    return content_->SetOffsetY(slide.Get());
+}
+
+// Replacing the animations with constants lets DWM release them. Does not commit.
+HRESULT Compositor::SettleContent(float opacity, float offsetY) {
+    if (!content_ || !contentEffect_) return S_OK;
+    HRESULT hr = contentEffect_->SetOpacity(opacity);
+    return FAILED(hr) ? hr : content_->SetOffsetY(offsetY);
+}
+
 
 }  // namespace noitch
