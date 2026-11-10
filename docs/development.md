@@ -90,7 +90,8 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 56 unit tests | Passing |
+| Builds; 60 unit tests | Passing |
+| Settings window with sidebar | General page checked by a window screenshot (`--settings`, Debug only); other pages and every control's effect **not checked on screen** |
 | Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |
 | Usage page ring design | Checked by an offscreen render with sample numbers |
 | Claude limits from the usage endpoint and Keychain | **Not run**: needs the Keychain prompt answered in the real app |
@@ -121,6 +122,8 @@ Keep this honest and up to date.
 | Spring, geometry, Home, lyrics and JSON tests | Passing on macOS, under ASan and UBSan |
 | Usage parser, five-hour block, pager and swipe tests | Passing on macOS with clang; not run under ASan/UBSan |
 | Pages, header, usage page with rings, shared painter, Claude limit request, `WM_MOUSEHWHEEL` swipe | **Never compiled**: no Windows toolchain was available |
+| Settings values, panes, page and usage settings tests | Passing on macOS with clang |
+| Settings window with sidebar, registry store, hover delay, page settings in the pager | **Never compiled** |
 | Compiles | With Zig and mingw, using a stub for the WinRT header. It no longer links there |
 | `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |

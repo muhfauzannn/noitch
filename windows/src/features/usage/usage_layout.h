@@ -1,8 +1,8 @@
 #pragma once
 
 // Where everything on the usage page sits, in pixels from the pill's top-left corner. One column per
-// tool: a ring gauge, and beside it the numbers and what they mean. No Windows headers. The macOS
-// app uses the same numbers (UsageLayout.swift).
+// tool: a ring gauge, and beside it the numbers and what they mean. A single tool keeps the same
+// column width, centered. No Windows headers. The macOS app uses the same numbers (UsageLayout.swift).
 
 #include <algorithm>
 
@@ -24,6 +24,7 @@ public:
     float Width() const { return width_ * scale_; }
     float Height() const { return height_ * scale_; }
     float Scale() const { return scale_; }
+    void SetColumns(int columns) { columns_ = columns; }
 
     HomeRect Gauge(int column) const { return Px({X(column), BodyTop() + (BodyHeight() - kGauge) / 2, kGauge, kGauge}); }
     HomeRect Center(int column) const { return Px({X(column), GaugeMidY() - 14, kGauge, 22}); }
@@ -48,7 +49,10 @@ private:
     float BodyTop() const { return header_ + kHeaderGap; }
     float BodyHeight() const { return height_ - BodyTop() - kBottomPadding; }
     float ColumnWidth() const { return (width_ - kSidePadding * 2 - kColumnGap) / 2; }
-    float X(int column) const { return kSidePadding + static_cast<float>(column) * (ColumnWidth() + kColumnGap); }
+    float X(int column) const {
+        if (columns_ == 1) return (width_ - ColumnWidth()) / 2;
+        return kSidePadding + static_cast<float>(column) * (ColumnWidth() + kColumnGap);
+    }
     float TextX(int column) const { return X(column) + kGauge + kGaugeGap; }
     float TextWidth() const { return ColumnWidth() - kGauge - kGaugeGap; }
     // The text block is 102 points tall; it and the gauge share the body's vertical center.
@@ -61,6 +65,7 @@ private:
     float height_ = 0;
     float header_ = 0;
     float scale_ = 1;
+    int columns_ = 2;
 };
 
 }  // namespace noitch

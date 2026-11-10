@@ -12,7 +12,7 @@
 
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
-#include "features/settings/app_settings.h"
+#include "home_settings.h"
 
 namespace noitch {
 
@@ -57,7 +57,7 @@ inline std::string LyricStatus(const Lyrics* lyrics, bool isLoading) {
 }
 
 inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyrics, bool isLoadingLyrics, double position,
-                               const AppSettings& settings, bool isSkipping = false) {
+                               const HomeSettings& settings, bool isSkipping = false) {
     HomeModel model;
     model.showsShuffleAndRepeat = settings.showShuffleAndRepeat;
     if (!nowPlaying.HasTrack()) return model;
@@ -79,13 +79,13 @@ inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyric
     if (!settings.showLyrics) return model;
 
     if (lyrics && !lyrics->synced.empty()) {
-        const int index = lyrics->LineIndex(position);
+        const int index = lyrics->LineIndex(position + settings.lyricsOffset);
         model.lyricIndex = index;
         // Before the first line, and in the gaps a line leaves empty, a note holds the place.
         const std::string current = index >= 0 ? lyrics->synced[static_cast<size_t>(index)].text : "";
         model.lyric = current.empty() ? "\xE2\x99\xAA" : current;
         const int next = index + 1;
-        if (next < static_cast<int>(lyrics->synced.size())) model.nextLyric = lyrics->synced[static_cast<size_t>(next)].text;
+        if (settings.showNextLyric && next < static_cast<int>(lyrics->synced.size())) model.nextLyric = lyrics->synced[static_cast<size_t>(next)].text;
     } else {
         model.lyric = LyricStatus(lyrics, isLoadingLyrics);
         model.lyricIsStatus = true;

@@ -8,9 +8,15 @@ final class UsageController {
     var onSceneCreated: ((CALayer) -> Void)?
     var sceneRoot: CALayer? { scene?.root }
 
+    private var settings: UsageSettings
     private var layout: UsageLayout?
     private var scale: CGFloat = 2
     private var scene: UsageScene?
+    private var sceneTools: [UsageTool] = []
+    private var isShown = false
+    /// When Claude's limits were last asked for, so a longer refresh choice is honored.
+    private var lastFetch: Double?
+    private var isFetching = false
     private var source: UsageSource?
     private let claudeSource = ClaudeLimitSource()
     private var claudeLimits = ToolLimits.failed(.loading)
@@ -20,26 +26,55 @@ final class UsageController {
     private var tickTimer: Timer?
     private var releaseTimer: Timer?
 
+    init(settings: UsageSettings) {
+        self.settings = settings
+    }
+
     func pageWillShow(layout: UsageLayout, scale: CGFloat) {
         releaseTimer?.invalidate()
         releaseTimer = nil
+        isShown = true
         // Show what was last known at once, rather than an empty page while asking.
         if claudeLimits.problem == .loading, let known = rememberedLimits()["claude"] { claudeLimits = known }
-        if scene == nil || layout != self.layout || scale != self.scale {
-            scene?.root.removeFromSuperlayer()
-            let scene = UsageScene(layout: layout, scale: scale)
-            self.scene = scene
-            self.layout = layout
-            self.scale = scale
-            onSceneCreated?(scene.root)
-        }
+        self.layout = layout
+        self.scale = scale
+        buildSceneIfNeeded()
         refresh()
     }
 
+    func apply(_ settings: UsageSettings) {
+        let old = self.settings
+        self.settings = settings
+        guard isShown else { return }
+        buildSceneIfNeeded()
+        if settings.showClaude && !old.showClaude || settings.refreshMinutes < old.refreshMinutes {
+            refresh()
+        } else {
+            render()
+        }
+    }
+
+    private func buildSceneIfNeeded() {
+        guard var layout else { return }
+        let tools = settings.tools
+        layout.columns = tools.count
+        guard scene == nil || layout != self.layout || tools != sceneTools else { return }
+        scene?.root.removeFromSuperlayer()
+        let scene = UsageScene(layout: layout, tools: tools, scale: scale)
+        self.scene = scene
+        self.layout = layout
+        sceneTools = tools
+        onSceneCreated?(scene.root)
+    }
+
     func pageWillHide() {
+        isShown = false
         tickTimer?.invalidate()
         tickTimer = nil
         claudeSource.cancel()
+        // A request cut short never answered, so the next showing asks again.
+        if isFetching { lastFetch = nil }
+        isFetching = false
         guard releaseTimer == nil else { return }
         let timer = Timer(timeInterval: Self.releaseDelay, repeats: false) { [unowned self] _ in
             MainActor.assumeIsolated { release() }
@@ -98,8 +133,16 @@ final class UsageController {
         self.source = source
         log = source.refresh(now: now)
         render()
+        let due = lastFetch.map { now - $0 >= settings.refreshMinutes * 60 - 5 } ?? true
+        guard settings.showClaude, due || claudeLimits.problem == .loading else {
+            scheduleTick(after: date)
+            return
+        }
+        lastFetch = now
+        isFetching = true
         claudeSource.fetch(now: now) { [weak self] limits in
             guard let self else { return }
+            isFetching = false
             let now = Date().timeIntervalSince1970
             if limits.problem == nil {
                 claudeLimits = limits
@@ -134,7 +177,7 @@ final class UsageController {
         }
         let dayStart = Calendar.current.startOfDay(for: date).timeIntervalSince1970
         let summary = UsageSummary(log: log, now: now, dayStart: dayStart)
-        scene.apply(UsageModel(claude: claude, codex: codex, summary: summary, now: now) { time in
+        scene.apply(UsageModel(claude: claude, codex: codex, summary: summary, now: now, settings: settings) { time in
             Self.clock.string(from: Date(timeIntervalSince1970: time))
         })
     }

@@ -108,8 +108,9 @@ void HomeScene::Release() {
     factory_.Reset();
 }
 
-void HomeScene::SetArtwork(const std::shared_ptr<const Artwork>& artwork, uint32_t tint) {
-    tint_ = tint;
+void HomeScene::SetArtwork(const std::shared_ptr<const Artwork>& artwork, uint32_t barTint, uint32_t glow) {
+    tint_ = barTint;
+    glow_ = glow;
     artworkBrush_.Reset();
     if (!artwork || artwork->size <= 0 || !context_) return;
     const auto size = static_cast<UINT32>(artwork->size);
@@ -158,8 +159,8 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
     context_->Clear(D2D1::ColorF(0, 0, 0, 0));
 
     // A soft wash of the artwork's colour from the left, so the page takes on the track's mood.
-    if (tint_ != 0xFFFFFFFF && artworkBrush_) {
-        const D2D1_COLOR_F tint = FromBgra(tint_);
+    if (glow_ != 0xFFFFFFFF && artworkBrush_) {
+        const D2D1_COLOR_F tint = FromBgra(glow_);
         const D2D1_GRADIENT_STOP stops[] = {
             {0.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.42f)},
             {0.45f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.12f)},

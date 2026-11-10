@@ -24,6 +24,10 @@ A feature that needs its own page adds a case to `IslandPage` (both platforms), 
 and a branch in `PageController`'s show, hide and reveal switches. With two pages that is still
 simpler than a protocol; reconsider at the third.
 
+A feature with preferences adds a settings part and a settings page in its own folder (see
+[Settings](architecture.md#settings)): a `<Name>Settings` value added to `AppSettings`, and a pane
+listed in the settings window. Both apps get the same rows.
+
 ## Checklist
 
 1. **Find the event.** Identify the OS notification or callback before writing anything. Polling is

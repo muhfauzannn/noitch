@@ -16,6 +16,7 @@ public:
     HRESULT Create(Compositor& compositor, Painter& painter, const HeaderLayout& layout, float width, float height, float left, float scale);
     void Release();
     bool Exists() const { return surface_ != nullptr; }
+    const HeaderLayout& Layout() const { return layout_; }
 
     // Commits, so animations set on other layers just before start on the same frame.
     HRESULT Paint(IslandPage page, HeaderControl hovered, bool isPressed);

@@ -1,8 +1,8 @@
 import CoreGraphics
 
 /// Where everything on the usage page sits, from the pill's top-left corner with y growing downward.
-/// One column per tool: a ring gauge, and beside it the numbers and what they mean. The Windows app
-/// uses the same numbers (usage_layout.h).
+/// One column per tool: a ring gauge, and beside it the numbers and what they mean. A single tool
+/// keeps the same column width, centered. The Windows app uses the same numbers (usage_layout.h).
 struct UsageLayout: Equatable {
     static let sidePadding: CGFloat = 22
     static let columnGap: CGFloat = 24
@@ -17,11 +17,15 @@ struct UsageLayout: Equatable {
 
     let size: CGSize
     let headerHeight: CGFloat
+    var columns = 2
 
     private var bodyTop: CGFloat { headerHeight + Self.headerGap }
     private var bodyHeight: CGFloat { size.height - bodyTop - Self.bottomPadding }
     var columnWidth: CGFloat { (size.width - Self.sidePadding * 2 - Self.columnGap) / 2 }
-    private func x(_ column: Int) -> CGFloat { Self.sidePadding + CGFloat(column) * (columnWidth + Self.columnGap) }
+    private func x(_ column: Int) -> CGFloat {
+        if columns == 1 { return (size.width - columnWidth) / 2 }
+        return Self.sidePadding + CGFloat(column) * (columnWidth + Self.columnGap)
+    }
     private func textX(_ column: Int) -> CGFloat { x(column) + Self.gauge + Self.gaugeGap }
     var textWidth: CGFloat { columnWidth - Self.gauge - Self.gaugeGap }
     /// The text block is 102 points tall; it and the gauge share the body's vertical center.

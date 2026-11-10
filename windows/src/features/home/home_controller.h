@@ -7,7 +7,7 @@
 
 #include "features/lyrics/lyrics_source.h"
 #include "features/now_playing/media_session_source.h"
-#include "features/settings/app_settings.h"
+#include "home_settings.h"
 #include "home_layout.h"
 #include "home_model.h"
 #include "home_scene.h"
@@ -30,7 +30,7 @@ public:
 
     void IslandWillOpen(const HomeLayout& layout, float left, float scale);
     void IslandWillClose();
-    void Apply(const AppSettings& settings);
+    void Apply(const HomeSettings& settings);
 
     // The compositor rebuilt its tree, so the scene's surface is gone with the old device.
     void DeviceLost();
@@ -54,6 +54,7 @@ private:
     void Activate(HomeControl control);
     void FinishScrub(double fraction);
     void ReceiveMedia();
+    void ShowArtwork();
     void BeginSkip();
     void RequestLyricsIfNeeded();
     double CurrentPosition() const;
@@ -61,7 +62,7 @@ private:
     HWND window_ = nullptr;
     Compositor* compositor_ = nullptr;
     double (*now_)() = nullptr;
-    AppSettings settings_;
+    HomeSettings settings_;
     HomeLayout layout_;
     float left_ = 0;
     float scale_ = 0;

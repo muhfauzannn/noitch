@@ -26,7 +26,9 @@ public:
     void Release();
     bool Exists() const { return surface_ != nullptr; }
 
-    void SetArtwork(const std::shared_ptr<const Artwork>& artwork, uint32_t tint);
+    // `barTint` colours the progress bar and `glow` the wash behind the page, as BGRA; 0xFFFFFFFF is
+    // white and none.
+    void SetArtwork(const std::shared_ptr<const Artwork>& artwork, uint32_t barTint, uint32_t glow);
     HRESULT Paint(const HomeModel& model, HomeControl hovered, bool isPressed);
 
 private:
@@ -53,6 +55,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> largeIconFormat_;
     Microsoft::WRL::ComPtr<ID2D1BitmapBrush> artworkBrush_;
     uint32_t tint_ = 0xFFFFFFFF;
+    uint32_t glow_ = 0xFFFFFFFF;
 };
 
 }  // namespace noitch

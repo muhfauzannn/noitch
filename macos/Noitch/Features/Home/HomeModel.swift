@@ -23,7 +23,7 @@ struct HomeModel: Equatable {
 
     init() {}
 
-    init(nowPlaying: NowPlaying, lyrics: Lyrics?, isLoadingLyrics: Bool, position: TimeInterval, settings: AppSettings, isSkipping: Bool = false) {
+    init(nowPlaying: NowPlaying, lyrics: Lyrics?, isLoadingLyrics: Bool, position: TimeInterval, settings: HomeSettings, isSkipping: Bool = false) {
         showsShuffleAndRepeat = settings.showShuffleAndRepeat
         guard nowPlaying.hasTrack else { return }
         hasTrack = true
@@ -42,13 +42,13 @@ struct HomeModel: Equatable {
         remainingText = "-" + Self.formatTime(max(nowPlaying.duration - position, 0))
         guard settings.showLyrics else { return }
         if let lyrics, !lyrics.synced.isEmpty {
-            let index = lyrics.lineIndex(at: position)
+            let index = lyrics.lineIndex(at: position + settings.lyricsOffset)
             lyricIndex = index
             // Before the first line, and in the gaps a line leaves empty, a note holds the place.
             let current = index.map { lyrics.synced[$0].text } ?? ""
             lyric = current.isEmpty ? "♪" : current
             let next = (index ?? -1) + 1
-            nextLyric = lyrics.synced.indices.contains(next) ? lyrics.synced[next].text : ""
+            nextLyric = settings.showNextLyric && lyrics.synced.indices.contains(next) ? lyrics.synced[next].text : ""
         } else {
             lyric = Self.lyricStatus(lyrics, isLoading: isLoadingLyrics)
             lyricIsStatus = true

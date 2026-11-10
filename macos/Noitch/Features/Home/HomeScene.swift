@@ -222,16 +222,16 @@ final class HomeScene {
         layer.opacity = target.opacity
     }
 
-    /// `tint` colours the progress bar and the wash behind the page; nil turns both back to white
-    /// and none.
-    func setArtwork(_ image: CGImage?, tint: NSColor?) {
+    /// `barTint` colours the progress bar and `glow` the wash behind the page; nil turns them back to
+    /// white and none.
+    func setArtwork(_ image: CGImage?, barTint: NSColor?, glow: NSColor?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         Self.addFade(to: artwork, duration: 0.3)
         artwork.contents = image
         artworkPlaceholder.isHidden = image != nil
-        fill.backgroundColor = (tint ?? .white).cgColor
-        let wash = Self.wash(tint ?? .clear)
+        fill.backgroundColor = (barTint ?? .white).cgColor
+        let wash = Self.wash(glow ?? .clear)
         let animation = CABasicAnimation(keyPath: "colors")
         animation.fromValue = backdrop.presentation()?.colors ?? backdrop.colors
         animation.toValue = wash

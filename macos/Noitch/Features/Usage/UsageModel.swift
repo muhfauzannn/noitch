@@ -36,19 +36,27 @@ struct UsageModel: Equatable {
     var claude: Tool
     var codex: Tool
 
-    /// `clock` turns a time into a short local label such as "Thu 14:00".
-    init(claude: ToolLimits, codex: ToolLimits, summary: UsageSummary, now: Double, clock: (Double) -> String) {
-        self.claude = Self.tool("Claude Code", limits: claude, today: summary.claudeToday, now: now, clock: clock)
-        self.codex = Self.tool("Codex", limits: codex, today: summary.codexToday, now: now, clock: clock)
+    /// `clock` turns a time into a short local label such as "Thu 14:00". `settings` sets where amber
+    /// and red begin.
+    init(claude: ToolLimits, codex: ToolLimits, summary: UsageSummary, now: Double, settings: UsageSettings = UsageSettings(), clock: (Double) -> String) {
+        self.claude = Self.tool("Claude Code", limits: claude, today: summary.claudeToday, now: now, settings: settings, clock: clock)
+        self.codex = Self.tool("Codex", limits: codex, today: summary.codexToday, now: now, settings: settings, clock: clock)
     }
 
-    private static func tool(_ name: String, limits: ToolLimits, today: ToolUsage, now: Double, clock: (Double) -> String) -> Tool {
+    func tool(_ tool: UsageTool) -> Tool {
+        switch tool {
+        case .claude: claude
+        case .codex: codex
+        }
+    }
+
+    private static func tool(_ name: String, limits: ToolLimits, today: ToolUsage, now: Double, settings: UsageSettings, clock: (Double) -> String) -> Tool {
         let insight = LimitInsight(limits, at: now)
         let five = limits.fiveHour?.current(at: now)
         let week = limits.week?.current(at: now)
         let (headline, detail) = text(insight, now: now, clock: clock)
         func severity(of window: LimitWindow) -> Severity {
-            var level: Severity = window.usedPercent >= 90 ? .critical : window.usedPercent >= 70 ? .watch : .calm
+            var level: Severity = window.usedPercent >= settings.criticalAt ? .critical : window.usedPercent >= settings.warnAt ? .watch : .calm
             if Pace(window, at: now) == .ahead { level = max(level, .watch) }
             switch insight {
             case let .reached(length, _) where length == window.length, let .runsOut(length, _, _) where length == window.length:

@@ -61,7 +61,7 @@ struct HomeTests {
     }
 
     @Test func `nothing playing shows the placeholder`() {
-        let model = HomeModel(nowPlaying: NowPlaying(), lyrics: nil, isLoadingLyrics: false, position: 0, settings: AppSettings())
+        let model = HomeModel(nowPlaying: NowPlaying(), lyrics: nil, isLoadingLyrics: false, position: 0, settings: HomeSettings())
         #expect(!model.hasTrack)
         #expect(model.title == HomeModel().title)
     }
@@ -71,10 +71,10 @@ struct HomeTests {
         nowPlaying.title = "Song"
         nowPlaying.duration = 100
         let lyrics = Lyrics(synced: [.init(start: 1, text: "one"), .init(start: 2, text: "two"), .init(start: 3, text: "three")])
-        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 2.5, settings: AppSettings())
+        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 2.5, settings: HomeSettings())
         #expect(model.lyric == "two" && model.nextLyric == "three" && model.lyricIndex == 1)
         #expect(model.remainingText == "-1:37")
-        let intro = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 0.5, settings: AppSettings())
+        let intro = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 0.5, settings: HomeSettings())
         #expect(intro.lyric == "♪" && intro.nextLyric == "one" && intro.lyricIndex == nil)
     }
 
@@ -83,7 +83,7 @@ struct HomeTests {
         nowPlaying.title = "Song"
         nowPlaying.duration = 100
         let lyrics = Lyrics(synced: [.init(start: 1, text: "one")])
-        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 50, settings: AppSettings(), isSkipping: true)
+        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 50, settings: HomeSettings(), isSkipping: true)
         #expect(model.isSkipping && model.title == "Song")
         #expect(model.elapsedText == "0:00" && model.lyric.isEmpty)
     }
@@ -100,7 +100,7 @@ struct HomeTests {
     @Test func `turning lyrics off removes them everywhere`() {
         var nowPlaying = NowPlaying()
         nowPlaying.title = "Song"
-        var settings = AppSettings()
+        var settings = HomeSettings()
         settings.showLyrics = false
         let lyrics = Lyrics(synced: [.init(start: 0, text: "one")])
         let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 1, settings: settings)
@@ -111,9 +111,54 @@ struct HomeTests {
         let defaults = try #require(UserDefaults(suiteName: "noitch.tests.\(UUID().uuidString)"))
         #expect(AppSettings.load(from: defaults) == AppSettings())
         var settings = AppSettings()
-        settings.openOnHover = false
-        settings.tintWithArtwork = false
+        settings.general.openOnHover = false
+        settings.general.hoverDelay = 0.3
+        settings.general.display = .main
+        settings.pages.showUsage = false
+        settings.pages.openOn = .home
+        settings.home.tintWithArtwork = false
+        settings.home.lyricsOffset = -0.5
+        settings.usage.showCodex = false
+        settings.usage.refreshMinutes = 5
         settings.save(to: defaults)
         #expect(AppSettings.load(from: defaults) == settings)
+    }
+
+    @Test func `choices stored by an older version still read`() throws {
+        let defaults = try #require(UserDefaults(suiteName: "noitch.tests.\(UUID().uuidString)"))
+        defaults.set(false, forKey: "showLyrics")
+        defaults.set(false, forKey: "openOnHover")
+        defaults.set("sideways", forKey: "display")
+        defaults.set(0.1, forKey: "usageRefreshMinutes")
+        let settings = AppSettings.load(from: defaults)
+        #expect(!settings.home.showLyrics && !settings.general.openOnHover)
+        // Unknown and out-of-range values fall back to something safe.
+        #expect(settings.general.display == .notch && settings.usage.refreshMinutes == 1)
+    }
+
+    @Test func `the lyrics timing shifts which line is sung`() {
+        var nowPlaying = NowPlaying()
+        nowPlaying.title = "Song"
+        nowPlaying.duration = 100
+        let lyrics = Lyrics(synced: [.init(start: 1, text: "one"), .init(start: 2, text: "two"), .init(start: 3, text: "three")])
+        var settings = HomeSettings()
+        settings.lyricsOffset = 0.5
+        let early = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 1.6, settings: settings)
+        #expect(early.lyric == "two")
+        settings.showNextLyric = false
+        let single = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 1.6, settings: settings)
+        #expect(single.lyric == "two" && single.nextLyric.isEmpty)
+    }
+
+    @Test func `pages open where the settings say, and Home is always there`() {
+        var pages = PageSettings()
+        #expect(pages.page(opening: .usage) == .usage)
+        pages.openOn = .home
+        #expect(pages.page(opening: .usage) == .home)
+        pages.openOn = .usage
+        pages.showUsage = false
+        #expect(pages.visible == [.home] && pages.page(opening: .usage) == .home)
+        let header = HeaderLayout(size: IslandGeometry.expandedSize, headerHeight: 32, pages: pages.visible)
+        #expect(header.control(at: CGPoint(x: HeaderLayout.sidePadding + 45, y: 16)) == nil)
     }
 }

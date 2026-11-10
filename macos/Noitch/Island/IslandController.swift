@@ -10,9 +10,11 @@ final class IslandController: NSObject {
     private var settings = AppSettings.load()
     private let pages: PageController
     private var settingsWindow: SettingsWindowController?
+    /// A one-shot wait while the pointer rests in the notch, when a hover delay is set.
+    private var hoverTimer: Timer?
 
     override init() {
-        geometry = IslandGeometry(display: Self.preferredScreen().islandDisplay)
+        geometry = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
         pages = PageController(settings: settings)
         super.init()
         panel.contentView = view
@@ -23,7 +25,8 @@ final class IslandController: NSObject {
         view.onPrimaryDown = { [unowned self] point in
             if state == .expanded {
                 pages.pointerDown(at: point)
-            } else if !settings.openOnHover {
+            } else {
+                // A click opens at once, whatever the hover settings.
                 transition(to: .expanded)
             }
         }
@@ -37,8 +40,9 @@ final class IslandController: NSObject {
         view.onHoverChange = { [unowned self] isInside, eventLocation in
             if isInside {
                 if geometry.panelFrame(for: .collapsed).contains(eventLocation) { openIfPointerInNotch() }
-            } else if !pages.isInteracting {
-                transition(to: .collapsed)
+            } else {
+                cancelHoverTimer()
+                if !pages.isInteracting { transition(to: .collapsed) }
             }
         }
         view.onSecondaryClick = { [unowned self] event in showMenu(for: event) }
@@ -57,12 +61,38 @@ final class IslandController: NSObject {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+        #if DEBUG
+        // `--settings` opens the settings window at launch, for checking its layout.
+        if ProcessInfo.processInfo.arguments.contains("--settings") { openSettings() }
+        #endif
     }
 
     private func openIfPointerInNotch() {
-        guard state == .collapsed, settings.openOnHover,
+        guard state == .collapsed, settings.general.openOnHover,
               geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) else { return }
-        transition(to: .expanded)
+        let delay = settings.general.hoverDelay
+        guard delay > 0 else {
+            transition(to: .expanded)
+            return
+        }
+        guard hoverTimer == nil else { return }
+        let timer = Timer(timeInterval: delay, target: self, selector: #selector(hoverDelayEnded), userInfo: nil, repeats: false)
+        timer.tolerance = 0.02
+        RunLoop.main.add(timer, forMode: .common)
+        hoverTimer = timer
+    }
+
+    @objc private func hoverDelayEnded() {
+        hoverTimer = nil
+        // Only a pointer that stayed opens it; one that left has already cancelled this.
+        if state == .collapsed, geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) {
+            transition(to: .expanded)
+        }
+    }
+
+    private func cancelHoverTimer() {
+        hoverTimer?.invalidate()
+        hoverTimer = nil
     }
 
     private func transition(to newState: IslandState) {
@@ -72,7 +102,11 @@ final class IslandController: NSObject {
         let transition = latestTransition
         // Grow before expanding and shrink after collapsing: the window changes size twice per
         // round trip instead of on every frame.
+        cancelHoverTimer()
         if newState == .expanded {
+            if settings.general.haptics {
+                NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+            }
             resizePanel(for: .expanded)
             pages.islandWillOpen(size: IslandGeometry.expandedSize, headerHeight: geometry.collapsedSize.height, scale: panel.backingScaleFactor)
         } else {
@@ -104,7 +138,7 @@ final class IslandController: NSObject {
     }
 
     @objc private func screenParametersChanged() {
-        let updated = IslandGeometry(display: Self.preferredScreen().islandDisplay)
+        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
         guard updated != geometry else { return }
         geometry = updated
         applyLayout()
@@ -123,8 +157,10 @@ final class IslandController: NSObject {
         if settingsWindow == nil {
             let window = SettingsWindowController(settings: settings)
             window.onChange = { [unowned self] updated in
+                let old = settings
                 settings = updated
                 pages.apply(updated)
+                if updated.general.display != old.general.display { screenParametersChanged() }
             }
             window.onClose = { [unowned self] in settingsWindow = nil }
             settingsWindow = window
@@ -137,8 +173,10 @@ final class IslandController: NSObject {
         pages.stop()
     }
 
-    private static func preferredScreen() -> NSScreen {
-        guard let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main else {
+    /// The first screen is the one with the menu bar.
+    private static func preferredScreen(_ choice: DisplayChoice) -> NSScreen {
+        let notched = choice == .notch ? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) : nil
+        guard let screen = notched ?? NSScreen.screens.first ?? NSScreen.main else {
             preconditionFailure("A running GUI session always has a screen")
         }
         return screen

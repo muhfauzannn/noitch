@@ -15,9 +15,11 @@ namespace noitch {
 enum class IslandPage { Home, Usage };
 inline constexpr int kPageCount = 2;
 
-inline bool NeighborPage(IslandPage page, int step, IslandPage* next) {
+// The page `step` places away, skipping Usage when it is turned off.
+inline bool NeighborPage(IslandPage page, int step, bool showUsage, IslandPage* next) {
+    const int count = showUsage ? kPageCount : 1;
     const int index = static_cast<int>(page) + step;
-    if (index < 0 || index >= kPageCount) return false;
+    if (index < 0 || index >= count) return false;
     *next = static_cast<IslandPage>(index);
     return true;
 }
@@ -32,17 +34,22 @@ inline constexpr HeaderControl TabFor(IslandPage page) {
 }
 
 // Page tabs at the left of the band beside the notch, settings at the right. Pages keep their own
-// buttons clear of these. In pixels from the pill's top-left corner.
+// buttons clear of these. In pixels from the pill's top-left corner. A page turned off has no tab.
 class HeaderLayout {
 public:
     HeaderLayout() = default;
-    HeaderLayout(float width, float headerHeight, float scale) : width_(width), header_(headerHeight), scale_(scale) {}
+    HeaderLayout(float width, float headerHeight, float scale, bool showUsage = true)
+        : width_(width), header_(headerHeight), scale_(scale), showUsage_(showUsage) {}
+
+    bool ShowsUsage() const { return showUsage_; }
 
     HomeRect Frame(HeaderControl control) const {
         const float y = std::max((header_ - kButton) / 2, 0.0f);
         switch (control) {
             case HeaderControl::HomeTab: return Px({kSidePadding, y, kButton, kButton});
-            case HeaderControl::UsageTab: return Px({kSidePadding + kButton + kGap, y, kButton, kButton});
+            case HeaderControl::UsageTab:
+                if (!showUsage_) return {};
+                return Px({kSidePadding + kButton + kGap, y, kButton, kButton});
             case HeaderControl::Settings: return Px({width_ - kSidePadding - kButton, y, kButton, kButton});
             default: return {};
         }
@@ -65,6 +72,7 @@ private:
     float width_ = 0;
     float header_ = 0;
     float scale_ = 1;
+    bool showUsage_ = true;
 };
 
 // Turns a stream of horizontal wheel deltas into at most one page step per gesture, so a long

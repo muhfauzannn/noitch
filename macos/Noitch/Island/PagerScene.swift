@@ -13,7 +13,7 @@ final class PagerScene {
     /// Pinned to the pill's top edge by the view.
     let root = CALayer()
 
-    private let layout: HeaderLayout
+    let layout: HeaderLayout
     private let header = CALayer()
     private let selection = CALayer()
     private let hoverPlate = CALayer()
@@ -40,8 +40,13 @@ final class PagerScene {
         selection.cornerRadius = selection.frame.height / 2
         header.addSublayer(selection)
 
-        let controls: [(HeaderControl, HomeIcon)] = [(.tab(.home), .music), (.tab(.usage), .usage), (.settings, .settings)]
-        for (control, icon) in controls {
+        let tabs: [(HeaderControl, HomeIcon)] = layout.pages.map { page in
+            switch page {
+            case .home: (.tab(.home), .music)
+            case .usage: (.tab(.usage), .usage)
+            }
+        }
+        for (control, icon) in tabs + [(.settings, .settings)] {
             let frame = layout.frame(of: control)
             let inset = frame.width * 0.22
             let layer = CAShapeLayer()
@@ -69,13 +74,18 @@ final class PagerScene {
         CATransaction.commit()
     }
 
-    /// Marks the current tab without animating, for a scene that was just built.
+    /// Shows a page and marks its tab without animating, for a scene that is out of sight.
     func select(_ page: IslandPage) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         selection.frame = layout.frame(of: .tab(page))
-        for candidate in IslandPage.allCases {
+        for candidate in layout.pages {
             icons[.tab(candidate)]?.opacity = candidate == page ? 1 : Self.idleTabOpacity
+        }
+        for (candidate, layer) in pages {
+            layer.removeAllAnimations()
+            layer.opacity = candidate == page ? 1 : 0
+            layer.transform = CATransform3DIdentity
         }
         CATransaction.commit()
     }
@@ -112,7 +122,7 @@ final class PagerScene {
         spring.duration = spring.settlingDuration
         selection.position.x = target
         selection.add(spring, forKey: "position.x")
-        for candidate in IslandPage.allCases {
+        for candidate in layout.pages {
             guard let icon = icons[.tab(candidate)] else { continue }
             let opacity: Float = candidate == page ? 1 : Self.idleTabOpacity
             Motion.ease(icon, "opacity", from: icon.presentation()?.opacity ?? icon.opacity, to: opacity, duration: 0.25, begin: now)

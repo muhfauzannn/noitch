@@ -22,7 +22,7 @@ public:
     static constexpr UINT_PTR kReleaseTimer = 7;
 
     void Initialize(HWND window, Compositor* compositor, double (*now)());
-    void Apply(const AppSettings& settings) { home_.Apply(settings); }
+    void Apply(const AppSettings& settings);
 
     // `left` is the expanded pill's left edge; sizes are logical.
     void IslandWillOpen(float width, float height, float headerHeight, float left, float scale);
@@ -47,6 +47,9 @@ public:
 
 private:
     void Select(IslandPage next);
+    // Shows a page at once, for an island that is out of sight.
+    void Jump(IslandPage page);
+    HeaderLayout Header() const { return HeaderLayout(width_, headerHeight_, scale_, pages_.showUsage); }
     void ShowFeature(IslandPage page);
     void HideFeature(IslandPage page);
     void PaintHeader();
@@ -60,6 +63,7 @@ private:
     UsageController usage_;
     Painter painter_;
     HeaderScene header_;
+    PageSettings pages_;
     IslandPage page_ = IslandPage::Home;
     bool isOpen_ = false;
     float width_ = 0;

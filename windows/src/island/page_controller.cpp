@@ -26,6 +26,32 @@ void PageController::Initialize(HWND window, Compositor* compositor, double (*no
     usage_.Initialize(window, compositor);
 }
 
+void PageController::Apply(const AppSettings& settings) {
+    home_.Apply(settings.home);
+    usage_.Apply(settings.usage);
+    pages_ = settings.pages;
+    // A page turned off while shown gives way to Home. Its tab goes when the header is next built,
+    // on the next opening; until then it does nothing.
+    if (!pages_.Shows(page_)) {
+        if (isOpen_) {
+            Select(IslandPage::Home);
+        } else {
+            Jump(IslandPage::Home);
+        }
+    }
+}
+
+void PageController::Jump(IslandPage page) {
+    page_ = page;
+    for (const IslandPage candidate : {IslandPage::Home, IslandPage::Usage}) {
+        const int i = static_cast<int>(candidate);
+        const float opacity = candidate == page ? 1.0f : 0.0f;
+        opacity_[i] = {0, 0, 0, opacity, opacity};
+        offset_[i] = {};
+        if (compositor_) compositor_->SetLayer(PageLayer(candidate), opacity, 0);
+    }
+}
+
 void PageController::IslandWillOpen(float width, float height, float headerHeight, float left, float scale) {
     KillTimer(window_, kReleaseTimer);
     isOpen_ = true;
@@ -33,6 +59,9 @@ void PageController::IslandWillOpen(float width, float height, float headerHeigh
         header_.Release();
         usage_.DeviceLost();
     }
+    if (header_.Exists() && header_.Layout().ShowsUsage() != pages_.showUsage) header_.Release();
+    const IslandPage opening = pages_.Opening(page_);
+    if (opening != page_) Jump(opening);
     width_ = width;
     height_ = height;
     headerHeight_ = headerHeight;
@@ -40,7 +69,7 @@ void PageController::IslandWillOpen(float width, float height, float headerHeigh
     scale_ = scale;
     if (!painter_.Exists() && FAILED(painter_.Create(compositor_->DxgiDevice()))) painter_.Release();
     if (painter_.Exists() && !header_.Exists()) {
-        const HeaderLayout layout(width, headerHeight, scale);
+        const HeaderLayout layout(width, headerHeight, scale, pages_.showUsage);
         if (FAILED(header_.Create(*compositor_, painter_, layout, width * scale, headerHeight * scale, left, scale))) header_.Release();
     }
     PaintHeader();
@@ -95,7 +124,7 @@ void PageController::PaintHeader() {
 // The old page slides a little toward where it lives in tab order and fades; the new one comes from
 // the other side. Each starts from its analytic on-screen value, so a quick second switch reverses.
 void PageController::Select(IslandPage next) {
-    if (!isOpen_ || next == page_) return;
+    if (!isOpen_ || next == page_ || !pages_.Shows(next)) return;
     const IslandPage old = page_;
     HideFeature(old);
     page_ = next;
@@ -134,7 +163,7 @@ void PageController::Scrolled(double delta, double time) {
     if (!isOpen_ || home_.IsInteracting()) return;
     const int step = swipe_.Add(delta, time);
     IslandPage next = page_;
-    if (step != 0 && NeighborPage(page_, step, &next)) Select(next);
+    if (step != 0 && NeighborPage(page_, step, pages_.showUsage, &next)) Select(next);
 }
 
 bool PageController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -155,7 +184,7 @@ bool PageController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
 
 void PageController::PointerMoved(float x, float y) {
     if (pressed_ == HeaderControl::None) {
-        const HeaderControl control = HeaderLayout(width_, headerHeight_, scale_).ControlAt(x, y);
+        const HeaderControl control = Header().ControlAt(x, y);
         if (control != hovered_) {
             hovered_ = control;
             PaintHeader();
@@ -165,7 +194,7 @@ void PageController::PointerMoved(float x, float y) {
 }
 
 void PageController::PointerDown(float x, float y) {
-    const HeaderControl control = HeaderLayout(width_, headerHeight_, scale_).ControlAt(x, y);
+    const HeaderControl control = Header().ControlAt(x, y);
     if (control != HeaderControl::None) {
         pressed_ = hovered_ = control;
         PaintHeader();
@@ -179,7 +208,7 @@ void PageController::PointerUp(float x, float y) {
     if (pressed_ != HeaderControl::None) {
         const HeaderControl control = pressed_;
         pressed_ = HeaderControl::None;
-        hovered_ = HeaderLayout(width_, headerHeight_, scale_).ControlAt(x, y);
+        hovered_ = Header().ControlAt(x, y);
         if (hovered_ == control) {
             if (control == HeaderControl::Settings) {
                 if (onOpenSettings) onOpenSettings(onOpenSettingsContext);

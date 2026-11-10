@@ -11,6 +11,8 @@ namespace {
 
 constexpr wchar_t kClassName[] = L"NoitchIsland";
 constexpr UINT_PTR kSettleTimer = 1;
+// One-shot wait while the pointer rests in the notch, when a hover delay is set.
+constexpr UINT_PTR kHoverTimer = 9;
 constexpr UINT kQuitCommand = 1;
 constexpr UINT kSettingsCommand = 2;
 // Lets the pill open far enough that content lands inside it, not at its edge.
@@ -105,7 +107,8 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
                 pages_.PointerUp(PointerX(lparam), PointerY(lparam));
                 // A slider drag can end outside the island, where no leave message will follow.
                 if (!CursorInWindow()) TransitionTo(IslandState::Collapsed);
-            } else if (!settings_.openOnHover) {
+            } else {
+                // A click opens at once, whatever the hover settings.
                 TransitionTo(IslandState::Expanded);
             }
             return 0;
@@ -130,6 +133,8 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             return 0;
         case WM_MOUSELEAVE:
             trackingLeave_ = false;
+            KillTimer(hwnd_, kHoverTimer);
+            hoverPending_ = false;
             if (pages_.IsInteracting()) return 0;
             TransitionTo(IslandState::Collapsed);
             if (CursorInCollapsedHitRegion()) OpenIfPointerInNotch();
@@ -141,6 +146,12 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             return 0;
         case WM_TIMER:
             if (wparam == kSettleTimer) FinishTransition();
+            if (wparam == kHoverTimer) {
+                KillTimer(hwnd_, kHoverTimer);
+                hoverPending_ = false;
+                // Only a pointer that stayed opens it; one that left has already cancelled this.
+                if (state_ == IslandState::Collapsed && CursorInCollapsedHitRegion()) TransitionTo(IslandState::Expanded);
+            }
             return 0;
         case WM_DISPLAYCHANGE:
         case WM_DPICHANGED:
@@ -185,6 +196,8 @@ void IslandWindow::ApplyLayout() {
 void IslandWindow::TransitionTo(IslandState next) {
     if (next == state_) return;
     state_ = next;
+    KillTimer(hwnd_, kHoverTimer);
+    hoverPending_ = false;
     const double now = NowSeconds();
     motion_.Retarget(geometry_.PillFor(next), now, SpringFor(next));
     // Grow the hit region before expanding and shrink it after collapsing.
@@ -234,9 +247,15 @@ void IslandWindow::FinishTransition() {
 }
 
 void IslandWindow::OpenIfPointerInNotch() {
-    if (state_ == IslandState::Collapsed && settings_.openOnHover && CursorInCollapsedHitRegion()) {
+    if (state_ != IslandState::Collapsed || !settings_.general.openOnHover || !CursorInCollapsedHitRegion()) return;
+    const double delay = settings_.general.hoverDelay;
+    if (delay <= 0) {
         TransitionTo(IslandState::Expanded);
+        return;
     }
+    if (hoverPending_) return;
+    hoverPending_ = true;
+    SetTimer(hwnd_, kHoverTimer, static_cast<UINT>(delay * 1000), nullptr);
 }
 
 bool IslandWindow::CursorInCollapsedHitRegion() const {

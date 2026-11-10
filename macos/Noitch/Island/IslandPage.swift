@@ -5,7 +5,11 @@ enum IslandPage: Int, CaseIterable {
     case home
     case usage
 
-    func neighbor(_ step: Int) -> IslandPage? { IslandPage(rawValue: rawValue + step) }
+    /// The page `step` places away among `pages`, if there is one.
+    func neighbor(_ step: Int, in pages: [IslandPage]) -> IslandPage? {
+        guard let index = pages.firstIndex(of: self), pages.indices.contains(index + step) else { return nil }
+        return pages[index + step]
+    }
 }
 
 /// Something in the header that every page shares.
@@ -24,19 +28,22 @@ struct HeaderLayout: Equatable {
 
     let size: CGSize
     let headerHeight: CGFloat
+    /// The pages with a tab, in order. Settings can turn some off.
+    var pages = IslandPage.allCases
 
     func frame(of control: HeaderControl) -> CGRect {
         let y = max((headerHeight - Self.button) / 2, 0)
         switch control {
         case .tab(let page):
-            return CGRect(x: Self.sidePadding + CGFloat(page.rawValue) * (Self.button + Self.gap), y: y, width: Self.button, height: Self.button)
+            let slot = CGFloat(pages.firstIndex(of: page) ?? 0)
+            return CGRect(x: Self.sidePadding + slot * (Self.button + Self.gap), y: y, width: Self.button, height: Self.button)
         case .settings:
             return CGRect(x: size.width - Self.sidePadding - Self.button, y: y, width: Self.button, height: Self.button)
         }
     }
 
     func control(at point: CGPoint) -> HeaderControl? {
-        let controls = IslandPage.allCases.map(HeaderControl.tab) + [.settings]
+        let controls = pages.map(HeaderControl.tab) + [.settings]
         return controls.first { frame(of: $0).contains(point) }
     }
 }

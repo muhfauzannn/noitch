@@ -43,6 +43,7 @@ private:
     ContentFade contentOffset_;
     IslandState state_ = IslandState::Collapsed;
     bool trackingLeave_ = false;
+    bool hoverPending_ = false;
     int compositorGeneration_ = 0;
     AppSettings settings_;
     PageController pages_;

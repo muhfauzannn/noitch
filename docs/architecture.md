@@ -284,17 +284,41 @@ found later. "Show lyrics" in settings turns off both the display and the lookup
 
 ## Settings
 
-| Setting | Default | Effect |
+A window with a sidebar of pages: General, Pages, then one page per feature (Home, AI Usage), and
+About. Each feature owns its part of the settings and its page, next to its code:
+
+| Part | macOS | Windows |
 | --- | --- | --- |
-| Launch at login | Off | `SMAppService` on macOS, the `Run` registry value on Windows |
-| Open on hover | On | When off, a click opens the island. Leaving still closes it |
-| Show lyrics | On | The two lyric lines and the LRCLIB lookup |
-| Show shuffle and repeat | On | The two outer transport buttons |
-| Tint progress bar with artwork | On | Average artwork color, lifted so dark covers stay visible |
+| Values | `AppSettings` holds `GeneralSettings`, `PageSettings`, `HomeSettings`, `UsageSettings` | `app_settings.h`, `home_settings.h`, `usage_settings.h` |
+| Page | `SettingsPane` built by `SettingsPanes`, `HomeSettingsPane`, `UsageSettingsPane` | `SettingsPane` data from `settings_panes.h`, `home_settings_pane.h`, `usage_settings_pane.h` |
+| Controls | `SettingsForm` turns a pane into AppKit rows in rounded groups | `SettingsWindow` turns a pane into Win32 controls |
+| Storage | `UserDefaults`, keys unchanged from before the split | `HKCU\Software\Noitch`; fractions stored in thousandths |
+
+A new feature adds its values to `AppSettings` and its page to the window's list; nothing else.
+
+| Page | Setting | Default | Effect |
+| --- | --- | --- | --- |
+| General | Launch at login | Off | `SMAppService` on macOS, the `Run` registry value on Windows |
+| General | Open on hover | On | When off, a click opens the island. A click always opens it. Leaving still closes it |
+| General | Hover delay | None | 0.15, 0.3 or 0.5 s of rest in the notch first: one one-shot timer, cancelled on leaving |
+| General | Haptic feedback | Off | macOS only: a tap on a Force Touch trackpad as the island opens. Windows has no such API for desktop apps |
+| General | Show the island on | Built-in display with a notch | macOS only: or the main (menu bar) display. Windows always uses the primary display |
+| Pages | AI Usage | On | Off removes its tab and swipe stop. Home is always there |
+| Pages | Open on | The page used last | Or always Home, or always AI Usage |
+| Home | Show lyrics | On | The lyric lines and the LRCLIB lookup |
+| Home | Show the next line | On | The dimmer second line |
+| Home | Timing | As published | Shifts which line is sung by −1 to +1 s |
+| Home | Show shuffle and repeat | On | The two outer transport buttons |
+| Home | Tint the progress bar | On | Average artwork color, lifted so dark covers stay visible |
+| Home | Glow behind the page | On | The wash of that color behind the page |
+| AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
+| AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
+| AI Usage | Check Claude every | Minute | Or 5 or 15 minutes. Never more often than the approved once a minute; logs are still read every minute |
 
 Open settings with the header's gear or the secondary-click menu. The window is created on first use
-and released on close. macOS uses AppKit, not SwiftUI, because
-[the first SwiftUI window](tech-stack.md#swiftui) would use most of the footprint budget for good.
+and released on close, and only the page on screen has controls. macOS uses AppKit, not SwiftUI,
+because [the first SwiftUI window](tech-stack.md#swiftui) would use most of the footprint budget for
+good. Sidebar badges are drawn from paths rather than SF Symbols for the same reason.
 
 ## Shared behavior
 
@@ -315,8 +339,9 @@ The spec both apps follow. Change it here and in both apps together.
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
-| Expand / collapse | Expand immediately when the pointer reaches the real notch, including at the screen top edge; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
+| Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |
+| Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
 | Release after closing | 10 s |
 

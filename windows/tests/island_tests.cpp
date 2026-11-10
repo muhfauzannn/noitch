@@ -7,6 +7,9 @@
 
 #include "features/home/home_layout.h"
 #include "features/home/home_model.h"
+#include "features/home/home_settings_pane.h"
+#include "features/settings/settings_panes.h"
+#include "features/usage/usage_settings_pane.h"
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
 #include "features/usage/ai_limits.h"
@@ -309,7 +312,7 @@ void TestNextTickIsTheNextSecondOrAnEarlierLyric() {
 }
 
 void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
-    const AppSettings settings;
+    const HomeSettings settings;
     assert(!MakeHomeModel({}, nullptr, false, 0, settings).hasTrack);
 
     NowPlaying nowPlaying;
@@ -326,7 +329,7 @@ void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
     assert(model.remainingText == "-1:37");
     assert(Near(model.progress, 0.025, 1e-9));
 
-    AppSettings off;
+    HomeSettings off;
     off.showLyrics = false;
     const HomeModel hidden = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, off);
     assert(hidden.lyric.empty() && hidden.nextLyric.empty());
@@ -556,11 +559,83 @@ void TestSwipeStepsOnePageHoweverLongItRuns() {
     assert(swipe.Add(200, 0.04) == 0);
     assert(swipe.Add(-50, 0.5) == -1);
     IslandPage next = IslandPage::Home;
-    assert(!NeighborPage(IslandPage::Home, -1, &next));
-    assert(NeighborPage(IslandPage::Home, 1, &next) && next == IslandPage::Usage);
+    assert(!NeighborPage(IslandPage::Home, -1, true, &next));
+    assert(NeighborPage(IslandPage::Home, 1, true, &next) && next == IslandPage::Usage);
+    assert(!NeighborPage(IslandPage::Home, 1, false, &next));
 }
 
 }  // namespace
+
+void TestLyricsTimingShiftsWhichLineIsSung() {
+    NowPlaying nowPlaying;
+    nowPlaying.title = "Song";
+    nowPlaying.duration = 100;
+    Lyrics lyrics;
+    lyrics.synced = {{1, "one"}, {2, "two"}, {3, "three"}};
+    HomeSettings settings;
+    settings.lyricsOffset = 0.5;
+    assert(MakeHomeModel(nowPlaying, &lyrics, false, 1.6, settings).lyric == "two");
+    settings.showNextLyric = false;
+    const HomeModel single = MakeHomeModel(nowPlaying, &lyrics, false, 1.6, settings);
+    assert(single.lyric == "two" && single.nextLyric.empty());
+}
+
+void TestPagesOpenWhereTheSettingsSay() {
+    PageSettings pages;
+    assert(pages.Opening(IslandPage::Usage) == IslandPage::Usage);
+    pages.openOn = OpenPage::Home;
+    assert(pages.Opening(IslandPage::Usage) == IslandPage::Home);
+    pages.openOn = OpenPage::Usage;
+    pages.showUsage = false;
+    assert(pages.Opening(IslandPage::Usage) == IslandPage::Home && pages.Shows(IslandPage::Home));
+    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1, false);
+    assert(header.ControlAt(22 + 45, 16) == HeaderControl::None);
+}
+
+void TestUsageSettingsPickColumnsAndWhereAmberStarts() {
+    UsageSettings settings;
+    assert(settings.Tools().size() == 2);
+    settings.showClaude = false;
+    assert(settings.Tools().size() == 1 && settings.Tools()[0] == UsageTool::Codex);
+    settings.showCodex = false;
+    assert(settings.Tools().size() == 1 && settings.Tools()[0] == UsageTool::Claude);
+    UsageLayout single(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 32, 1);
+    single.SetColumns(1);
+    const UsageLayout both(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 32, 1);
+    const float columnWidth = both.Detail(0).Right() - both.Gauge(0).x;
+    assert(Near(single.Gauge(0).x + columnWidth / 2, IslandGeometry::ExpandedWidth() / 2, 0.5));
+    ToolLimits limits;
+    limits.fiveHour = LimitWindow{65, std::nullopt, LimitWindow::kFiveHours};
+    settings.warnAt = 60;
+    const auto clock = [](double) { return std::string(); };
+    const UsageModel warned = MakeUsageModel(limits, ToolLimits::Failed(LimitProblem::NoData), UsageSummary{}, 0, clock, settings);
+    const UsageModel calm = MakeUsageModel(limits, ToolLimits::Failed(LimitProblem::NoData), UsageSummary{}, 0, clock);
+    assert(warned.claude.rows[0].severity == Severity::Watch && calm.claude.rows[0].severity == Severity::Calm);
+}
+
+// Every row a pane describes reads back what it writes, so no control is wired to the wrong setting.
+void TestSettingsPanesWriteWhatTheyRead() {
+    for (const SettingsPane& pane : {GeneralSettingsPane(), PagesSettingsPane(), HomeSettingsPane(), UsageSettingsPane(), AboutSettingsPane()}) {
+        assert(!pane.title.empty());
+        for (const SettingsSection& section : pane.sections) {
+            for (const SettingsRow& row : section.rows) {
+                AppSettings settings;
+                if (row.kind == SettingsRow::Kind::Toggle) {
+                    const bool before = row.isOn(settings);
+                    row.setOn(settings, !before);
+                    assert(row.isOn(settings) == !before && !(settings == AppSettings{}));
+                } else if (row.kind == SettingsRow::Kind::Choice) {
+                    assert(ChoiceIndex(row, row.value(settings)) >= 0);
+                    for (const auto& option : row.options) {
+                        row.setValue(settings, option.second);
+                        assert(Near(row.value(settings), option.second, 1e-9));
+                    }
+                }
+            }
+        }
+    }
+    assert(SecondsLabel(0.15) == L"0.15 s" && SecondsLabel(-0.5, true) == L"\x2212" L"0.5 s" && SecondsLabel(1, true) == L"+1 s");
+}
 
 int main() {
     TestTimesParseInUtcAndWithAnOffset();
@@ -607,6 +682,10 @@ int main() {
     TestNextTickIsTheNextSecondOrAnEarlierLyric();
     TestHomeModelShowsThePlaceholderAndFollowsLyrics();
     TestArtworkTintIsAverageAndLifted();
+    TestLyricsTimingShiftsWhichLineIsSung();
+    TestPagesOpenWhereTheSettingsSay();
+    TestUsageSettingsPickColumnsAndWhereAmberStarts();
+    TestSettingsPanesWriteWhatTheyRead();
     std::puts("island_tests: all passed");
     return 0;
 }

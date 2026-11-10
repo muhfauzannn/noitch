@@ -15,6 +15,11 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the settings window split into per-feature pages (2026-11-11, same M5): 9.47 and 9.39 MB, 1.43
+and 2.10 ms/min, 0.13 wakeups/s, 4.12 ms per transition, all 23 hover checks passing. Just before,
+the same machine read 9.36 MB, 1.68 ms/min and 0.13 wakeups/s. The binary grew from 776 KB to 920
+KB. Opening the settings window is not in these figures.
+
 With the Home redesign and the content clip (2026-11-10, same M5): 9.33 MB, 0.86 ms/min, 0.10
 wakeups/s and 3.20 ms per transition; two further runs read 4.33 and 5.25 ms/min and 3.01 and 3.53 ms
 per transition with all hover checks passing. The first run failed one check, "a brief visit closes

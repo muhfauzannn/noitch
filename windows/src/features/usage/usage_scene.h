@@ -7,6 +7,7 @@
 #include "island/painter.h"
 #include "usage_layout.h"
 #include "usage_model.h"
+#include "usage_settings.h"
 
 namespace noitch {
 
@@ -19,15 +20,18 @@ public:
     void Release();
     bool Exists() const { return surface_ != nullptr; }
 
+    // One column per tool, in this order. Takes effect at the next paint.
+    void SetTools(const std::vector<UsageTool>& tools);
     HRESULT Paint(const UsageModel& model);
 
 private:
-    void PaintTool(int index, const UsageModel::Tool& tool);
+    void PaintTool(int column, UsageTool kind, const UsageModel::Tool& tool);
 
     Compositor* compositor_ = nullptr;
     Painter* painter_ = nullptr;
     UsageLayout layout_;
     UsageModel shown_;
+    std::vector<UsageTool> tools_ = {UsageTool::Claude, UsageTool::Codex};
     bool hasShown_ = false;
     Microsoft::WRL::ComPtr<IDCompositionSurface> surface_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> centerFormat_;

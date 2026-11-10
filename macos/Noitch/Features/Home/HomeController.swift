@@ -10,7 +10,7 @@ final class HomeController {
     /// Set by the island, which owns the panel and adds the layers to its view.
     var onSceneCreated: ((CALayer) -> Void)?
 
-    private var settings: AppSettings
+    private var settings: HomeSettings
     private var layout: HomeLayout?
     private var scale: CGFloat = 2
     private var scene: HomeScene?
@@ -42,7 +42,7 @@ final class HomeController {
     private let isDemo = false
     #endif
 
-    init(settings: AppSettings) {
+    init(settings: HomeSettings) {
         self.settings = settings
     }
 
@@ -110,7 +110,7 @@ final class HomeController {
         isLoadingLyrics = false
     }
 
-    func apply(_ settings: AppSettings) {
+    func apply(_ settings: HomeSettings) {
         self.settings = settings
         requestLyricsIfNeeded()
         updateArtwork(force: true)
@@ -158,7 +158,8 @@ final class HomeController {
         shownArtwork = nowPlaying.artwork
         let size = (layout?.artwork.width ?? 0) * scale
         let image = nowPlaying.artwork.flatMap { Self.decode($0, maxPixelSize: size) }
-        scene.setArtwork(image, tint: settings.tintWithArtwork ? image.flatMap(Self.averageColor) : nil)
+        let tint = settings.tintWithArtwork || settings.artworkGlow ? image.flatMap(Self.averageColor) : nil
+        scene.setArtwork(image, barTint: settings.tintWithArtwork ? tint : nil, glow: settings.artworkGlow ? tint : nil)
     }
 
     /// Decodes straight to display size, so a large cover never exists in memory at full size.
@@ -227,7 +228,10 @@ final class HomeController {
         tickTimer = nil
         guard isOpen, nowPlaying.isPlaying else { return }
         let position = currentPosition()
-        let delay = HomeModel.nextTick(position: position, rate: nowPlaying.rate, nextLyric: lyrics?.nextChange(after: position))
+        // Lyrics run on their own clock, shifted by the timing setting.
+        let offset = settings.lyricsOffset
+        let nextLyric = lyrics?.nextChange(after: position + offset).map { $0 - offset }
+        let delay = HomeModel.nextTick(position: position, rate: nowPlaying.rate, nextLyric: nextLyric)
         let timer = Timer(timeInterval: delay, repeats: false) { [unowned self] _ in
             MainActor.assumeIsolated {
                 render()

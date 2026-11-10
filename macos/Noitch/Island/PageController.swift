@@ -11,7 +11,8 @@ final class PageController {
     var onOpenSettings: (() -> Void)?
 
     private let home: HomeController
-    private let usage = UsageController()
+    private let usage: UsageController
+    private var settings: PageSettings
     private var scene: PagerScene?
     private var page = IslandPage.home
     private var isOpen = false
@@ -27,14 +28,29 @@ final class PageController {
     private var pageHasPointer = false
 
     init(settings: AppSettings) {
-        home = HomeController(settings: settings)
+        self.settings = settings.pages
+        home = HomeController(settings: settings.home)
+        usage = UsageController(settings: settings.usage)
         home.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .home, visible: page == .home) }
         usage.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .usage, visible: page == .usage) }
     }
 
     var isInteracting: Bool { home.isInteracting }
 
-    func apply(_ settings: AppSettings) { home.apply(settings) }
+    func apply(_ settings: AppSettings) {
+        home.apply(settings.home)
+        usage.apply(settings.usage)
+        self.settings = settings.pages
+        // A page turned off while shown gives way to Home. Its tab goes when the header is next
+        // built, on the next opening; until then it does nothing.
+        if !self.settings.visible.contains(page) {
+            if isOpen {
+                select(.home)
+            } else {
+                page = .home
+            }
+        }
+    }
 
     func stop() { home.stop() }
 
@@ -44,9 +60,12 @@ final class PageController {
         releaseTimer?.invalidate()
         releaseTimer = nil
         isOpen = true
-        if scene == nil || size != self.size || headerHeight != self.headerHeight || scale != self.scale {
+        let opening = settings.page(opening: page)
+        let header = HeaderLayout(size: size, headerHeight: headerHeight, pages: settings.visible)
+        if scene == nil || header != scene?.layout || scale != self.scale {
+            page = opening
             scene?.root.removeFromSuperlayer()
-            let scene = PagerScene(layout: HeaderLayout(size: size, headerHeight: headerHeight), scale: scale)
+            let scene = PagerScene(layout: header, scale: scale)
             self.scene = scene
             self.size = size
             self.headerHeight = headerHeight
@@ -56,6 +75,9 @@ final class PageController {
             if let layer = home.sceneRoot { scene.attach(layer, for: .home, visible: page == .home) }
             if let layer = usage.sceneRoot { scene.attach(layer, for: .usage, visible: page == .usage) }
             onSceneCreated?(scene.root)
+        } else if opening != page {
+            page = opening
+            scene?.select(page)
         }
         showFeature(page)
         let begin = scene?.reveal() ?? 0
@@ -84,7 +106,7 @@ final class PageController {
     // MARK: Switching
 
     func select(_ next: IslandPage) {
-        guard isOpen, next != page else { return }
+        guard isOpen, next != page, next == .home || settings.visible.contains(next) else { return }
         let old = page
         hideFeature(old)
         page = next
@@ -96,7 +118,7 @@ final class PageController {
     func scrolled(by delta: Double, at time: Double) {
         guard isOpen, !home.isInteracting else { return }
         let step = swipe.add(delta, at: time)
-        if step != 0, let next = page.neighbor(step) { select(next) }
+        if step != 0, let next = page.neighbor(step, in: settings.visible) { select(next) }
     }
 
     private func showFeature(_ page: IslandPage) {
@@ -124,7 +146,7 @@ final class PageController {
 
     // MARK: Pointer
 
-    private var headerLayout: HeaderLayout { HeaderLayout(size: size, headerHeight: headerHeight) }
+    private var headerLayout: HeaderLayout { scene?.layout ?? HeaderLayout(size: size, headerHeight: headerHeight, pages: settings.visible) }
 
     func pointerMoved(to point: CGPoint) {
         guard pressed == nil else { return }

@@ -9,6 +9,7 @@
 #include "ai_limits.h"
 #include "claude_limit_source.h"
 #include "usage_layout.h"
+#include "usage_settings.h"
 #include "usage_scene.h"
 #include "usage_source.h"
 
@@ -26,6 +27,7 @@ public:
         compositor_ = compositor;
     }
 
+    void Apply(const UsageSettings& settings);
     void PageWillShow(Painter& painter, const UsageLayout& layout, float left, float scale);
     void PageWillHide();
     void DeviceLost();
@@ -44,6 +46,11 @@ private:
 
     HWND window_ = nullptr;
     Compositor* compositor_ = nullptr;
+    UsageSettings settings_;
+    bool isShown_ = false;
+    // When Claude's limits were last asked for, so a longer refresh choice is honored; 0 is never.
+    double lastFetch_ = 0;
+    bool isFetching_ = false;
     UsageScene scene_;
     std::unique_ptr<UsageSource> source_;
     ToolLimits claudeLimits_ = ToolLimits::Failed(LimitProblem::Loading);

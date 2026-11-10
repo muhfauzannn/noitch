@@ -34,16 +34,17 @@ final class UsageScene {
     }
 
     private let layout: UsageLayout
+    private let tools: [UsageTool]
     private let columns: [Column]
     private var shown: UsageModel?
 
-    init(layout: UsageLayout, scale: CGFloat) {
+    /// One column per entry of `tools`, in that order; `layout` must have as many columns.
+    init(layout: UsageLayout, tools: [UsageTool], scale: CGFloat) {
         self.layout = layout
+        self.tools = tools
         root.bounds = CGRect(origin: .zero, size: layout.size)
-        // Claude's coral and a calm blue for Codex, so the two read apart at a glance.
-        let accents = [NSColor(srgbRed: 0.85, green: 0.47, blue: 0.34, alpha: 1), NSColor(srgbRed: 0.48, green: 0.64, blue: 1, alpha: 1)]
-        columns = accents.map { accent in
-            Column(outer: Ring(radius: UsageLayout.outerRadius), inner: Ring(radius: UsageLayout.innerRadius), accent: accent)
+        columns = tools.map { tool in
+            Column(outer: Ring(radius: UsageLayout.outerRadius), inner: Ring(radius: UsageLayout.innerRadius), accent: Self.accent(of: tool))
         }
         for (index, column) in columns.enumerated() {
             column.group.frame = root.bounds
@@ -74,8 +75,9 @@ final class UsageScene {
         let now = CACurrentMediaTime()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for (index, (column, tool)) in zip(columns, [model.claude, model.codex]).enumerated() {
-            let old = previous.map { index == 0 ? $0.claude : $0.codex }
+        for (column, kind) in zip(columns, tools) {
+            let tool = model.tool(kind)
+            let old = previous?.tool(kind)
             column.center.string = tool.center
             column.caption.string = tool.caption
             column.name.string = tool.name
@@ -129,6 +131,14 @@ final class UsageScene {
             let center = CGPoint(x: ring.track.bounds.midX, y: ring.track.bounds.midY)
             ring.tick.position = CGPoint(x: center.x + ring.radius * sin(angle) + ring.track.frame.minX,
                                          y: center.y - ring.radius * cos(angle) + ring.track.frame.minY)
+        }
+    }
+
+    /// Claude's coral and a calm blue for Codex, so the two read apart at a glance.
+    private static func accent(of tool: UsageTool) -> NSColor {
+        switch tool {
+        case .claude: NSColor(srgbRed: 0.85, green: 0.47, blue: 0.34, alpha: 1)
+        case .codex: NSColor(srgbRed: 0.48, green: 0.64, blue: 1, alpha: 1)
         }
     }
 

@@ -50,15 +50,17 @@ void HomeController::Release() {
     isLoadingLyrics_ = false;
 }
 
-void HomeController::Apply(const AppSettings& settings) {
+void HomeController::Apply(const HomeSettings& settings) {
     settings_ = settings;
     RequestLyricsIfNeeded();
-    if (scene_.Exists()) {
-        const auto& artwork = shownArtwork_;
-        const uint32_t tint = artwork && settings_.tintWithArtwork ? ArtworkTint(artwork->pixels.data(), artwork->pixels.size()) : 0xFFFFFFFF;
-        scene_.SetArtwork(artwork, tint);
-    }
+    if (scene_.Exists()) ShowArtwork();
     Refresh();
+}
+
+void HomeController::ShowArtwork() {
+    const auto& artwork = shownArtwork_;
+    const uint32_t tint = artwork && (settings_.tintWithArtwork || settings_.artworkGlow) ? ArtworkTint(artwork->pixels.data(), artwork->pixels.size()) : 0xFFFFFFFF;
+    scene_.SetArtwork(artwork, settings_.tintWithArtwork ? tint : 0xFFFFFFFF, settings_.artworkGlow ? tint : 0xFFFFFFFF);
 }
 
 void HomeController::DeviceLost() {
@@ -111,8 +113,7 @@ void HomeController::ReceiveMedia() {
     RequestLyricsIfNeeded();
     if (source_.CurrentArtwork() != shownArtwork_) {
         shownArtwork_ = source_.CurrentArtwork();
-        const uint32_t tint = shownArtwork_ && settings_.tintWithArtwork ? ArtworkTint(shownArtwork_->pixels.data(), shownArtwork_->pixels.size()) : 0xFFFFFFFF;
-        scene_.SetArtwork(shownArtwork_, tint);
+        ShowArtwork();
     }
     Refresh();
 }
@@ -150,7 +151,10 @@ void HomeController::ScheduleTick() {
     KillTimer(window_, kTickTimer);
     if (!isOpen_ || !nowPlaying_.isPlaying || scrubFraction_) return;
     const double position = CurrentPosition();
-    const double nextLyric = lyrics_ ? lyrics_->NextChange(position) : -1;
+    // Lyrics run on their own clock, shifted by the timing setting.
+    const double offset = settings_.lyricsOffset;
+    const double nextChange = lyrics_ ? lyrics_->NextChange(position + offset) : -1;
+    const double nextLyric = nextChange >= 0 ? nextChange - offset : -1;
     const double delay = NextHomeTick(position, nowPlaying_.rate, nextLyric);
     SetTimer(window_, kTickTimer, static_cast<UINT>(delay * 1000) + 1, nullptr);
 }

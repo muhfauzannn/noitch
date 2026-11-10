@@ -12,6 +12,7 @@
 
 #include "ai_limits.h"
 #include "ai_usage.h"
+#include "usage_settings.h"
 
 namespace noitch {
 
@@ -128,13 +129,14 @@ inline std::pair<std::string, std::string> InsightText(const LimitInsight& insig
     return {"", ""};
 }
 
-inline UsageModel::Tool MakeUsageTool(const char* name, const ToolLimits& limits, const ToolUsage& today, double now, const UsageClock& clock) {
+inline UsageModel::Tool MakeUsageTool(const char* name, const ToolLimits& limits, const ToolUsage& today, double now, const UsageClock& clock,
+                                      const UsageSettings& settings) {
     using namespace usage_text;
     const LimitInsight insight = InsightOf(limits, now);
     const std::optional<LimitWindow> five = limits.fiveHour ? std::optional(limits.fiveHour->Current(now)) : std::nullopt;
     const std::optional<LimitWindow> week = limits.week ? std::optional(limits.week->Current(now)) : std::nullopt;
     const auto severity = [&](const LimitWindow& window) {
-        Severity level = window.usedPercent >= 90 ? Severity::Critical : window.usedPercent >= 70 ? Severity::Watch : Severity::Calm;
+        Severity level = window.usedPercent >= settings.CriticalAt() ? Severity::Critical : window.usedPercent >= settings.warnAt ? Severity::Watch : Severity::Calm;
         if (PaceOf(window, now) == Pace::Ahead) level = std::max(level, Severity::Watch);
         if ((insight.kind == LimitInsight::Kind::Reached || insight.kind == LimitInsight::Kind::RunsOut) && insight.window == window.length) {
             level = std::max(level, insight.Level());
@@ -177,8 +179,11 @@ inline UsageModel::Tool MakeUsageTool(const char* name, const ToolLimits& limits
     return tool;
 }
 
-inline UsageModel MakeUsageModel(const ToolLimits& claude, const ToolLimits& codex, const UsageSummary& summary, double now, const UsageClock& clock) {
-    return {MakeUsageTool("Claude Code", claude, summary.claudeToday, now, clock), MakeUsageTool("Codex", codex, summary.codexToday, now, clock)};
+// `settings` sets where amber and red begin.
+inline UsageModel MakeUsageModel(const ToolLimits& claude, const ToolLimits& codex, const UsageSummary& summary, double now, const UsageClock& clock,
+                                 const UsageSettings& settings = {}) {
+    return {MakeUsageTool("Claude Code", claude, summary.claudeToday, now, clock, settings),
+            MakeUsageTool("Codex", codex, summary.codexToday, now, clock, settings)};
 }
 
 }  // namespace noitch

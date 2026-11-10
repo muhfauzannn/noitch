@@ -31,6 +31,7 @@ HRESULT UsageScene::Create(Compositor& compositor, Painter& painter, const Usage
     compositor_ = &compositor;
     painter_ = &painter;
     layout_ = layout;
+    layout_.SetColumns(static_cast<int>(tools_.size()));
     hasShown_ = false;
     constexpr auto leading = DWRITE_TEXT_ALIGNMENT_LEADING;
     constexpr auto center = DWRITE_TEXT_ALIGNMENT_CENTER;
@@ -59,12 +60,19 @@ void UsageScene::Release() {
     headlineFormat_.Reset();
 }
 
-void UsageScene::PaintTool(int index, const UsageModel::Tool& tool) {
+void UsageScene::SetTools(const std::vector<UsageTool>& tools) {
+    if (tools == tools_) return;
+    tools_ = tools;
+    layout_.SetColumns(static_cast<int>(tools.size()));
+    hasShown_ = false;
+}
+
+void UsageScene::PaintTool(int index, UsageTool kind, const UsageModel::Tool& tool) {
     const float scale = layout_.Scale();
     const HomeRect gauge = layout_.Gauge(index);
     const D2D1_POINT_2F middle = D2D1::Point2F(gauge.x + gauge.width / 2, gauge.y + gauge.height / 2);
     const float width = UsageLayout::kRingWidth * scale;
-    const D2D1_COLOR_F accent = kAccents[index];
+    const D2D1_COLOR_F accent = kAccents[static_cast<int>(kind)];
     const auto ring = [&](const std::optional<UsageModel::Ring>& data, float radius, D2D1_COLOR_F calm) {
         painter_->Arc(middle, radius, width, 1, White(0.1f));
         if (!data) return;
@@ -102,8 +110,10 @@ HRESULT UsageScene::Paint(const UsageModel& model) {
     if (!surface_ || (hasShown_ && model == shown_)) return S_OK;
     HRESULT hr = painter_->Begin(surface_.Get(), layout_.Width(), layout_.Height());
     if (FAILED(hr)) return hr;
-    PaintTool(0, model.claude);
-    PaintTool(1, model.codex);
+    for (size_t column = 0; column < tools_.size(); ++column) {
+        const UsageTool kind = tools_[column];
+        PaintTool(static_cast<int>(column), kind, kind == UsageTool::Claude ? model.claude : model.codex);
+    }
     if (FAILED(hr = painter_->End(surface_.Get()))) return hr;
     shown_ = model;
     hasShown_ = true;

@@ -14,8 +14,21 @@ constexpr UINT kReleaseDelayMs = 10000;
 
 }  // namespace
 
+void UsageController::Apply(const UsageSettings& settings) {
+    const UsageSettings old = settings_;
+    settings_ = settings;
+    scene_.SetTools(settings.Tools());
+    if (!isShown_) return;
+    if ((settings.showClaude && !old.showClaude) || settings.refreshMinutes < old.refreshMinutes) {
+        Refresh();
+    } else {
+        Render();
+    }
+}
+
 void UsageController::PageWillShow(Painter& painter, const UsageLayout& layout, float left, float scale) {
     KillTimer(window_, kReleaseTimer);
+    isShown_ = true;
     // Show what was last known at once, rather than an empty page while asking.
     if (claudeLimits_.problem == LimitProblem::Loading) {
         if (const auto known = Remembered("claude")) claudeLimits_ = *known;
@@ -25,8 +38,12 @@ void UsageController::PageWillShow(Painter& painter, const UsageLayout& layout, 
 }
 
 void UsageController::PageWillHide() {
+    isShown_ = false;
     KillTimer(window_, kTickTimer);
     ++claudeGeneration_;
+    // A request cut short never answered, so the next showing asks again.
+    if (isFetching_) lastFetch_ = 0;
+    isFetching_ = false;
     // One-shot, not periodic: it fires once, unless the page is shown again first.
     SetTimer(window_, kReleaseTimer, kReleaseDelayMs, nullptr);
 }
@@ -106,7 +123,12 @@ void UsageController::Refresh() {
     const double now = UnixNow();
     source_->Refresh(now);
     Render();
-    ClaudeLimitSource::Fetch(window_, ++claudeGeneration_, now);
+    const bool due = lastFetch_ == 0 || now - lastFetch_ >= settings_.refreshMinutes * 60 - 5;
+    if (settings_.showClaude && (due || claudeLimits_.problem == LimitProblem::Loading)) {
+        lastFetch_ = now;
+        isFetching_ = true;
+        ClaudeLimitSource::Fetch(window_, ++claudeGeneration_, now);
+    }
     // One shot at the next minute, only while shown: the countdowns are in minutes, and new log
     // lines and limits are picked up on the same look.
     const double delay = 60 - std::fmod(now, 60) + 0.5;
@@ -131,13 +153,14 @@ void UsageController::Render() {
         // The logs that held them are over a day old; the week may still be running.
         codex = *known;
     }
-    scene_.Paint(MakeUsageModel(claude, codex, Summarize(log, now, LocalDayStart()), now, LocalClock));
+    scene_.Paint(MakeUsageModel(claude, codex, Summarize(log, now, LocalDayStart()), now, LocalClock, settings_));
 }
 
 bool UsageController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == ClaudeLimitSource::kMessage) {
         std::unique_ptr<ToolLimits> limits(reinterpret_cast<ToolLimits*>(lparam));
         if (wparam == claudeGeneration_ && limits) {
+            isFetching_ = false;
             if (limits->problem == LimitProblem::None) {
                 claudeLimits_ = *limits;
                 Remember("claude", *limits, UnixNow());

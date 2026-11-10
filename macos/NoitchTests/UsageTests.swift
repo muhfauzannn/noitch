@@ -247,7 +247,25 @@ struct UsageTests {
         #expect(swipe.add(200, at: 0.04) == 0)
         // A pause starts a new gesture.
         #expect(swipe.add(-50, at: 0.5) == -1)
-        #expect(IslandPage.home.neighbor(-1) == nil)
-        #expect(IslandPage.home.neighbor(1) == .usage)
+        #expect(IslandPage.home.neighbor(-1, in: IslandPage.allCases) == nil)
+        #expect(IslandPage.home.neighbor(1, in: IslandPage.allCases) == .usage)
+        #expect(IslandPage.home.neighbor(1, in: [.home]) == nil)
+    }
+
+    @Test func `the usage settings pick the columns and where amber starts`() {
+        var settings = UsageSettings()
+        #expect(settings.tools == [.claude, .codex])
+        settings.showClaude = false
+        #expect(settings.tools == [.codex])
+        settings.showCodex = false
+        #expect(settings.tools == [.claude])
+        let single = UsageLayout(size: IslandGeometry.expandedSize, headerHeight: 32, columns: 1)
+        #expect(abs(single.gauge(0).minX + single.columnWidth / 2 - IslandGeometry.expandedSize.width / 2) < 0.5)
+        let limits = ToolLimits(fiveHour: LimitWindow(usedPercent: 65, resetsAt: nil, length: LimitWindow.fiveHours))
+        let summary = UsageSummary(log: UsageLog(), now: 0, dayStart: 0)
+        settings.warnAt = 60
+        let warned = UsageModel(claude: limits, codex: .failed(.noData), summary: summary, now: 0, settings: settings) { _ in "" }
+        let calm = UsageModel(claude: limits, codex: .failed(.noData), summary: summary, now: 0) { _ in "" }
+        #expect(warned.claude.rows[0].severity == .watch && calm.claude.rows[0].severity == .calm)
     }
 }
