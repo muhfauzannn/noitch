@@ -30,8 +30,11 @@ inline std::string FormatTime(double seconds) {
 struct HomeModel {
     std::string title = "Nothing playing";
     std::string artist = "Start something to see it here";
-    std::string lyricLine;
-    std::array<std::string, 3> panelLines;
+    // The line being sung, bright, and the one after it, dim. A status message takes the first slot.
+    std::string lyric;
+    std::string nextLyric;
+    int lyricIndex = -1;  // The synced line, or -1.
+    bool lyricIsStatus = false;
     std::string elapsedText = "0:00";
     std::string remainingText = "0:00";
     double progress = 0;
@@ -39,13 +42,14 @@ struct HomeModel {
     bool isPlaying = false;
     bool isShuffled = false;
     RepeatMode repeatMode = RepeatMode::Off;
-    bool showsLyricsPanel = false;
-    bool showsLyricsButton = true;
     bool showsShuffleAndRepeat = true;
+    // After next or previous, until the player reports the new track: the old one stays, dimmed,
+    // so the press is answered at once even when the player is slow to say what comes next.
+    bool isSkipping = false;
 };
 
 inline std::string LyricStatus(const Lyrics* lyrics, bool isLoading) {
-    if (isLoading) return "Looking for lyrics…";
+    if (isLoading) return "Looking for lyrics\xE2\x80\xA6";
     if (!lyrics) return "";
     if (lyrics->isInstrumental) return "Instrumental";
     if (!lyrics->plain.empty()) return "Lyrics aren't synced for this track";
@@ -53,11 +57,9 @@ inline std::string LyricStatus(const Lyrics* lyrics, bool isLoading) {
 }
 
 inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyrics, bool isLoadingLyrics, double position,
-                               bool showsPanel, const AppSettings& settings) {
+                               const AppSettings& settings, bool isSkipping = false) {
     HomeModel model;
-    model.showsLyricsButton = settings.showLyrics;
     model.showsShuffleAndRepeat = settings.showShuffleAndRepeat;
-    model.showsLyricsPanel = showsPanel && settings.showLyrics;
     if (!nowPlaying.HasTrack()) return model;
 
     model.hasTrack = true;
@@ -66,27 +68,27 @@ inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyric
     model.isPlaying = nowPlaying.isPlaying;
     model.isShuffled = nowPlaying.isShuffled;
     model.repeatMode = nowPlaying.repeatMode;
+    model.isSkipping = isSkipping;
+    if (isSkipping) {
+        model.remainingText.clear();
+        return model;
+    }
     model.elapsedText = FormatTime(position);
     model.remainingText = "-" + FormatTime(std::max(nowPlaying.duration - position, 0.0));
     model.progress = nowPlaying.duration > 0 ? std::clamp(position / nowPlaying.duration, 0.0, 1.0) : 0;
     if (!settings.showLyrics) return model;
 
-    const std::string status = LyricStatus(lyrics, isLoadingLyrics);
     if (lyrics && !lyrics->synced.empty()) {
         const int index = lyrics->LineIndex(position);
-        if (index >= 0) model.lyricLine = lyrics->synced[static_cast<size_t>(index)].text;
-        for (int i = 0; i < 3; ++i) {
-            const int line = index - 1 + i;
-            if (line >= 0 && line < static_cast<int>(lyrics->synced.size())) {
-                model.panelLines[static_cast<size_t>(i)] = lyrics->synced[static_cast<size_t>(line)].text;
-            }
-        }
-    } else if (lyrics && !lyrics->plain.empty()) {
-        model.lyricLine = status;
-        for (size_t i = 0; i < 3 && i < lyrics->plain.size(); ++i) model.panelLines[i] = lyrics->plain[i];
+        model.lyricIndex = index;
+        // Before the first line, and in the gaps a line leaves empty, a note holds the place.
+        const std::string current = index >= 0 ? lyrics->synced[static_cast<size_t>(index)].text : "";
+        model.lyric = current.empty() ? "\xE2\x99\xAA" : current;
+        const int next = index + 1;
+        if (next < static_cast<int>(lyrics->synced.size())) model.nextLyric = lyrics->synced[static_cast<size_t>(next)].text;
     } else {
-        model.lyricLine = status;
-        model.panelLines[1] = status;
+        model.lyric = LyricStatus(lyrics, isLoadingLyrics);
+        model.lyricIsStatus = true;
     }
     return model;
 }

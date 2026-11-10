@@ -90,7 +90,7 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 53 unit tests | Passing |
+| Builds; 56 unit tests | Passing |
 | Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |
 | Usage page ring design | Checked by an offscreen render with sample numbers |
 | Claude limits from the usage endpoint and Keychain | **Not run**: needs the Keychain prompt answered in the real app |
@@ -98,7 +98,9 @@ Keep this honest and up to date.
 | Budgets at rest | Passing |
 | Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Passing on a notched MacBook, on the clean Release build |
 | Pill and flare shape, collapsed and expanded | Checked by screenshot |
-| Home layout, lyrics panel, header buttons, opening Settings by click | Checked with `--demo-media` and real clicks |
+| Home layout before the redesign, header buttons, opening Settings by click | Checked with `--demo-media` and real clicks |
+| Redesigned Home (wash, two lyric lines, skip state) | Checked by an offscreen render; the lyric slide and skip timing **not checked on screen** |
+| Content clipped to the pill while opening | **Not checked on screen** |
 | Adapter stream, play/pause and seek by real clicks | Passing with a browser player on macOS 26.6 |
 | Adapter stops after closing, and on quit | Passing |
 | Lyrics lookup from LRCLIB | Passing for one known track, outside a real playback session |

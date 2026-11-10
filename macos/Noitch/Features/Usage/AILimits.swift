@@ -73,6 +73,8 @@ nonisolated struct ToolLimits: Equatable, Sendable {
     /// Five-hour percent per second over the last half hour, when known.
     var recentRate: Double?
     var problem: LimitProblem?
+    /// Set when these are remembered numbers rather than fresh ones: when they were current.
+    var asOf: Double?
 
     static func failed(_ problem: LimitProblem) -> ToolLimits { ToolLimits(problem: problem) }
 }
@@ -203,5 +205,33 @@ nonisolated enum ClaudeUsageFormat {
               let token = JSONScan.value("accessToken", in: oauth).flatMap(JSONScan.string), !token.isEmpty else { return nil }
         let expires = JSONScan.value("expiresAt", in: oauth).flatMap(JSONScan.number).map { $0 / 1000 }
         return Login(accessToken: token, expiresAt: expires)
+    }
+}
+
+/// The last good limits per tool, kept on disk so the page isn't empty while offline or after the
+/// logs that held them have aged out. One line per tool; the Windows app writes the same format.
+nonisolated enum LimitCache {
+    /// "claude 1794322800 72 1794330000 18000 41 - 604800": the time they were current, then for
+    /// five hours and the week the percent, the reset or "-", and the length. A missing window is "- - -".
+    static func encode(_ tool: String, _ limits: ToolLimits, asOf: Double) -> String {
+        func window(_ window: LimitWindow?) -> String {
+            guard let window else { return "- - -" }
+            return "\(window.usedPercent) \(window.resetsAt.map { String($0) } ?? "-") \(window.length)"
+        }
+        return "\(tool) \(asOf) \(window(limits.fiveHour)) \(window(limits.week))"
+    }
+
+    static func decode(_ text: String, tool: String) -> ToolLimits? {
+        for line in text.split(separator: "\n") {
+            let parts = line.split(separator: " ").map(String.init)
+            guard parts.count == 8, parts[0] == tool, let asOf = Double(parts[1]) else { continue }
+            func window(_ at: Int) -> LimitWindow? {
+                guard let used = Double(parts[at]), let length = Double(parts[at + 2]), length > 0 else { return nil }
+                return LimitWindow(usedPercent: used, resetsAt: Double(parts[at + 1]), length: length)
+            }
+            let limits = ToolLimits(fiveHour: window(2), week: window(5), asOf: asOf)
+            return limits.fiveHour == nil && limits.week == nil ? nil : limits
+        }
+        return nil
     }
 }

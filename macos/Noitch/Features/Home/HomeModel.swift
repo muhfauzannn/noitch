@@ -4,24 +4,27 @@ import Foundation
 struct HomeModel: Equatable {
     var title = "Nothing playing"
     var artist = "Start something to see it here"
-    var lyricLine = ""
-    var panelLines = ["", "", ""]
+    /// The line being sung, bright, and the one after it, dim. A status message takes the first slot.
+    var lyric = ""
+    var nextLyric = ""
+    /// The synced line's index, so the scene can tell a step forward (a slide) from a jump (a fade).
+    var lyricIndex: Int?
+    var lyricIsStatus = false
     var elapsedText = "0:00"
     var remainingText = "0:00"
     var hasTrack = false
     var isPlaying = false
     var isShuffled = false
     var repeatMode = RepeatMode.off
-    var showsLyricsPanel = false
-    var showsLyricsButton = true
     var showsShuffleAndRepeat = true
+    /// After next or previous, until the player reports the new track: the old one stays, dimmed,
+    /// so the press is answered at once even when the player is slow to say what comes next.
+    var isSkipping = false
 
     init() {}
 
-    init(nowPlaying: NowPlaying, lyrics: Lyrics?, isLoadingLyrics: Bool, position: TimeInterval, showsPanel: Bool, settings: AppSettings) {
-        showsLyricsButton = settings.showLyrics
+    init(nowPlaying: NowPlaying, lyrics: Lyrics?, isLoadingLyrics: Bool, position: TimeInterval, settings: AppSettings, isSkipping: Bool = false) {
         showsShuffleAndRepeat = settings.showShuffleAndRepeat
-        showsLyricsPanel = showsPanel && settings.showLyrics
         guard nowPlaying.hasTrack else { return }
         hasTrack = true
         title = nowPlaying.title
@@ -29,23 +32,26 @@ struct HomeModel: Equatable {
         isPlaying = nowPlaying.isPlaying
         isShuffled = nowPlaying.isShuffled
         repeatMode = nowPlaying.repeatMode
+        self.isSkipping = isSkipping
+        guard !isSkipping else {
+            elapsedText = "0:00"
+            remainingText = ""
+            return
+        }
         elapsedText = Self.formatTime(position)
         remainingText = "-" + Self.formatTime(max(nowPlaying.duration - position, 0))
         guard settings.showLyrics else { return }
-        let status = Self.lyricStatus(lyrics, isLoading: isLoadingLyrics)
         if let lyrics, !lyrics.synced.isEmpty {
             let index = lyrics.lineIndex(at: position)
-            lyricLine = index.map { lyrics.synced[$0].text } ?? ""
-            let current = index ?? -1
-            panelLines = [current - 1, current, current + 1].map { line in
-                lyrics.synced.indices.contains(line) ? lyrics.synced[line].text : ""
-            }
-        } else if let lyrics, !lyrics.plain.isEmpty {
-            lyricLine = status
-            panelLines = Array((lyrics.plain + ["", "", ""]).prefix(3))
+            lyricIndex = index
+            // Before the first line, and in the gaps a line leaves empty, a note holds the place.
+            let current = index.map { lyrics.synced[$0].text } ?? ""
+            lyric = current.isEmpty ? "♪" : current
+            let next = (index ?? -1) + 1
+            nextLyric = lyrics.synced.indices.contains(next) ? lyrics.synced[next].text : ""
         } else {
-            lyricLine = status
-            panelLines = ["", status, ""]
+            lyric = Self.lyricStatus(lyrics, isLoading: isLoadingLyrics)
+            lyricIsStatus = true
         }
     }
 

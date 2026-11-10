@@ -2,7 +2,6 @@ import CoreGraphics
 
 /// Something in Home that reacts to the pointer.
 enum HomeControl: CaseIterable {
-    case lyrics
     case artwork
     case slider
     case shuffle
@@ -16,15 +15,19 @@ enum HomeControl: CaseIterable {
 /// The Windows app uses the same numbers.
 struct HomeLayout: Equatable {
     static let sidePadding: CGFloat = 22
-    static let bottomPadding: CGFloat = 16
+    static let bottomPadding: CGFloat = 12
     static let headerGap: CGFloat = 8
-    static let columnGap: CGFloat = 16
-    static let headerButton: CGFloat = 26
-    static let transportButton: CGFloat = 34
-    static let transportGap: CGFloat = 12
+    static let columnGap: CGFloat = 18
+    static let transportButton: CGFloat = 30
+    static let transportGap: CGFloat = 14
     static let timeWidth: CGFloat = 40
     static let sliderHeight: CGFloat = 14
     static let sliderTrackHeight: CGFloat = 4
+    /// How far apart the bright lyric and the dim one below it sit; also how far a line slides.
+    static let lyricStep: CGFloat = 19
+    /// The dim line is drawn at the bright line's size and scaled down, so a line can grow into
+    /// place by transform alone, without redrawing its text.
+    static let nextLyricScale: CGFloat = 0.84
 
     let size: CGSize
     /// Height of the band the notch occupies. Nothing but header buttons goes there.
@@ -36,9 +39,11 @@ struct HomeLayout: Equatable {
     private var columnWidth: CGFloat { size.width - columnX - Self.sidePadding }
 
     var artwork: CGRect { CGRect(x: Self.sidePadding, y: bodyTop, width: bodyHeight, height: bodyHeight) }
-    var title: CGRect { CGRect(x: columnX, y: bodyTop, width: columnWidth, height: 20) }
-    var artist: CGRect { CGRect(x: columnX, y: bodyTop + 20, width: columnWidth, height: 17) }
-    var lyricLine: CGRect { CGRect(x: columnX, y: bodyTop + 38, width: columnWidth, height: 16) }
+    var title: CGRect { CGRect(x: columnX, y: bodyTop - 2, width: columnWidth, height: 20) }
+    var artist: CGRect { CGRect(x: columnX, y: bodyTop + 17, width: columnWidth, height: 17) }
+    /// The bright line. The dim one is `lyricStep` below it.
+    var lyric: CGRect { CGRect(x: columnX, y: bodyTop + 38, width: columnWidth, height: 19) }
+    var nextLyric: CGRect { lyric.offsetBy(dx: 0, dy: Self.lyricStep) }
     var elapsedTime: CGRect { CGRect(x: columnX, y: sliderY, width: Self.timeWidth, height: Self.sliderHeight) }
     var remainingTime: CGRect {
         CGRect(x: columnX + columnWidth - Self.timeWidth, y: sliderY, width: Self.timeWidth, height: Self.sliderHeight)
@@ -51,18 +56,11 @@ struct HomeLayout: Equatable {
             height: Self.sliderTrackHeight
         )
     }
-    /// Previous, current and next line in the lyrics panel.
-    func panelLine(_ index: Int) -> CGRect {
-        let height = (bodyHeight - Self.transportButton) / 3
-        return CGRect(x: columnX, y: bodyTop + CGFloat(index) * height, width: columnWidth, height: height)
-    }
 
-    private var sliderY: CGFloat { bodyTop + 58 }
+    private var sliderY: CGFloat { size.height - Self.bottomPadding - Self.transportButton - Self.sliderHeight - 2 }
 
     func frame(of control: HomeControl) -> CGRect {
         switch control {
-        // Slot 0 is the shared header's settings button.
-        case .lyrics: headerButton(slot: 1)
         case .artwork: artwork
         case .slider: sliderTrack.insetBy(dx: 0, dy: -6)
         case .shuffle: transportButton(slot: 0)
@@ -80,16 +78,6 @@ struct HomeLayout: Equatable {
     /// Where a point falls along the slider, from 0 to 1.
     func sliderFraction(at x: CGFloat) -> Double {
         min(max(Double((x - sliderTrack.minX) / sliderTrack.width), 0), 1)
-    }
-
-    private func headerButton(slot: CGFloat) -> CGRect {
-        let side = Self.headerButton
-        return CGRect(
-            x: size.width - Self.sidePadding - side - slot * (side + 4),
-            y: max((headerHeight - side) / 2, 0),
-            width: side,
-            height: side
-        )
     }
 
     private func transportButton(slot: CGFloat) -> CGRect {

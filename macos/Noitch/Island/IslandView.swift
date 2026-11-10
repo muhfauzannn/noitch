@@ -18,6 +18,10 @@ final class IslandView: NSView {
     private static let flareOverlap: CGFloat = 1
 
     private let pill = CALayer()
+    /// Holds the content and clips it to the pill's shape as the pill moves, so nothing shows
+    /// outside the black while it opens or closes. Its bounds follow the pill with the same spring;
+    /// the bounds origin keeps the content still while the visible window grows around it.
+    private let clip = CALayer()
     private let leftFlare = IslandView.makeFlare(mirrored: false)
     private let rightFlare = IslandView.makeFlare(mirrored: true)
     private var hoverTrackingArea: NSTrackingArea?
@@ -34,6 +38,11 @@ final class IslandView: NSView {
         // Layers are y-up here: MinY is the bottom edge. The top edge stays flush with the screen.
         pill.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         layer?.addSublayer(pill)
+        clip.anchorPoint = CGPoint(x: 0.5, y: 1)
+        clip.masksToBounds = true
+        clip.cornerCurve = .continuous
+        clip.maskedCorners = pill.maskedCorners
+        layer?.addSublayer(clip)
         layer?.addSublayer(leftFlare)
         layer?.addSublayer(rightFlare)
     }
@@ -116,7 +125,10 @@ final class IslandView: NSView {
     func setContent(_ layer: CALayer, size: CGSize) {
         contentSize = size
         content = layer
-        self.layer?.addSublayer(layer)
+        // Top-center of the content sits at the top-center of the full-size area clip shows part of.
+        layer.anchorPoint = CGPoint(x: 0.5, y: 1)
+        layer.position = CGPoint(x: size.width / 2, y: size.height)
+        clip.addSublayer(layer)
         pinPill()
     }
 
@@ -145,7 +157,7 @@ final class IslandView: NSView {
         withoutImplicitAnimations {
             let top = bounds.maxY - IslandGeometry.topEdgeHitMargin
             pill.position = CGPoint(x: bounds.midX, y: top)
-            content?.position = pill.position
+            clip.position = pill.position
             let flares = flarePositions(pillWidth: pill.bounds.width)
             leftFlare.position = CGPoint(x: flares.left, y: top)
             rightFlare.position = CGPoint(x: flares.right, y: top)
@@ -156,6 +168,8 @@ final class IslandView: NSView {
         withoutImplicitAnimations {
             pill.bounds = CGRect(origin: .zero, size: size)
             pill.cornerRadius = cornerRadius
+            clip.bounds = clipBounds(for: size)
+            clip.cornerRadius = cornerRadius
             let flares = flarePositions(pillWidth: size.width)
             leftFlare.position.x = flares.left
             rightFlare.position.x = flares.right
@@ -174,11 +188,21 @@ final class IslandView: NSView {
         CATransaction.setCompletionBlock(completion)
         addSpring(spring, to: pill, keyPath: "bounds", from: NSValue(rect: current.bounds), to: NSValue(rect: CGRect(origin: .zero, size: size)))
         addSpring(spring, to: pill, keyPath: "cornerRadius", from: current.cornerRadius, to: cornerRadius)
+        // The same spring on the same numbers keeps the clip exactly on the pill.
+        addSpring(spring, to: clip, keyPath: "bounds", from: NSValue(rect: clipBounds(for: current.bounds.size)), to: NSValue(rect: clipBounds(for: size)))
+        addSpring(spring, to: clip, keyPath: "cornerRadius", from: current.cornerRadius, to: cornerRadius)
         // The same spring over half the distance keeps each flare on the pill's edge throughout.
         addSpring(spring, to: leftFlare, keyPath: "position.x", from: flaresFrom.left, to: flaresTo.left)
         addSpring(spring, to: rightFlare, keyPath: "position.x", from: flaresFrom.right, to: flaresTo.right)
         setPill(size: size, cornerRadius: cornerRadius)
         CATransaction.commit()
+    }
+
+    /// The visible part of the full-size content area: centered horizontally and hanging from the top.
+    /// Both origin terms are linear in the size, so springing the rect keeps the content still.
+    private func clipBounds(for size: CGSize) -> CGRect {
+        let full = contentSize == .zero ? IslandGeometry.expandedSize : contentSize
+        return CGRect(x: (full.width - size.width) / 2, y: full.height - size.height, width: size.width, height: size.height)
     }
 
     private func flarePositions(pillWidth: CGFloat) -> (left: CGFloat, right: CGFloat) {

@@ -183,6 +183,18 @@ struct UsageTests {
         #expect(login.accessToken == "token-value" && login.expiresAt == 1_794_326_400)
     }
 
+    @Test func `the last good limits survive a round trip`() {
+        let limits = ToolLimits(fiveHour: LimitWindow(usedPercent: 72.5, resetsAt: 1_794_330_000, length: LimitWindow.fiveHours),
+                                week: LimitWindow(usedPercent: 41, resetsAt: nil, length: LimitWindow.week))
+        let text = LimitCache.encode("claude", limits, asOf: 1_794_322_800) + "\n" + LimitCache.encode("codex", ToolLimits(week: limits.week), asOf: 5)
+        let claude = LimitCache.decode(text, tool: "claude")
+        #expect(claude?.fiveHour == limits.fiveHour && claude?.week == limits.week && claude?.asOf == 1_794_322_800)
+        #expect(LimitCache.decode(text, tool: "codex")?.fiveHour == nil)
+        #expect(LimitCache.decode("claude nonsense", tool: "claude") == nil)
+        let model = UsageModel(claude: claude!, codex: .failed(.noData), summary: UsageSummary(log: UsageLog(), now: 0, dayStart: 0), now: 1_794_323_000) { _ in "Tue 14:00" }
+        #expect(model.claude.today == "As of Tue 14:00")
+    }
+
     @Test func `the page says what matters in a few words`() {
         let now = 100_000.0
         let five = LimitWindow(usedPercent: 70, resetsAt: now + 2 * 3600, length: LimitWindow.fiveHours)

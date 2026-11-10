@@ -73,7 +73,8 @@ struct UsageModel: Equatable {
         let center = five ?? week
         return Tool(
             name: name,
-            today: today.tokens > 0 ? "Today \(tokens(today.tokens)) · \(cost(today))" : "Nothing today",
+            // Remembered numbers say so, in place of today's totals.
+            today: limits.asOf.map { "As of \(clock($0))" } ?? (today.tokens > 0 ? "Today \(tokens(today.tokens)) · \(cost(today))" : "Nothing today"),
             center: center.map { percent($0.usedPercent) } ?? "—",
             caption: five != nil ? "5h" : week != nil ? "week" : "",
             inner: ring(five),

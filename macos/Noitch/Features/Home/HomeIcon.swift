@@ -11,12 +11,10 @@ enum HomeIcon {
     case repeatAll
     case repeatOne
     case settings
-    case lyrics
-    case lyricsFilled
     case music
     case usage
 
-    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .lyrics, .lyricsFilled, .music, .usage]
+    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage]
 
     /// Only the gear relies on the even-odd rule. Others have overlapping parts that it would punch out.
     var hasHole: Bool {
@@ -26,7 +24,7 @@ enum HomeIcon {
     /// Outlines are drawn with a stroke, and everything else is filled.
     var isOutline: Bool {
         switch self {
-        case .shuffle, .repeatAll, .repeatOne, .lyrics: true
+        case .shuffle, .repeatAll, .repeatOne: true
         default: false
         }
     }
@@ -66,11 +64,6 @@ enum HomeIcon {
             path.addLine(to: CGPoint(x: 12, y: 14))
         case .settings:
             Self.addGear(to: path)
-        case .lyrics, .lyricsFilled:
-            path.addRoundedRect(in: CGRect(x: 3, y: 4, width: 18, height: 13), cornerWidth: 4, cornerHeight: 4)
-            path.move(to: CGPoint(x: 8, y: 17))
-            path.addLine(to: CGPoint(x: 8, y: 21))
-            path.addLine(to: CGPoint(x: 13, y: 17))
         case .usage:
             // Three bars, a usage chart.
             path.addRoundedRect(in: CGRect(x: 4, y: 12, width: 4, height: 8), cornerWidth: 1, cornerHeight: 1)

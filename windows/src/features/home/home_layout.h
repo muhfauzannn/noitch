@@ -19,10 +19,10 @@ struct HomeRect {
     bool Intersects(const HomeRect& o) const { return x < o.Right() && o.x < Right() && y < o.Bottom() && o.y < Bottom(); }
 };
 
-enum class HomeControl { None, Lyrics, Artwork, Slider, Shuffle, Previous, PlayPause, Next, Repeat };
+enum class HomeControl { None, Artwork, Slider, Shuffle, Previous, PlayPause, Next, Repeat };
 
 inline constexpr HomeControl kHomeControls[] = {
-    HomeControl::Lyrics, HomeControl::Artwork, HomeControl::Slider, HomeControl::Shuffle,
+    HomeControl::Artwork, HomeControl::Slider, HomeControl::Shuffle,
     HomeControl::Previous, HomeControl::PlayPause, HomeControl::Next, HomeControl::Repeat,
 };
 
@@ -39,23 +39,17 @@ public:
     float Height() const { return height_ * scale_; }
 
     HomeRect Artwork() const { return Px({kSidePadding, BodyTop(), BodyHeight(), BodyHeight()}); }
-    HomeRect Title() const { return Px({ColumnX(), BodyTop(), ColumnWidth(), 20}); }
-    HomeRect Artist() const { return Px({ColumnX(), BodyTop() + 20, ColumnWidth(), 17}); }
-    HomeRect LyricLine() const { return Px({ColumnX(), BodyTop() + 38, ColumnWidth(), 16}); }
+    HomeRect Title() const { return Px({ColumnX(), BodyTop() - 2, ColumnWidth(), 20}); }
+    HomeRect Artist() const { return Px({ColumnX(), BodyTop() + 17, ColumnWidth(), 17}); }
+    // The bright line; the dim one is kLyricStep below it, drawn smaller.
+    HomeRect Lyric() const { return Px({ColumnX(), BodyTop() + 38, ColumnWidth(), 19}); }
+    HomeRect NextLyric() const { return Px({ColumnX(), BodyTop() + 38 + kLyricStep, ColumnWidth(), 19}); }
     HomeRect ElapsedTime() const { return Px({ColumnX(), SliderY(), kTimeWidth, kSliderHeight}); }
     HomeRect RemainingTime() const { return Px({ColumnX() + ColumnWidth() - kTimeWidth, SliderY(), kTimeWidth, kSliderHeight}); }
     HomeRect SliderTrack() const { return Px(LogicalTrack()); }
 
-    // Previous, current and next line in the lyrics panel.
-    HomeRect PanelLine(int index) const {
-        const float height = (BodyHeight() - kTransportButton) / 3;
-        return Px({ColumnX(), BodyTop() + static_cast<float>(index) * height, ColumnWidth(), height});
-    }
-
     HomeRect Frame(HomeControl control) const {
         switch (control) {
-            // Slot 0 is the shared header's settings button.
-            case HomeControl::Lyrics: return HeaderButton(1);
             case HomeControl::Artwork: return Artwork();
             case HomeControl::Slider: {
                 const HomeRect track = LogicalTrack();
@@ -85,12 +79,12 @@ public:
 
 private:
     static constexpr float kSidePadding = 22;
-    static constexpr float kBottomPadding = 16;
+    static constexpr float kBottomPadding = 12;
     static constexpr float kHeaderGap = 8;
-    static constexpr float kColumnGap = 16;
-    static constexpr float kHeaderButton = 26;
-    static constexpr float kTransportButton = 34;
-    static constexpr float kTransportGap = 12;
+    static constexpr float kColumnGap = 18;
+    static constexpr float kTransportButton = 30;
+    static constexpr float kTransportGap = 14;
+    static constexpr float kLyricStep = 19;
     static constexpr float kTimeWidth = 40;
     static constexpr float kSliderHeight = 14;
     static constexpr float kSliderTrackHeight = 4;
@@ -99,19 +93,10 @@ private:
     float BodyHeight() const { return height_ - BodyTop() - kBottomPadding; }
     float ColumnX() const { return kSidePadding + BodyHeight() + kColumnGap; }
     float ColumnWidth() const { return width_ - ColumnX() - kSidePadding; }
-    float SliderY() const { return BodyTop() + 58; }
+    float SliderY() const { return height_ - kBottomPadding - kTransportButton - kSliderHeight - 2; }
 
     HomeRect LogicalTrack() const {
         return {ColumnX() + kTimeWidth, SliderY() + (kSliderHeight - kSliderTrackHeight) / 2, ColumnWidth() - kTimeWidth * 2, kSliderTrackHeight};
-    }
-
-    HomeRect HeaderButton(int slot) const {
-        return Px({
-            width_ - kSidePadding - kHeaderButton - static_cast<float>(slot) * (kHeaderButton + 4),
-            std::max((header_ - kHeaderButton) / 2, 0.0f),
-            kHeaderButton,
-            kHeaderButton,
-        });
     }
 
     HomeRect TransportButton(int slot) const {

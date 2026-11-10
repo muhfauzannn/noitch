@@ -38,6 +38,9 @@ private:
     void Release();
     void Refresh();
     void Render();
+    // The last good numbers per tool, read from the cache file once per showing.
+    std::optional<ToolLimits> Remembered(const char* tool);
+    void Remember(const char* tool, const ToolLimits& limits, double asOf);
 
     HWND window_ = nullptr;
     Compositor* compositor_ = nullptr;
@@ -46,6 +49,9 @@ private:
     ToolLimits claudeLimits_ = ToolLimits::Failed(LimitProblem::Loading);
     // A result from an earlier request, posted after the page was hidden or asked again, is dropped.
     uintptr_t claudeGeneration_ = 0;
+    bool loadedCache_ = false;
+    std::optional<ToolLimits> rememberedClaude_;
+    std::optional<ToolLimits> rememberedCodex_;
 };
 
 }  // namespace noitch

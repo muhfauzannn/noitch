@@ -14,6 +14,8 @@ final class UsageController {
     private var source: UsageSource?
     private let claudeSource = ClaudeLimitSource()
     private var claudeLimits = ToolLimits.failed(.loading)
+    /// The last good numbers per tool, from this run or the cache file, with when they were current.
+    private var remembered: [String: ToolLimits]?
     private var log = UsageLog()
     private var tickTimer: Timer?
     private var releaseTimer: Timer?
@@ -21,6 +23,8 @@ final class UsageController {
     func pageWillShow(layout: UsageLayout, scale: CGFloat) {
         releaseTimer?.invalidate()
         releaseTimer = nil
+        // Show what was last known at once, rather than an empty page while asking.
+        if claudeLimits.problem == .loading, let known = rememberedLimits()["claude"] { claudeLimits = known }
         if scene == nil || layout != self.layout || scale != self.scale {
             scene?.root.removeFromSuperlayer()
             let scene = UsageScene(layout: layout, scale: scale)
@@ -54,6 +58,36 @@ final class UsageController {
         source = nil
         log = UsageLog()
         claudeLimits = .failed(.loading)
+        remembered = nil
+    }
+
+    private static let cacheFile = FileManager.default
+        .urls(for: .cachesDirectory, in: .userDomainMask).first?
+        .appendingPathComponent("Noitch/limits", isDirectory: false)
+
+    private func rememberedLimits() -> [String: ToolLimits] {
+        if let remembered { return remembered }
+        let text = Self.cacheFile.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
+        var found: [String: ToolLimits] = [:]
+        for tool in ["claude", "codex"] { found[tool] = LimitCache.decode(text, tool: tool) }
+        remembered = found
+        return found
+    }
+
+    /// Written only when the numbers change or have aged, and only while the page is shown.
+    private func remember(_ tool: String, _ limits: ToolLimits, asOf: Double) {
+        var all = rememberedLimits()
+        var stored = limits
+        stored.asOf = asOf
+        stored.recentRate = nil
+        // Same numbers confirmed again only move the "as of" time, so that waits ten minutes.
+        guard all[tool].map({ $0.fiveHour != stored.fiveHour || $0.week != stored.week || asOf - ($0.asOf ?? 0) > 600 }) ?? true else { return }
+        all[tool] = stored
+        remembered = all
+        guard let file = Self.cacheFile else { return }
+        let text = all.compactMap { tool, limits in limits.asOf.map { LimitCache.encode(tool, limits, asOf: $0) } }.sorted().joined(separator: "\n")
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? text.write(to: file, atomically: true, encoding: .utf8)
     }
 
     private func refresh() {
@@ -66,7 +100,16 @@ final class UsageController {
         render()
         claudeSource.fetch(now: now) { [weak self] limits in
             guard let self else { return }
-            claudeLimits = limits
+            let now = Date().timeIntervalSince1970
+            if limits.problem == nil {
+                claudeLimits = limits
+                remember("claude", limits, asOf: now)
+            } else if limits.problem == .unavailable, let known = rememberedLimits()["claude"] {
+                // Offline or refused for now: the last good numbers beat a blank page.
+                claudeLimits = known
+            } else {
+                claudeLimits = limits
+            }
             render()
         }
         scheduleTick(after: date)
@@ -82,8 +125,10 @@ final class UsageController {
         let codex: ToolLimits
         if let latest = log.codexSamples.last {
             codex = ToolLimits(fiveHour: latest.fiveHour, week: latest.week, recentRate: LimitRates.codex(log.codexSamples, now: now))
+            remember("codex", codex, asOf: latest.time)
         } else {
-            codex = .failed(.noData)
+            // The logs that held them are over a day old; the week may still be running.
+            codex = rememberedLimits()["codex"] ?? .failed(.noData)
         }
         let dayStart = Calendar.current.startOfDay(for: date).timeIntervalSince1970
         let summary = UsageSummary(log: log, now: now, dayStart: dayStart)

@@ -15,6 +15,12 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the Home redesign and the content clip (2026-11-10, same M5): 9.33 MB, 0.86 ms/min, 0.10
+wakeups/s and 3.20 ms per transition; two further runs read 4.33 and 5.25 ms/min and 3.01 and 3.53 ms
+per transition with all hover checks passing. The first run failed one check, "a brief visit closes
+after the pointer leaves", which then passed twice; treat it as flaky until it recurs. The binary
+is 776 KB.
+
 With the limits page (2026-11-10, same M5): two idle runs read 9.16 and 9.27 MB, 1.84 and 4.89
 ms/min, 0.10 and 0.07 wakeups/s. Two runs started straight after a test run or another measurement
 read 10.09 and 10.58 MB, 24.15 and 37.56 ms/min, over budget, so their hover checks did not run; the

@@ -20,6 +20,7 @@ class HomeController {
 public:
     static constexpr UINT_PTR kTickTimer = 2;
     static constexpr UINT_PTR kReleaseTimer = 3;
+    static constexpr UINT_PTR kSkipTimer = 8;
 
     void Initialize(HWND window, Compositor* compositor, double (*now)()) {
         window_ = window;
@@ -53,6 +54,7 @@ private:
     void Activate(HomeControl control);
     void FinishScrub(double fraction);
     void ReceiveMedia();
+    void BeginSkip();
     void RequestLyricsIfNeeded();
     double CurrentPosition() const;
 
@@ -71,7 +73,8 @@ private:
     std::string lyricsKey_;
     uintptr_t lyricsGeneration_ = 0;
     bool isLoadingLyrics_ = false;
-    bool showsLyricsPanel_ = false;
+    // The title playing when next or previous was pressed, until the player reports another.
+    std::optional<std::string> skippingFrom_;
     std::shared_ptr<const Artwork> shownArtwork_;
     bool isOpen_ = false;
 

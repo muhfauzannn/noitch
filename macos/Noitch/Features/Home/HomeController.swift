@@ -21,9 +21,10 @@ final class HomeController {
     private var lyrics: Lyrics?
     private var lyricsKey: String?
     private var isLoadingLyrics = false
-    private var showsLyricsPanel = false
+    /// The title playing when next or previous was pressed, until the player reports another.
+    private var skippingFrom: String?
+    private var skipTimer: Timer?
     private var shownArtwork: Data?
-    private var tint = NSColor.white
     private var isOpen = false
 
     private var tickTimer: Timer?
@@ -95,6 +96,9 @@ final class HomeController {
     /// Nothing that holds an image, text or a process outlives this.
     private func release() {
         releaseTimer = nil
+        skipTimer?.invalidate()
+        skipTimer = nil
+        skippingFrom = nil
         source.stop()
         lyricsSource.cancel()
         scene?.root.removeFromSuperlayer()
@@ -117,6 +121,11 @@ final class HomeController {
 
     private func receive(_ update: NowPlaying) {
         nowPlaying = update
+        if let skippingFrom, update.title != skippingFrom {
+            self.skippingFrom = nil
+            skipTimer?.invalidate()
+            skipTimer = nil
+        }
         requestLyricsIfNeeded()
         updateArtwork(force: false)
         refresh()
@@ -149,8 +158,7 @@ final class HomeController {
         shownArtwork = nowPlaying.artwork
         let size = (layout?.artwork.width ?? 0) * scale
         let image = nowPlaying.artwork.flatMap { Self.decode($0, maxPixelSize: size) }
-        tint = settings.tintWithArtwork ? (image.flatMap(Self.averageColor) ?? .white) : .white
-        scene.setArtwork(image, tint: tint)
+        scene.setArtwork(image, tint: settings.tintWithArtwork ? image.flatMap(Self.averageColor) : nil)
     }
 
     /// Decodes straight to display size, so a large cover never exists in memory at full size.
@@ -195,8 +203,9 @@ final class HomeController {
         guard let scene, isOpen else { return }
         render()
         let duration = nowPlaying.duration
-        let fraction = duration > 0 ? min(currentPosition() / duration, 1) : 0
-        let moving = nowPlaying.isPlaying && duration > 0 && scrubFraction == nil
+        // While skipping, the bar empties at once: the next track starts from nothing.
+        let fraction = duration > 0 && skippingFrom == nil ? min(currentPosition() / duration, 1) : 0
+        let moving = nowPlaying.isPlaying && duration > 0 && scrubFraction == nil && skippingFrom == nil
         scene.setProgress(fraction, speed: moving ? nowPlaying.rate / duration : 0)
         scheduleTick()
     }
@@ -207,8 +216,8 @@ final class HomeController {
             lyrics: lyrics,
             isLoadingLyrics: isLoadingLyrics,
             position: currentPosition(),
-            showsPanel: showsLyricsPanel,
-            settings: settings
+            settings: settings,
+            isSkipping: skippingFrom != nil
         ))
     }
 
@@ -244,7 +253,7 @@ final class HomeController {
         guard let layout, let control = layout.control(at: point) else { return }
         pressed = control
         scene?.setHover(control, isPressed: true)
-        if control == .slider, nowPlaying.hasTrack, !showsLyricsPanel {
+        if control == .slider, nowPlaying.hasTrack, skippingFrom == nil {
             scrubFraction = layout.sliderFraction(at: point.x)
             refresh()
         }
@@ -280,10 +289,6 @@ final class HomeController {
 
     private func activate(_ control: HomeControl) {
         switch control {
-        case .lyrics:
-            guard settings.showLyrics else { return }
-            showsLyricsPanel.toggle()
-            refresh()
         case .artwork:
             openPlayer()
         case .slider:
@@ -296,9 +301,13 @@ final class HomeController {
             if !isDemo { source.send(.togglePlayPause) }
             refresh()
         case .previous:
-            if nowPlaying.hasTrack, !isDemo { source.send(.previous) }
+            guard nowPlaying.hasTrack else { return }
+            if !isDemo { source.send(.previous) }
+            beginSkip()
         case .next:
-            if nowPlaying.hasTrack, !isDemo { source.send(.next) }
+            guard nowPlaying.hasTrack else { return }
+            if !isDemo { source.send(.next) }
+            beginSkip()
         case .shuffle:
             guard nowPlaying.hasTrack, settings.showShuffleAndRepeat else { return }
             nowPlaying.isShuffled.toggle()
@@ -310,6 +319,27 @@ final class HomeController {
             if !isDemo { source.setRepeat(nowPlaying.repeatMode) }
             refresh()
         }
+    }
+
+    /// Answers the press at once: players can take a second or more to report the new track.
+    /// Ends when another title arrives, or after a few seconds in case the same track restarted.
+    private func beginSkip() {
+        skippingFrom = nowPlaying.title
+        skipTimer?.invalidate()
+        let timer = Timer(timeInterval: 4, repeats: false) { [unowned self] _ in
+            MainActor.assumeIsolated { endSkip() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        skipTimer = timer
+        refresh()
+    }
+
+    private func endSkip() {
+        skipTimer?.invalidate()
+        skipTimer = nil
+        guard skippingFrom != nil else { return }
+        skippingFrom = nil
+        refresh()
     }
 
     private func openPlayer() {

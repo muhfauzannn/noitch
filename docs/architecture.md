@@ -143,9 +143,25 @@ of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
 
 ## Home
 
-Home is what the expanded island shows: artwork, title, artist, the current lyric line, a progress
-slider and transport buttons, plus lyrics and settings buttons in the header band beside the notch.
-The lyrics button swaps the text column for the previous, current and next line.
+Home is the first page: large artwork on the left, and beside it the title and artist, the lyric line
+being sung (bright) with the next one below it (dim and smaller), a progress slider and transport
+buttons. Behind it, a soft wash of the artwork's average colour fades out from the left; "Tint progress
+bar with artwork" turns both the wash and the bar's colour on or off.
+
+- **Lyrics.** When the song moves on one line, the bright line rises and fades, the dim line grows
+  into its place and the following line rises in below: three text layers take turns, and only
+  position, scale and opacity move, so no text is redrawn during the motion. Any other change,
+  such as a seek or a new track, crossfades. Before the first line and on empty lines, "♪" holds the
+  place. On Windows the surface is redrawn in place, without the slide.
+- **A new track** rises a few points into place as its title and artist crossfade.
+- **Next and previous** answer at once. Until the player reports a different title, the old title,
+  artist and artwork stay at 40% and the clock reads 0:00; after 4 s without a new title it ends
+  anyway, for a track that restarted. Players, browsers especially, can take a second or more to
+  report the new track, and the adapter adds no delay of its own (`stream` runs without debounce).
+- **Buttons** sink to 88% while pressed on macOS.
+- The island's content is clipped to the pill on macOS, by a layer whose bounds follow the pill's
+  spring, so nothing shows outside the black while it opens or closes. On Windows the content
+  already sits inside the pill's clip.
 
 Nothing about it runs at rest. On each platform:
 
@@ -213,6 +229,12 @@ and will it last? For Claude Code and Codex side by side:
   so its recent pace is that percentage times the share of the window's cost (from local logs)
   spent in the last half hour.
 - **Today.** Tokens and estimated cost today, under each name, from the local logs.
+- **Remembered.** The last good numbers per tool are kept in a small cache file (`Caches/Noitch/limits`
+  on macOS, `%LOCALAPPDATA%\Noitch\limits` on Windows, one line per tool in the same format). They
+  show at once when the page opens, while the request is out, and in place of "Limits unavailable"
+  when offline; Codex's are used when its logs have aged out of the day the page reads. Remembered
+  numbers say "As of" and when in place of today's totals. A window whose reset has passed shows
+  0%. Written only when the numbers change or are ten minutes older, and only while the page shows.
 
 Where the numbers come from:
 
@@ -263,7 +285,7 @@ found later. "Show lyrics" in settings turns off both the display and the lookup
 | --- | --- | --- |
 | Launch at login | Off | `SMAppService` on macOS, the `Run` registry value on Windows |
 | Open on hover | On | When off, a click opens the island. Leaving still closes it |
-| Show lyrics | On | Lyric line, lyrics button, and the LRCLIB lookup |
+| Show lyrics | On | The two lyric lines and the LRCLIB lookup |
 | Show shuffle and repeat | On | The two outer transport buttons |
 | Tint progress bar with artwork | On | Average artwork color, lifted so dark covers stay visible |
 
@@ -321,7 +343,7 @@ side by side on screen.
   transition. One open-source notch app solves this with a private CGS overlay space. Noitch uses
   public API only so far; check this by hand and decide before adopting anything private.
 - **Now playing on macOS depends on undocumented behavior.** See [Now playing on macOS](#now-playing-on-macos).
-- **Plain lyrics** show their first three lines in the panel, with no scrolling.
+- **Plain lyrics** aren't shown; Home says they aren't synced.
 - **Long titles** are truncated, not scrolled.
 - **Full screen.** Neither app hides itself for full-screen video or games yet.
 - **One display.** The island appears on the notched display, or the main one on macOS, and on the

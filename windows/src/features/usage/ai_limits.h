@@ -5,6 +5,8 @@
 // same rules (AILimits.swift).
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -33,6 +35,8 @@ struct ToolLimits {
     std::optional<LimitWindow> week;
     std::optional<double> recentRate;  // Five-hour percent per second over the last half hour.
     LimitProblem problem = LimitProblem::None;
+    // Set when these are remembered numbers rather than fresh ones: when they were current.
+    std::optional<double> asOf;
 
     static ToolLimits Failed(LimitProblem problem) {
         ToolLimits limits;
@@ -205,6 +209,63 @@ inline std::optional<ClaudeLogin> ClaudeLoginFromCredentials(std::string_view bo
     ClaudeLogin login{std::string(*token), std::nullopt};
     if (const auto expires = Number(Value("expiresAt", *oauth))) login.expiresAt = *expires / 1000;
     return login;
+}
+
+// The last good limits per tool, kept on disk so the page isn't empty while offline or after the logs
+// that held them have aged out. One line per tool, the same format the macOS app writes:
+// "claude 1794322800 72 1794330000 18000 41 - 604800": the time they were current, then for five
+// hours and the week the percent, the reset or "-", and the length. A missing window is "- - -".
+inline std::string EncodeLimitCache(const std::string& tool, const ToolLimits& limits, double asOf) {
+    const auto number = [](double value) {
+        char buffer[48];
+        std::snprintf(buffer, sizeof(buffer), "%.17g", value);
+        return std::string(buffer);
+    };
+    const auto window = [&](const std::optional<LimitWindow>& window) {
+        if (!window) return std::string("- - -");
+        return number(window->usedPercent) + " " + (window->resetsAt ? number(*window->resetsAt) : "-") + " " + number(window->length);
+    };
+    return tool + " " + number(asOf) + " " + window(limits.fiveHour) + " " + window(limits.week);
+}
+
+inline std::optional<ToolLimits> DecodeLimitCache(std::string_view text, std::string_view tool) {
+    const auto parseNumber = [](const std::string& part) -> std::optional<double> {
+        if (part.empty() || part == "-") return std::nullopt;
+        char* end = nullptr;
+        const double value = std::strtod(part.c_str(), &end);
+        return end && *end == '\0' ? std::optional(value) : std::nullopt;
+    };
+    size_t start = 0;
+    while (start < text.size()) {
+        size_t end = text.find('\n', start);
+        if (end == std::string_view::npos) end = text.size();
+        const std::string_view line = text.substr(start, end - start);
+        start = end + 1;
+        std::vector<std::string> parts;
+        size_t at = 0;
+        while (at <= line.size()) {
+            size_t space = line.find(' ', at);
+            if (space == std::string_view::npos) space = line.size();
+            if (space > at) parts.emplace_back(line.substr(at, space - at));
+            at = space + 1;
+        }
+        if (parts.size() != 8 || parts[0] != tool) continue;
+        const auto asOf = parseNumber(parts[1]);
+        if (!asOf) continue;
+        const auto window = [&](size_t index) -> std::optional<LimitWindow> {
+            const auto used = parseNumber(parts[index]);
+            const auto length = parseNumber(parts[index + 2]);
+            if (!used || !length || *length <= 0) return std::nullopt;
+            return LimitWindow{*used, parseNumber(parts[index + 1]), *length};
+        };
+        ToolLimits limits;
+        limits.fiveHour = window(2);
+        limits.week = window(5);
+        limits.asOf = asOf;
+        if (!limits.fiveHour && !limits.week) return std::nullopt;
+        return limits;
+    }
+    return std::nullopt;
 }
 
 }  // namespace noitch

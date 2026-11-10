@@ -310,23 +310,32 @@ void TestNextTickIsTheNextSecondOrAnEarlierLyric() {
 
 void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
     const AppSettings settings;
-    assert(!MakeHomeModel({}, nullptr, false, 0, false, settings).hasTrack);
+    assert(!MakeHomeModel({}, nullptr, false, 0, settings).hasTrack);
 
     NowPlaying nowPlaying;
     nowPlaying.title = "Song";
     nowPlaying.duration = 100;
     Lyrics lyrics;
     lyrics.synced = {{1, "one"}, {2, "two"}, {3, "three"}};
-    const HomeModel model = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, true, settings);
-    assert(model.lyricLine == "two");
-    assert(model.panelLines[0] == "one" && model.panelLines[2] == "three");
+    const HomeModel model = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, settings);
+    assert(model.lyric == "two" && model.nextLyric == "three" && model.lyricIndex == 1);
+    const HomeModel intro = MakeHomeModel(nowPlaying, &lyrics, false, 0.5, settings);
+    assert(intro.lyric == "\xE2\x99\xAA" && intro.nextLyric == "one" && intro.lyricIndex == -1);
+    const HomeModel skipping = MakeHomeModel(nowPlaying, &lyrics, false, 50, settings, true);
+    assert(skipping.isSkipping && skipping.title == "Song" && skipping.elapsedText == "0:00" && skipping.lyric.empty());
     assert(model.remainingText == "-1:37");
     assert(Near(model.progress, 0.025, 1e-9));
 
     AppSettings off;
     off.showLyrics = false;
-    const HomeModel hidden = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, true, off);
-    assert(hidden.lyricLine.empty() && !hidden.showsLyricsPanel && !hidden.showsLyricsButton);
+    const HomeModel hidden = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, off);
+    assert(hidden.lyric.empty() && hidden.nextLyric.empty());
+
+    for (float header : {24.0f, 32.0f, 38.0f}) {
+        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
+        assert(layout.Lyric().y >= layout.Artist().Bottom());
+        assert(layout.NextLyric().Bottom() <= layout.SliderTrack().y - 4);
+    }
 }
 
 void TestArtworkTintIsAverageAndLifted() {
@@ -479,6 +488,24 @@ void TestUsageResponseAndStoredLoginParse() {
     assert(login && login->accessToken == "token-value" && *login->expiresAt == 1794326400);
 }
 
+void TestTheLastGoodLimitsSurviveARoundTrip() {
+    ToolLimits limits;
+    limits.fiveHour = LimitWindow{72.5, 1794330000.0, LimitWindow::kFiveHours};
+    limits.week = LimitWindow{41, std::nullopt, LimitWindow::kWeek};
+    ToolLimits weekOnly;
+    weekOnly.week = limits.week;
+    const std::string text = EncodeLimitCache("claude", limits, 1794322800) + "\n" + EncodeLimitCache("codex", weekOnly, 5);
+    const auto claude = DecodeLimitCache(text, "claude");
+    assert(claude && claude->fiveHour == limits.fiveHour && claude->week == limits.week && *claude->asOf == 1794322800);
+    assert(!DecodeLimitCache(text, "codex")->fiveHour);
+    assert(!DecodeLimitCache("claude nonsense", "claude"));
+    // The same line the macOS app writes reads back here.
+    const auto mac = DecodeLimitCache("claude 1794322800.0 72.5 1794330000.0 18000.0 41.0 - 604800.0", "claude");
+    assert(mac && mac->fiveHour->usedPercent == 72.5 && !mac->week->resetsAt);
+    const UsageModel model = MakeUsageModel(*claude, ToolLimits::Failed(LimitProblem::NoData), UsageSummary{}, 1794323000, [](double) { return std::string("Tue 14:00"); });
+    assert(model.claude.today == "As of Tue 14:00");
+}
+
 void TestThePageSaysWhatMattersInAFewWords() {
     const double now = 100000;
     ToolLimits claude;
@@ -540,6 +567,7 @@ int main() {
     TestTheWeekWarnsWhenItsAveragePaceRunsOutEarly();
     TestPacesComeFromCodexPercentagesAndClaudeCost();
     TestUsageResponseAndStoredLoginParse();
+    TestTheLastGoodLimitsSurviveARoundTrip();
     TestThePageSaysWhatMattersInAFewWords();
     TestUsageNumbersReadTheWayThePageShowsThem();
     TestUsagePageFitsUnderTheHeader();

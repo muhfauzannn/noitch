@@ -158,7 +158,12 @@ inline UsageModel::Tool MakeUsageTool(const char* name, const ToolLimits& limits
     const auto [headline, detail] = InsightText(insight, now, clock);
     UsageModel::Tool tool;
     tool.name = name;
-    tool.today = today.tokens > 0 ? "Today " + Tokens(today.tokens) + " \xC2\xB7 " + Cost(today) : "Nothing today";
+    // Remembered numbers say so, in place of today's totals.
+    if (limits.asOf) {
+        tool.today = "As of " + clock(*limits.asOf);
+    } else {
+        tool.today = today.tokens > 0 ? "Today " + Tokens(today.tokens) + " \xC2\xB7 " + Cost(today) : "Nothing today";
+    }
     const auto& center = five ? five : week;
     tool.center = center ? Percent(center->usedPercent) : "\xE2\x80\x94";
     tool.caption = five ? "5h" : week ? "week" : "";

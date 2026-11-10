@@ -15,6 +15,8 @@ namespace {
 constexpr float kArtworkRadius = 14;
 constexpr float kDimmedOpacity = 0.35f;
 constexpr float kIdleOpacity = 0.55f;
+constexpr float kSkippingOpacity = 0.4f;
+constexpr float kNextLyricOpacity = 0.38f;
 
 // Segoe MDL2 Assets ships with Windows 10 and 11, so icons need no image files.
 constexpr wchar_t kGlyphPlay[] = L"\xE768";
@@ -24,7 +26,6 @@ constexpr wchar_t kGlyphNext[] = L"\xE893";
 constexpr wchar_t kGlyphShuffle[] = L"\xE8B1";
 constexpr wchar_t kGlyphRepeatAll[] = L"\xE8EE";
 constexpr wchar_t kGlyphRepeatOne[] = L"\xE8ED";
-constexpr wchar_t kGlyphLyrics[] = L"\xE8BD";
 constexpr wchar_t kGlyphMusic[] = L"\xEC4F";
 
 std::wstring Widen(const std::string& text) {
@@ -80,11 +81,10 @@ HRESULT HomeScene::CreateFormats() {
     HRESULT hr;
     if (FAILED(hr = make(L"Segoe UI", 15, DWRITE_FONT_WEIGHT_SEMI_BOLD, left, &titleFormat_))) return hr;
     if (FAILED(hr = make(L"Segoe UI", 13, DWRITE_FONT_WEIGHT_NORMAL, left, &artistFormat_))) return hr;
-    if (FAILED(hr = make(L"Segoe UI", 12, DWRITE_FONT_WEIGHT_NORMAL, left, &lyricFormat_))) return hr;
+    if (FAILED(hr = make(L"Segoe UI", 14, DWRITE_FONT_WEIGHT_SEMI_BOLD, left, &lyricFormat_))) return hr;
+    if (FAILED(hr = make(L"Segoe UI", 12, DWRITE_FONT_WEIGHT_SEMI_BOLD, left, &nextLyricFormat_))) return hr;
     if (FAILED(hr = make(L"Segoe UI", 11, DWRITE_FONT_WEIGHT_NORMAL, left, &timeFormat_))) return hr;
     if (FAILED(hr = make(L"Segoe UI", 11, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_TRAILING, &remainingFormat_))) return hr;
-    if (FAILED(hr = make(L"Segoe UI", 13, DWRITE_FONT_WEIGHT_NORMAL, left, &panelFormat_))) return hr;
-    if (FAILED(hr = make(L"Segoe UI", 16, DWRITE_FONT_WEIGHT_SEMI_BOLD, left, &panelCurrentFormat_))) return hr;
     if (FAILED(hr = make(L"Segoe MDL2 Assets", 15, DWRITE_FONT_WEIGHT_NORMAL, center, &iconFormat_))) return hr;
     return make(L"Segoe MDL2 Assets", 21, DWRITE_FONT_WEIGHT_NORMAL, center, &largeIconFormat_);
 }
@@ -98,8 +98,7 @@ void HomeScene::Release() {
     lyricFormat_.Reset();
     timeFormat_.Reset();
     remainingFormat_.Reset();
-    panelFormat_.Reset();
-    panelCurrentFormat_.Reset();
+    nextLyricFormat_.Reset();
     iconFormat_.Reset();
     largeIconFormat_.Reset();
     writeFactory_.Reset();
@@ -158,9 +157,24 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
     context_->PushAxisAlignedClip(whole, D2D1_ANTIALIAS_MODE_ALIASED);
     context_->Clear(D2D1::ColorF(0, 0, 0, 0));
 
+    // A soft wash of the artwork's colour from the left, so the page takes on the track's mood.
+    if (tint_ != 0xFFFFFFFF && artworkBrush_) {
+        const D2D1_COLOR_F tint = FromBgra(tint_);
+        const D2D1_GRADIENT_STOP stops[] = {
+            {0.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.42f)},
+            {0.45f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.12f)},
+            {1.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.0f)},
+        };
+        ComPtr<ID2D1GradientStopCollection> collection;
+        ComPtr<ID2D1LinearGradientBrush> wash;
+        if (SUCCEEDED(context_->CreateGradientStopCollection(stops, 3, &collection)) &&
+            SUCCEEDED(context_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(layout_.Width(), 0)), collection.Get(), &wash))) {
+            context_->FillRectangle(whole, wash.Get());
+        }
+    }
+
     // Hover plate, under the icon.
-    const bool plate = (hovered == HomeControl::Lyrics && model.showsLyricsButton) ||
-                       hovered == HomeControl::Previous || hovered == HomeControl::PlayPause || hovered == HomeControl::Next ||
+    const bool plate = hovered == HomeControl::Previous || hovered == HomeControl::PlayPause || hovered == HomeControl::Next ||
                        ((hovered == HomeControl::Shuffle || hovered == HomeControl::Repeat) && model.showsShuffleAndRepeat);
     if (plate) {
         const HomeRect frame = layout_.Frame(hovered);
@@ -169,10 +183,13 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
         context_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(frame.x + radius, frame.y + radius), radius, radius), brush_.Get());
     }
 
+    // While skipping, the old track stays, dimmed, until the player reports the new one.
+    const float heading = model.isSkipping ? kSkippingOpacity : 1.0f;
     const HomeRect art = layout_.Artwork();
     const float artRadius = kArtworkRadius * scale_;
     const D2D1_ROUNDED_RECT rounded = D2D1::RoundedRect(ToD2D(art), artRadius, artRadius);
     if (artworkBrush_) {
+        artworkBrush_->SetOpacity(heading);
         context_->FillRoundedRectangle(rounded, artworkBrush_.Get());
     } else {
         brush_->SetColor(White(0.08f));
@@ -181,29 +198,23 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
         context_->DrawText(kGlyphMusic, 1, largeIconFormat_.Get(), ToD2D(art), brush_.Get());
     }
 
-    if (model.showsLyricsPanel) {
-        PaintText(model.panelLines[0], panelFormat_.Get(), layout_.PanelLine(0), 0.45f);
-        PaintText(model.panelLines[1], panelCurrentFormat_.Get(), layout_.PanelLine(1), 1);
-        PaintText(model.panelLines[2], panelFormat_.Get(), layout_.PanelLine(2), 0.45f);
-    } else {
-        PaintText(model.title, titleFormat_.Get(), layout_.Title(), 1);
-        PaintText(model.artist, artistFormat_.Get(), layout_.Artist(), 0.6f);
-        PaintText(model.lyricLine, lyricFormat_.Get(), layout_.LyricLine(), 0.8f);
-        PaintText(model.elapsedText, timeFormat_.Get(), layout_.ElapsedTime(), 0.6f);
-        PaintText(model.remainingText, remainingFormat_.Get(), layout_.RemainingTime(), 0.6f);
+    PaintText(model.title, titleFormat_.Get(), layout_.Title(), heading);
+    PaintText(model.artist, artistFormat_.Get(), layout_.Artist(), 0.6f * heading);
+    PaintText(model.lyric, lyricFormat_.Get(), layout_.Lyric(), model.lyricIsStatus ? 0.5f : 1.0f);
+    PaintText(model.nextLyric, nextLyricFormat_.Get(), layout_.NextLyric(), kNextLyricOpacity);
+    PaintText(model.elapsedText, timeFormat_.Get(), layout_.ElapsedTime(), 0.6f);
+    PaintText(model.remainingText, remainingFormat_.Get(), layout_.RemainingTime(), 0.6f);
 
-        const HomeRect track = layout_.SliderTrack();
-        const float radius = track.height / 2;
-        brush_->SetColor(White(0.2f));
-        context_->FillRoundedRectangle(D2D1::RoundedRect(ToD2D(track), radius, radius), brush_.Get());
-        HomeRect filled = track;
-        filled.width = track.width * static_cast<float>(model.progress);
-        brush_->SetColor(FromBgra(tint_));
-        context_->FillRoundedRectangle(D2D1::RoundedRect(ToD2D(filled), radius, radius), brush_.Get());
-    }
+    const HomeRect track = layout_.SliderTrack();
+    const float radius = track.height / 2;
+    brush_->SetColor(White(0.18f));
+    context_->FillRoundedRectangle(D2D1::RoundedRect(ToD2D(track), radius, radius), brush_.Get());
+    HomeRect filled = track;
+    filled.width = track.width * static_cast<float>(model.progress);
+    brush_->SetColor(FromBgra(tint_));
+    context_->FillRoundedRectangle(D2D1::RoundedRect(ToD2D(filled), radius, radius), brush_.Get());
 
     const float transport = model.hasTrack ? 1 : kDimmedOpacity;
-    if (model.showsLyricsButton) PaintIcon(kGlyphLyrics, HomeControl::Lyrics, model.showsLyricsPanel ? 1 : kIdleOpacity, false);
     PaintIcon(kGlyphPrevious, HomeControl::Previous, transport, false);
     PaintIcon(model.isPlaying ? kGlyphPause : kGlyphPlay, HomeControl::PlayPause, transport, true);
     PaintIcon(kGlyphNext, HomeControl::Next, transport, false);

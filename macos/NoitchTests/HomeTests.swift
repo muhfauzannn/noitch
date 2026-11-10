@@ -23,7 +23,7 @@ struct HomeTests {
 
     @Test func `header buttons fit on a display without a notch`() {
         let short = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: 24)
-        #expect(short.frame(of: .lyrics).minY >= 0)
+        #expect(short.frame(of: .playPause).minY >= 0)
     }
 
     @Test func `points find their control`() {
@@ -61,7 +61,7 @@ struct HomeTests {
     }
 
     @Test func `nothing playing shows the placeholder`() {
-        let model = HomeModel(nowPlaying: NowPlaying(), lyrics: nil, isLoadingLyrics: false, position: 0, showsPanel: false, settings: AppSettings())
+        let model = HomeModel(nowPlaying: NowPlaying(), lyrics: nil, isLoadingLyrics: false, position: 0, settings: AppSettings())
         #expect(!model.hasTrack)
         #expect(model.title == HomeModel().title)
     }
@@ -71,10 +71,30 @@ struct HomeTests {
         nowPlaying.title = "Song"
         nowPlaying.duration = 100
         let lyrics = Lyrics(synced: [.init(start: 1, text: "one"), .init(start: 2, text: "two"), .init(start: 3, text: "three")])
-        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 2.5, showsPanel: true, settings: AppSettings())
-        #expect(model.lyricLine == "two")
-        #expect(model.panelLines == ["one", "two", "three"])
+        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 2.5, settings: AppSettings())
+        #expect(model.lyric == "two" && model.nextLyric == "three" && model.lyricIndex == 1)
         #expect(model.remainingText == "-1:37")
+        let intro = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 0.5, settings: AppSettings())
+        #expect(intro.lyric == "♪" && intro.nextLyric == "one" && intro.lyricIndex == nil)
+    }
+
+    @Test func `a skip dims the old track and empties the clock until the new one arrives`() {
+        var nowPlaying = NowPlaying()
+        nowPlaying.title = "Song"
+        nowPlaying.duration = 100
+        let lyrics = Lyrics(synced: [.init(start: 1, text: "one")])
+        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 50, settings: AppSettings(), isSkipping: true)
+        #expect(model.isSkipping && model.title == "Song")
+        #expect(model.elapsedText == "0:00" && model.lyric.isEmpty)
+    }
+
+    @Test func `the lyric lines fit between the artist and the slider`() {
+        for header in [CGFloat(24), 32, 38] {
+            let layout = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: header)
+            #expect(layout.lyric.minY >= layout.artist.maxY)
+            #expect(layout.nextLyric.maxY <= layout.sliderTrack.minY - 4)
+            #expect(layout.artwork.maxY <= IslandGeometry.expandedSize.height - HomeLayout.bottomPadding)
+        }
     }
 
     @Test func `turning lyrics off removes them everywhere`() {
@@ -83,10 +103,8 @@ struct HomeTests {
         var settings = AppSettings()
         settings.showLyrics = false
         let lyrics = Lyrics(synced: [.init(start: 0, text: "one")])
-        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 1, showsPanel: true, settings: settings)
-        #expect(model.lyricLine == "")
-        #expect(!model.showsLyricsPanel)
-        #expect(!model.showsLyricsButton)
+        let model = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 1, settings: settings)
+        #expect(model.lyric.isEmpty && model.nextLyric.isEmpty)
     }
 
     @Test func `settings survive a round trip and default on`() throws {

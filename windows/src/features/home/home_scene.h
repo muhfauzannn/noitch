@@ -15,10 +15,11 @@
 
 namespace noitch {
 
-// Draws Home into one surface with Direct2D and DirectWrite. It decides nothing, and it draws only
-// when a value changes: never per frame. The surface sits inside the pill's clip, so the transition
-// reveals it in DWM and collapsing hides it, with no fade of its own. Direct2D is delay-loaded, so
-// none of this costs anything until the island first opens.
+// Draws Home into one surface with Direct2D and DirectWrite: a wash of the artwork's colour, the
+// artwork, title and artist, the line being sung and the next one, the slider and the transport. It
+// decides nothing, and it draws only when a value changes: never per frame. One surface means a
+// lyric change redraws in place; the slide macOS does would need a visual per line. Direct2D is
+// delay-loaded, so none of this costs anything until the island first opens.
 class HomeScene {
 public:
     HRESULT Create(Compositor& compositor, const HomeLayout& layout, float left, float scale);
@@ -47,8 +48,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> lyricFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> timeFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> remainingFormat_;
-    Microsoft::WRL::ComPtr<IDWriteTextFormat> panelFormat_;
-    Microsoft::WRL::ComPtr<IDWriteTextFormat> panelCurrentFormat_;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> nextLyricFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> iconFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> largeIconFormat_;
     Microsoft::WRL::ComPtr<ID2D1BitmapBrush> artworkBrush_;

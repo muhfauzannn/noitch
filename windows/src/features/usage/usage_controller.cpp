@@ -1,6 +1,9 @@
 #include "usage_controller.h"
 
+#include <shlobj.h>
+
 #include <cmath>
+#include <string>
 
 namespace noitch {
 
@@ -13,6 +16,10 @@ constexpr UINT kReleaseDelayMs = 10000;
 
 void UsageController::PageWillShow(Painter& painter, const UsageLayout& layout, float left, float scale) {
     KillTimer(window_, kReleaseTimer);
+    // Show what was last known at once, rather than an empty page while asking.
+    if (claudeLimits_.problem == LimitProblem::Loading) {
+        if (const auto known = Remembered("claude")) claudeLimits_ = *known;
+    }
     if (!scene_.Exists() && FAILED(scene_.Create(*compositor_, painter, layout, left, scale))) scene_.Release();
     Refresh();
 }
@@ -35,6 +42,62 @@ void UsageController::Release() {
     scene_.Release();
     source_.reset();
     claudeLimits_ = ToolLimits::Failed(LimitProblem::Loading);
+    loadedCache_ = false;
+    rememberedClaude_.reset();
+    rememberedCodex_.reset();
+}
+
+namespace {
+
+std::wstring CacheFile() {
+    wchar_t* base = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &base))) return {};
+    std::wstring folder = std::wstring(base) + L"\\Noitch";
+    CoTaskMemFree(base);
+    CreateDirectoryW(folder.c_str(), nullptr);
+    return folder + L"\\limits";
+}
+
+}  // namespace
+
+std::optional<ToolLimits> UsageController::Remembered(const char* tool) {
+    if (!loadedCache_) {
+        loadedCache_ = true;
+        std::string text;
+        const std::wstring path = CacheFile();
+        const HANDLE file = path.empty() ? INVALID_HANDLE_VALUE : CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file != INVALID_HANDLE_VALUE) {
+            char buffer[1024];
+            DWORD read = 0;
+            if (ReadFile(file, buffer, sizeof(buffer), &read, nullptr)) text.assign(buffer, read);
+            CloseHandle(file);
+        }
+        rememberedClaude_ = DecodeLimitCache(text, "claude");
+        rememberedCodex_ = DecodeLimitCache(text, "codex");
+    }
+    return std::string_view(tool) == "claude" ? rememberedClaude_ : rememberedCodex_;
+}
+
+// Written only when the numbers change or have aged ten minutes, and only while the page is shown.
+void UsageController::Remember(const char* tool, const ToolLimits& limits, double asOf) {
+    Remembered(tool);
+    std::optional<ToolLimits>& slot = std::string_view(tool) == "claude" ? rememberedClaude_ : rememberedCodex_;
+    if (slot && slot->fiveHour == limits.fiveHour && slot->week == limits.week && asOf - slot->asOf.value_or(0) <= 600) return;
+    ToolLimits stored;
+    stored.fiveHour = limits.fiveHour;
+    stored.week = limits.week;
+    stored.asOf = asOf;
+    slot = stored;
+    std::string text;
+    if (rememberedClaude_) text += EncodeLimitCache("claude", *rememberedClaude_, *rememberedClaude_->asOf) + "\n";
+    if (rememberedCodex_) text += EncodeLimitCache("codex", *rememberedCodex_, *rememberedCodex_->asOf) + "\n";
+    const std::wstring path = CacheFile();
+    if (path.empty()) return;
+    const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+    DWORD written = 0;
+    WriteFile(file, text.data(), static_cast<DWORD>(text.size()), &written, nullptr);
+    CloseHandle(file);
 }
 
 void UsageController::Refresh() {
@@ -63,6 +126,10 @@ void UsageController::Render() {
         codex.fiveHour = log.CodexSamples().back().fiveHour;
         codex.week = log.CodexSamples().back().week;
         codex.recentRate = CodexRate(log.CodexSamples(), now);
+        Remember("codex", codex, log.CodexSamples().back().time);
+    } else if (const auto known = Remembered("codex")) {
+        // The logs that held them are over a day old; the week may still be running.
+        codex = *known;
     }
     scene_.Paint(MakeUsageModel(claude, codex, Summarize(log, now, LocalDayStart()), now, LocalClock));
 }
@@ -71,7 +138,15 @@ bool UsageController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
     if (message == ClaudeLimitSource::kMessage) {
         std::unique_ptr<ToolLimits> limits(reinterpret_cast<ToolLimits*>(lparam));
         if (wparam == claudeGeneration_ && limits) {
-            claudeLimits_ = *limits;
+            if (limits->problem == LimitProblem::None) {
+                claudeLimits_ = *limits;
+                Remember("claude", *limits, UnixNow());
+            } else if (limits->problem == LimitProblem::Unavailable && Remembered("claude")) {
+                // Offline or refused for now: the last good numbers beat a blank page.
+                claudeLimits_ = *Remembered("claude");
+            } else {
+                claudeLimits_ = *limits;
+            }
             Render();
         }
         return true;

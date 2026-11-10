@@ -2,39 +2,55 @@ import AppKit
 import QuartzCore
 
 /// Home's layers. It draws what it is given and decides nothing, and it never draws per frame: text
-/// changes when a value changes, and the progress bar moves in the render server.
+/// changes when a value changes, and the progress bar and every transition move in the render server.
 final class HomeScene {
     private static let artworkRadius: CGFloat = 14
     private static let dimmedOpacity: Float = 0.35
     private static let idleOpacity: Float = 0.55
+    private static let nextLyricOpacity: Float = 0.38
+    private static let skippingOpacity: Float = 0.4
 
     /// Placed by the pager, which owns its fade and slide.
     let root = CALayer()
 
     private let layout: HomeLayout
+    /// A soft wash of the artwork's colour from the left, so the page takes on the track's mood.
+    private let backdrop = CAGradientLayer()
     private let artwork = CALayer()
     private let artworkPlaceholder = CAShapeLayer()
+    /// Title and artist move together when the track changes.
+    private let heading = CALayer()
     private let title = HomeScene.makeText(size: 15, weight: .semibold, opacity: 1)
     private let artist = HomeScene.makeText(size: 13, weight: .regular, opacity: 0.6)
-    private let lyricLine = HomeScene.makeText(size: 12, weight: .regular, opacity: 0.8)
+    /// Three layers take turns as the bright line, the dim line and the one about to rise into view.
+    private let lyricLayers = (0..<3).map { _ in HomeScene.makeText(size: 14, weight: .semibold, opacity: 1) }
+    private var bright = 0
+    private var dim = 1
+    private var spare = 2
     private let elapsed = HomeScene.makeText(size: 11, weight: .regular, opacity: 0.6)
     private let remaining = HomeScene.makeText(size: 11, weight: .regular, opacity: 0.6)
-    private let panelLines = (0..<3).map { HomeScene.makeText(size: $0 == 1 ? 16 : 13, weight: $0 == 1 ? .semibold : .regular, opacity: $0 == 1 ? 1 : 0.45) }
     private let track = CALayer()
     private let fill = CALayer()
     /// One plate that moves to whichever button is under the pointer.
     private let hoverPlate = CALayer()
     private var icons: [HomeControl: CAShapeLayer] = [:]
-    /// Artwork and lyrics button, text, slider, transport: revealed one after another, so the eye
-    /// reads top-left to bottom instead of everything popping in at once.
+    /// Artwork, text, slider, transport: revealed one after another, so the eye reads top-left to
+    /// bottom instead of everything popping in at once.
     private let groups = (0..<4).map { _ in CALayer() }
     private var shownModel: HomeModel?
+    private var tint = NSColor.clear
 
     init(layout: HomeLayout, scale: CGFloat) {
         self.layout = layout
         // The pager places it and flips its geometry, so the shared y-down numbers hold.
         root.bounds = CGRect(origin: .zero, size: layout.size)
 
+        backdrop.frame = root.bounds
+        backdrop.startPoint = CGPoint(x: 0, y: 0.5)
+        backdrop.endPoint = CGPoint(x: 1, y: 0.5)
+        backdrop.locations = [0, 0.45, 1]
+        backdrop.colors = Self.wash(.clear)
+        root.addSublayer(backdrop)
         hoverPlate.backgroundColor = NSColor.white.withAlphaComponent(0.22).cgColor
         hoverPlate.isHidden = true
         root.addSublayer(hoverPlate)
@@ -55,25 +71,34 @@ final class HomeScene {
         artworkPlaceholder.opacity = Self.dimmedOpacity
         groups[0].addSublayer(artworkPlaceholder)
 
-        for (layer, frame, group) in [(title, layout.title, 1), (artist, layout.artist, 1), (lyricLine, layout.lyricLine, 1), (elapsed, layout.elapsedTime, 2), (remaining, layout.remainingTime, 2)] {
+        heading.frame = root.bounds
+        groups[1].addSublayer(heading)
+        for (layer, frame) in [(title, layout.title), (artist, layout.artist)] {
             layer.frame = frame
             layer.contentsScale = scale
-            groups[group].addSublayer(layer)
+            heading.addSublayer(layer)
         }
-        elapsed.alignmentMode = .left
-        remaining.alignmentMode = .right
-        for (index, layer) in panelLines.enumerated() {
-            // Text sits at the top of a text layer, so center it in its row by hand.
-            let row = layout.panelLine(index)
-            let height = (layer.fontSize + 6).rounded()
-            layer.frame = CGRect(x: row.minX, y: row.midY - height / 2, width: row.width, height: height)
+        for layer in lyricLayers {
+            // Anchored at the left edge, so the dim line shrinks toward where its text starts.
+            layer.anchorPoint = CGPoint(x: 0, y: 0.5)
+            layer.bounds = CGRect(origin: .zero, size: layout.lyric.size)
             layer.contentsScale = scale
             groups[1].addSublayer(layer)
         }
+        place(lyricLayers[bright], slot: 0)
+        place(lyricLayers[dim], slot: 1)
+        place(lyricLayers[spare], slot: 2)
 
+        for (layer, frame) in [(elapsed, layout.elapsedTime), (remaining, layout.remainingTime)] {
+            layer.frame = frame
+            layer.contentsScale = scale
+            groups[2].addSublayer(layer)
+        }
+        elapsed.alignmentMode = .left
+        remaining.alignmentMode = .right
         track.frame = layout.sliderTrack
         track.cornerRadius = layout.sliderTrack.height / 2
-        track.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        track.backgroundColor = NSColor.white.withAlphaComponent(0.18).cgColor
         groups[2].addSublayer(track)
         fill.anchorPoint = .zero
         fill.position = .zero
@@ -82,12 +107,12 @@ final class HomeScene {
         fill.backgroundColor = NSColor.white.cgColor
         track.addSublayer(fill)
 
-        for control in [HomeControl.lyrics, .shuffle, .previous, .playPause, .next, .repeatMode] {
+        for control in [HomeControl.shuffle, .previous, .playPause, .next, .repeatMode] {
             let icon = CAShapeLayer()
             let frame = layout.frame(of: control)
-            let inset = frame.width * (control == .playPause ? 0.14 : 0.2)
+            let inset = frame.width * (control == .playPause ? 0.12 : 0.2)
             icon.frame = frame.insetBy(dx: inset, dy: inset)
-            groups[control == .lyrics ? 0 : 3].addSublayer(icon)
+            groups[3].addSublayer(icon)
             icons[control] = icon
         }
         setIcon(.previous, for: .previous)
@@ -99,30 +124,30 @@ final class HomeScene {
         guard model != shownModel else { return }
         let previous = shownModel
         shownModel = model
+        let now = CACurrentMediaTime()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        if previous.map({ $0.title != model.title || $0.artist != model.artist }) ?? false, model.hasTrack {
+            // A new track rises into place, the way the lyrics do.
+            Self.addFade(to: title, duration: 0.3)
+            Self.addFade(to: artist, duration: 0.3)
+            Motion.ease(heading, "transform.translation.y", from: 8, to: 0, duration: 0.45, begin: now)
+        }
         title.string = model.title
         artist.string = model.artist
+        let headingOpacity: Float = model.isSkipping ? Self.skippingOpacity : 1
+        if heading.opacity != headingOpacity {
+            Motion.ease(heading, "opacity", from: heading.presentation()?.opacity ?? heading.opacity, to: headingOpacity, duration: 0.25, begin: now)
+            heading.opacity = headingOpacity
+            Motion.ease(artwork, "opacity", from: artwork.presentation()?.opacity ?? artwork.opacity, to: headingOpacity, duration: 0.25, begin: now)
+            artwork.opacity = headingOpacity
+        }
         elapsed.string = model.elapsedText
         remaining.string = model.remainingText
-
-        let showsPanel = model.showsLyricsPanel
-        for layer in [title, artist, lyricLine, elapsed, remaining, track] { layer.isHidden = showsPanel }
-        for layer in panelLines { layer.isHidden = !showsPanel }
-        if previous?.lyricLine != model.lyricLine {
-            Self.addFade(to: lyricLine)
-            lyricLine.string = model.lyricLine
-        }
-        if previous?.panelLines != model.panelLines {
-            for (layer, text) in zip(panelLines, model.panelLines) {
-                if showsPanel { Self.addFade(to: layer) }
-                layer.string = text
-            }
-        }
+        showLyrics(model, previous: previous, now: now)
 
         setIcon(model.isPlaying ? .pause : .play, for: .playPause)
         setIcon(model.repeatMode == .one ? .repeatOne : .repeatAll, for: .repeatMode)
-        setIcon(showsPanel ? .lyricsFilled : .lyrics, for: .lyrics)
         let transportOpacity = model.hasTrack ? 1 : Self.dimmedOpacity
         icons[.previous]?.opacity = transportOpacity
         icons[.playPause]?.opacity = transportOpacity
@@ -131,17 +156,89 @@ final class HomeScene {
         icons[.repeatMode]?.opacity = model.repeatMode == .off ? Self.idleOpacity : 1
         icons[.shuffle]?.isHidden = !model.showsShuffleAndRepeat
         icons[.repeatMode]?.isHidden = !model.showsShuffleAndRepeat
-        icons[.lyrics]?.isHidden = !model.showsLyricsButton
         CATransaction.commit()
     }
 
-    func setArtwork(_ image: CGImage?, tint: NSColor) {
+    /// When the song moves on one line, the bright line rises and fades, the dim line grows into its
+    /// place, and the following line rises in below. Any other change crossfades. Only position,
+    /// scale and opacity move, so no text is redrawn during the motion.
+    private func showLyrics(_ model: HomeModel, previous: HomeModel?, now: CFTimeInterval) {
+        let current = lyricLayers[bright]
+        let below = lyricLayers[dim]
+        let currentText = current.string as? String ?? ""
+        let belowText = below.string as? String ?? ""
+        guard currentText != model.lyric || belowText != model.nextLyric || previous?.lyricIsStatus != model.lyricIsStatus else { return }
+        // A step is one line on, with the dim line becoming the bright one, including from the intro.
+        let steppedForward = !Motion.reduceMotion && previous != nil && model.lyricIndex != nil
+            && (previous?.lyricIndex ?? -1) + 1 == model.lyricIndex && belowText == model.lyric && !belowText.isEmpty
+        if steppedForward {
+            let incoming = lyricLayers[spare]
+            incoming.string = model.nextLyric
+            move(current, to: -1, now: now, duration: 0.35)
+            move(below, to: 0, now: now, duration: 0.5)
+            place(incoming, slot: 2)
+            move(incoming, to: 1, now: now + 0.08, duration: 0.5)
+            (bright, dim, spare) = (dim, spare, bright)
+        } else {
+            place(current, slot: 0)
+            place(below, slot: 1)
+            place(lyricLayers[spare], slot: 2)
+            Self.addFade(to: current, duration: 0.25)
+            Self.addFade(to: below, duration: 0.25)
+            current.string = model.lyric
+            below.string = model.nextLyric
+        }
+        // A status message is quieter than a sung line.
+        lyricLayers[bright].opacity = model.lyricIsStatus ? 0.5 : 1
+    }
+
+    /// Slot -1 is above the bright line, 0 the bright line, 1 the dim line, 2 below it.
+    private func slot(_ index: Int) -> (position: CGPoint, scale: CGFloat, opacity: Float) {
+        let y = layout.lyric.midY + CGFloat(index) * HomeLayout.lyricStep
+        let position = CGPoint(x: layout.lyric.minX, y: y)
+        switch index {
+        case 0: return (position, 1, 1)
+        case 1: return (position, HomeLayout.nextLyricScale, Self.nextLyricOpacity)
+        default: return (position, index < 0 ? 1 : HomeLayout.nextLyricScale, 0)
+        }
+    }
+
+    private func place(_ layer: CALayer, slot index: Int) {
+        let target = slot(index)
+        layer.removeAllAnimations()
+        layer.position = target.position
+        layer.transform = CATransform3DMakeScale(target.scale, target.scale, 1)
+        layer.opacity = target.opacity
+    }
+
+    private func move(_ layer: CALayer, to index: Int, now: CFTimeInterval, duration: CFTimeInterval) {
+        let target = slot(index)
+        let shown = layer.presentation() ?? layer
+        Motion.ease(layer, "position", from: NSValue(point: shown.position), to: NSValue(point: target.position), duration: duration, begin: now)
+        Motion.ease(layer, "transform.scale", from: shown.value(forKeyPath: "transform.scale") ?? 1, to: target.scale, duration: duration, begin: now)
+        Motion.ease(layer, "opacity", from: shown.opacity, to: target.opacity, duration: duration, begin: now)
+        layer.position = target.position
+        layer.transform = CATransform3DMakeScale(target.scale, target.scale, 1)
+        layer.opacity = target.opacity
+    }
+
+    /// `tint` colours the progress bar and the wash behind the page; nil turns both back to white
+    /// and none.
+    func setArtwork(_ image: CGImage?, tint: NSColor?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        Self.addFade(to: artwork)
+        Self.addFade(to: artwork, duration: 0.3)
         artwork.contents = image
         artworkPlaceholder.isHidden = image != nil
-        fill.backgroundColor = tint.cgColor
+        fill.backgroundColor = (tint ?? .white).cgColor
+        let wash = Self.wash(tint ?? .clear)
+        let animation = CABasicAnimation(keyPath: "colors")
+        animation.fromValue = backdrop.presentation()?.colors ?? backdrop.colors
+        animation.toValue = wash
+        animation.duration = 0.6
+        animation.timingFunction = Motion.easeOut
+        backdrop.colors = wash
+        backdrop.add(animation, forKey: "colors")
         CATransaction.commit()
     }
 
@@ -170,15 +267,24 @@ final class HomeScene {
     func setHover(_ control: HomeControl?, isPressed: Bool) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let plateControls: Set<HomeControl> = [.lyrics, .shuffle, .previous, .playPause, .next, .repeatMode]
+        let plateControls: Set<HomeControl> = [.shuffle, .previous, .playPause, .next, .repeatMode]
         if let control, plateControls.contains(control), icons[control]?.isHidden == false {
             let frame = layout.frame(of: control)
+            let appearing = hoverPlate.isHidden
             hoverPlate.frame = frame
             hoverPlate.cornerRadius = frame.width / 2
             hoverPlate.opacity = isPressed ? 1 : 0.55
             hoverPlate.isHidden = false
+            if appearing { Self.addFade(to: hoverPlate, duration: 0.15) }
+            // A press sinks the icon a little; letting go springs it back.
+            if let icon = icons[control] {
+                let scale: CGFloat = isPressed ? 0.88 : 1
+                Motion.ease(icon, "transform.scale", from: icon.presentation()?.value(forKeyPath: "transform.scale") ?? 1, to: scale, duration: 0.2, begin: CACurrentMediaTime())
+                icon.transform = CATransform3DMakeScale(scale, scale, 1)
+            }
         } else {
             hoverPlate.isHidden = true
+            for icon in icons.values where icon.transform.m11 != 1 { icon.transform = CATransform3DIdentity }
         }
         CATransaction.commit()
     }
@@ -195,6 +301,11 @@ final class HomeScene {
         if let layer = icons[control] { Self.show(icon, on: layer) }
     }
 
+    /// The tint at the artwork's side, fading out before the middle of the page.
+    private static func wash(_ tint: NSColor) -> [CGColor] {
+        [tint.withAlphaComponent(tint.alphaComponent * 0.42).cgColor, tint.withAlphaComponent(tint.alphaComponent * 0.12).cgColor, NSColor.clear.cgColor]
+    }
+
     /// Set when an icon changes, never animated: moving a path is the expensive end of Core Animation.
     private static func show(_ icon: HomeIcon, on layer: CAShapeLayer) {
         let white = NSColor.white.cgColor
@@ -207,10 +318,10 @@ final class HomeScene {
         layer.lineJoin = .round
     }
 
-    private static func addFade(to layer: CALayer) {
+    private static func addFade(to layer: CALayer, duration: CFTimeInterval) {
         let transition = CATransition()
         transition.type = .fade
-        transition.duration = 0.2
+        transition.duration = duration
         layer.add(transition, forKey: "contentFade")
     }
 

@@ -38,6 +38,8 @@ void HomeController::IslandWillClose() {
 // Nothing that holds an image, text or a subscription outlives this.
 void HomeController::Release() {
     KillTimer(window_, kReleaseTimer);
+    KillTimer(window_, kSkipTimer);
+    skippingFrom_.reset();
     source_.Stop();
     scene_.Release();
     shownArtwork_.reset();
@@ -84,6 +86,12 @@ bool HomeController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
                 Refresh();
                 return true;
             }
+            if (wparam == kSkipTimer) {
+                KillTimer(window_, kSkipTimer);
+                skippingFrom_.reset();
+                Refresh();
+                return true;
+            }
             if (wparam == kReleaseTimer) {
                 Release();
                 return true;
@@ -96,6 +104,10 @@ bool HomeController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
 
 void HomeController::ReceiveMedia() {
     nowPlaying_ = source_.State();
+    if (skippingFrom_ && nowPlaying_.title != *skippingFrom_) {
+        skippingFrom_.reset();
+        KillTimer(window_, kSkipTimer);
+    }
     RequestLyricsIfNeeded();
     if (source_.CurrentArtwork() != shownArtwork_) {
         shownArtwork_ = source_.CurrentArtwork();
@@ -129,7 +141,7 @@ double HomeController::CurrentPosition() const {
 
 void HomeController::Refresh() {
     if (!isOpen_) return;
-    scene_.Paint(MakeHomeModel(nowPlaying_, lyrics_.get(), isLoadingLyrics_, CurrentPosition(), showsLyricsPanel_, settings_), hovered_, pressed_ != HomeControl::None);
+    scene_.Paint(MakeHomeModel(nowPlaying_, lyrics_.get(), isLoadingLyrics_, CurrentPosition(), settings_, skippingFrom_.has_value()), hovered_, pressed_ != HomeControl::None);
     ScheduleTick();
 }
 
@@ -161,7 +173,7 @@ void HomeController::PointerDown(float x, float y) {
     if (control == HomeControl::None) return;
     pressed_ = control;
     hovered_ = control;
-    if (control == HomeControl::Slider && nowPlaying_.HasTrack() && !showsLyricsPanel_) scrubFraction_ = layout_.SliderFraction(x);
+    if (control == HomeControl::Slider && nowPlaying_.HasTrack() && !skippingFrom_) scrubFraction_ = layout_.SliderFraction(x);
     Refresh();
 }
 
@@ -187,13 +199,18 @@ void HomeController::FinishScrub(double fraction) {
     source_.Seek(position);
 }
 
+// Answers the press at once: players can take a second or more to report the new track. Ends when
+// another title arrives, or after a few seconds in case the same track restarted.
+void HomeController::BeginSkip() {
+    skippingFrom_ = nowPlaying_.title;
+    // One-shot, not periodic: it fires once, unless the new track arrives first.
+    SetTimer(window_, kSkipTimer, 4000, nullptr);
+}
+
 void HomeController::Activate(HomeControl control) {
     switch (control) {
         case HomeControl::Artwork:
             source_.OpenApp();
-            break;
-        case HomeControl::Lyrics:
-            if (settings_.showLyrics) showsLyricsPanel_ = !showsLyricsPanel_;
             break;
         case HomeControl::PlayPause:
             if (!nowPlaying_.HasTrack()) break;
@@ -203,10 +220,14 @@ void HomeController::Activate(HomeControl control) {
             source_.TogglePlayPause();
             break;
         case HomeControl::Previous:
-            if (nowPlaying_.HasTrack()) source_.Previous();
+            if (!nowPlaying_.HasTrack()) break;
+            source_.Previous();
+            BeginSkip();
             break;
         case HomeControl::Next:
-            if (nowPlaying_.HasTrack()) source_.Next();
+            if (!nowPlaying_.HasTrack()) break;
+            source_.Next();
+            BeginSkip();
             break;
         case HomeControl::Shuffle:
             if (!nowPlaying_.HasTrack() || !settings_.showShuffleAndRepeat) break;
