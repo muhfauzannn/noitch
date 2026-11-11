@@ -12,6 +12,10 @@ struct HomeSettings: Equatable {
     var tintWithArtwork = true
     /// A soft wash of the artwork's color behind the page.
     var artworkGlow = true
+    /// While something plays, the closed island widens to show its artwork and level bars.
+    var showLive = true
+    /// A week and the chosen day's events beside the music, which narrows for it. macOS only.
+    var showCalendar = true
 
     static let lyricsOffsets = [-1.0, -0.5, -0.25, 0, 0.25, 0.5, 1.0]
 
@@ -23,6 +27,8 @@ struct HomeSettings: Equatable {
         store.read("showShuffleAndRepeat", into: &settings.showShuffleAndRepeat)
         store.read("tintWithArtwork", into: &settings.tintWithArtwork)
         store.read("artworkGlow", into: &settings.artworkGlow)
+        store.read("showLive", into: &settings.showLive)
+        store.read("showCalendar", into: &settings.showCalendar)
         settings.lyricsOffset = min(max(settings.lyricsOffset, -5), 5)
         return settings
     }
@@ -34,5 +40,7 @@ struct HomeSettings: Equatable {
         store.write("showShuffleAndRepeat", showShuffleAndRepeat)
         store.write("tintWithArtwork", tintWithArtwork)
         store.write("artworkGlow", artworkGlow)
+        store.write("showLive", showLive)
+        store.write("showCalendar", showCalendar)
     }
 }

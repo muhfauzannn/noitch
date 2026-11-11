@@ -27,9 +27,9 @@ final class PageController {
     /// True while a press that began on the page, not the header, is held.
     private var pageHasPointer = false
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, monitor: NowPlayingMonitor) {
         self.settings = settings.pages
-        home = HomeController(settings: settings.home)
+        home = HomeController(settings: settings.home, monitor: monitor)
         usage = UsageController(settings: settings.usage)
         home.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .home, visible: page == .home) }
         usage.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .usage, visible: page == .usage) }

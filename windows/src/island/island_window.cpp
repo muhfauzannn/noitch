@@ -52,8 +52,12 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
 
     const HRESULT hr = compositor_.Create(hwnd_);
     if (FAILED(hr)) return hr;
-    pages_.Initialize(hwnd_, &compositor_, NowSeconds);
+    monitor_.Initialize(hwnd_, NowSeconds);
+    pages_.Initialize(hwnd_, &compositor_, NowSeconds, &monitor_);
     pages_.Apply(settings_);
+    live_.onActiveChange = [](void* context, bool active) { static_cast<IslandWindow*>(context)->LiveChanged(active); };
+    live_.context = this;
+    live_.Initialize(hwnd_, &compositor_, &monitor_, NowSeconds, settings_.home);
     pages_.onOpenSettings = [](void* context) { static_cast<IslandWindow*>(context)->OpenSettings(); };
     pages_.onOpenSettingsContext = this;
     settingsWindow_.context = this;
@@ -61,6 +65,7 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
         auto* self = static_cast<IslandWindow*>(context);
         self->settings_ = settings;
         self->pages_.Apply(settings);
+        self->live_.Apply(settings.home);
     };
     ApplyLayout();
 
@@ -92,6 +97,8 @@ float IslandWindow::PointerY(LPARAM lparam) const {
 }
 
 LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (monitor_.HandleMessage(message, wparam, lparam)) return 0;
+    if (live_.HandleMessage(message, wparam, lparam)) return 0;
     if (pages_.HandleMessage(message, wparam, lparam)) return 0;
     switch (message) {
         case WM_LBUTTONDOWN:
@@ -160,6 +167,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             if (compositor_.Generation() != compositorGeneration_) {
                 compositorGeneration_ = compositor_.Generation();
                 pages_.DeviceLost();
+                live_.DeviceLost();
             }
             return 0;
         case WM_DESTROY:
@@ -180,6 +188,7 @@ void IslandWindow::ApplyLayout() {
     GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
 
     geometry_ = IslandGeometry(static_cast<float>(dpiX) / USER_DEFAULT_SCREEN_DPI);
+    geometry_.SetLive(live_.IsActive());
     const WindowSize size = geometry_.Window();
     const RECT& screen = info.rcMonitor;
     const int x = screen.left + (screen.right - screen.left - size.width) / 2;
@@ -191,6 +200,20 @@ void IslandWindow::ApplyLayout() {
     UpdateHitRegion();
     compositor_.SetFlareRadius(geometry_.FlareRadius());
     compositor_.ShowPill(pill);
+    live_.SetGeometry(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight(), size.width, geometry_.Scale());
+}
+
+// The closed pill widens into its wings when music starts and narrows when it ends. Like opening, the
+// hit region grows before widening and shrinks after narrowing (in FinishTransition), never per frame.
+void IslandWindow::LiveChanged(bool active) {
+    geometry_.SetLive(active);
+    if (state_ != IslandState::Collapsed) return;
+    const double now = NowSeconds();
+    motion_.Retarget(geometry_.PillFor(IslandState::Collapsed), now, kLiveSpring);
+    if (active) UpdateHitRegion();
+    compositor_.AnimatePill(motion_);
+    KillTimer(hwnd_, kSettleTimer);
+    SetTimer(hwnd_, kSettleTimer, static_cast<UINT>(motion_.Duration() * 1000) + 1, nullptr);
 }
 
 void IslandWindow::TransitionTo(IslandState next) {
@@ -202,11 +225,13 @@ void IslandWindow::TransitionTo(IslandState next) {
     motion_.Retarget(geometry_.PillFor(next), now, SpringFor(next));
     // Grow the hit region before expanding and shrink it after collapsing.
     if (next == IslandState::Expanded) {
+        live_.IslandWillOpen();
         UpdateHitRegion();
         pages_.IslandWillOpen(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(),
                               geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale());
         AnimateContent(true, now);
     } else {
+        live_.IslandWillClose();
         pages_.IslandWillClose();
         AnimateContent(false, now);
     }

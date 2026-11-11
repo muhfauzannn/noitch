@@ -81,7 +81,7 @@ SwiftUI over a small AppKit window. The numbers are in [tech-stack.md](tech-stac
 ## Where the events come from
 
 Starting points for likely features. Verify each against current OS documentation before relying on
-it. Only now playing, AI usage and launch at login are implemented so far.
+it. Now playing, AI usage, the calendar (macOS) and launch at login are implemented so far.
 
 | Feature | macOS | Windows |
 | --- | --- | --- |
@@ -90,9 +90,10 @@ it. Only now playing, AI usage and launch at login are implemented so far.
 | Network | `NWPathMonitor` | `INetworkListManager` events |
 | Timers (focus, reminders) | One-shot `DispatchSourceTimer`, tolerance set | One-shot waitable timer |
 | File shelf | `NSDraggingDestination`; keep URLs, not file data | `IDropTarget`; keep paths |
-| Now playing | [Implemented](architecture.md#now-playing-on-macos) | `GlobalSystemMediaTransportControlsSessionManager` |
+| Now playing | [Implemented](architecture.md#now-playing-on-macos), shared through `NowPlayingMonitor` | `GlobalSystemMediaTransportControlsSessionManager`, shared through `NowPlayingMonitor` |
 | AI usage | [Implemented](architecture.md#usage): reads local logs when shown | Same |
 | Launch at login | `SMAppService` | Run registry key or Startup task |
+| Calendar | [Implemented](architecture.md#calendar-in-home-macos): EventKit, `EKEventStoreChanged` | `AppointmentStore`, packaged apps only; not implemented |
 | Full-screen detection | `NSWorkspace` and Space notifications | `SHQueryUserNotificationState` on foreground change |
 
 ### Windows WinRT

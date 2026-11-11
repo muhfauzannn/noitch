@@ -21,7 +21,7 @@ public:
     static constexpr UINT_PTR kSettleTimer = 6;
     static constexpr UINT_PTR kReleaseTimer = 7;
 
-    void Initialize(HWND window, Compositor* compositor, double (*now)());
+    void Initialize(HWND window, Compositor* compositor, double (*now)(), NowPlayingMonitor* monitor);
     void Apply(const AppSettings& settings);
 
     // `left` is the expanded pill's left edge; sizes are logical.

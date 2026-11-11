@@ -2,6 +2,8 @@
 
 // Pure layout. No Windows headers, so it is unit-testable on any host.
 
+#include "features/live/live_layout.h"
+
 namespace noitch {
 
 enum class IslandState { Collapsed, Expanded };
@@ -33,6 +35,11 @@ public:
 
     float Scale() const { return scale_; }
 
+    // Music is playing and the closed pill has wings for it, see LiveLayout.
+    void SetLive(bool live) { live_ = live; }
+    bool IsLive() const { return live_; }
+    static constexpr float CollapsedWidth() { return kCollapsedWidth; }
+
     // Logical sizes for laying out what sits on the expanded pill.
     static constexpr float ExpandedWidth() { return kExpandedWidth; }
     static constexpr float ExpandedHeight() { return kExpandedHeight; }
@@ -40,7 +47,8 @@ public:
 
     Pill PillFor(IslandState state) const {
         const bool expanded = state == IslandState::Expanded;
-        const float halfWidth = (expanded ? kExpandedWidth : kCollapsedWidth) * scale_ / 2;
+        const float collapsed = live_ ? LiveLayout(kCollapsedWidth, kCollapsedHeight).Width() : kCollapsedWidth;
+        const float halfWidth = (expanded ? kExpandedWidth : collapsed) * scale_ / 2;
         const float center = Window().width / 2.0f;
         return {
             center - halfWidth,
@@ -64,6 +72,7 @@ private:
     int Px(float logical) const { return static_cast<int>(logical * scale_ + 0.5f); }
 
     float scale_;
+    bool live_ = false;
 };
 
 }  // namespace noitch

@@ -20,12 +20,26 @@ struct HomeModel: Equatable {
     /// After next or previous, until the player reports the new track: the old one stays, dimmed,
     /// so the press is answered at once even when the player is slow to say what comes next.
     var isSkipping = false
+    /// The lyrics button shows only while lyrics are on.
+    var showsLyricsButton = true
+    /// The whole page is the lyrics stage.
+    var isOnStage = false
+    /// The stage's lines: the one before, the one being sung, and the two after. An empty line shows
+    /// as a note, so every slot reads as part of the song.
+    var stageLines = ["", "", "", ""]
+    var stageIsStatus = false
 
     init() {}
 
-    init(nowPlaying: NowPlaying, lyrics: Lyrics?, isLoadingLyrics: Bool, position: TimeInterval, settings: HomeSettings, isSkipping: Bool = false) {
+    init(nowPlaying: NowPlaying, lyrics: Lyrics?, isLoadingLyrics: Bool, position: TimeInterval, settings: HomeSettings, isSkipping: Bool = false, onStage: Bool = false) {
         showsShuffleAndRepeat = settings.showShuffleAndRepeat
-        guard nowPlaying.hasTrack else { return }
+        showsLyricsButton = settings.showLyrics
+        isOnStage = onStage && settings.showLyrics
+        guard nowPlaying.hasTrack else {
+            stageLines[1] = title
+            stageIsStatus = true
+            return
+        }
         hasTrack = true
         title = nowPlaying.title
         artist = nowPlaying.artist
@@ -36,6 +50,8 @@ struct HomeModel: Equatable {
         guard !isSkipping else {
             elapsedText = "0:00"
             remainingText = ""
+            stageLines[1] = "♪"
+            stageIsStatus = true
             return
         }
         elapsedText = Self.formatTime(position)
@@ -49,9 +65,16 @@ struct HomeModel: Equatable {
             lyric = current.isEmpty ? "♪" : current
             let next = (index ?? -1) + 1
             nextLyric = settings.showNextLyric && lyrics.synced.indices.contains(next) ? lyrics.synced[next].text : ""
+            stageLines = (-1...2).map { step in
+                let line = (index ?? -1) + step
+                guard lyrics.synced.indices.contains(line) else { return step == 0 ? "♪" : "" }
+                return lyrics.synced[line].text.isEmpty ? "♪" : lyrics.synced[line].text
+            }
         } else {
             lyric = Self.lyricStatus(lyrics, isLoading: isLoadingLyrics)
             lyricIsStatus = true
+            stageLines[1] = lyric
+            stageIsStatus = true
         }
     }
 
@@ -71,11 +94,12 @@ struct HomeModel: Equatable {
     }
 
     /// How long until anything on screen changes: the next whole second or the next lyric. One
-    /// one-shot timer covers both, and it only exists while the island is open and playing.
-    static func nextTick(position: TimeInterval, rate: Double, nextLyric: TimeInterval?) -> TimeInterval {
+    /// one-shot timer covers both, and it only exists while the island is open and playing. The stage
+    /// shows no clock, so there only lyrics count, and nil means nothing will change.
+    static func nextTick(position: TimeInterval, rate: Double, nextLyric: TimeInterval?, wholeSeconds: Bool = true) -> TimeInterval? {
         let speed = max(rate, 0.1)
-        var delay = (position.rounded(.down) + 1 - position) / speed
-        if let nextLyric, nextLyric > position { delay = min(delay, (nextLyric - position) / speed) }
-        return max(delay, 0.05)
+        var delay: TimeInterval? = wholeSeconds ? (position.rounded(.down) + 1 - position) / speed : nil
+        if let nextLyric, nextLyric > position { delay = min(delay ?? .infinity, (nextLyric - position) / speed) }
+        return delay.map { max($0, 0.05) }
     }
 }

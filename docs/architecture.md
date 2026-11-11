@@ -143,16 +143,20 @@ of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
 
 ## Home
 
-Home is the first page: large artwork on the left, and beside it the title and artist, the lyric line
-being sung (bright) with the next one below it (dim and smaller), a progress slider and transport
-buttons. Behind it, a soft wash of the artwork's average colour fades out from the left; "Tint progress
-bar with artwork" turns both the wash and the bar's colour on or off.
+Home is the first page: large artwork on the left, and beside it the title and artist with the lyrics
+button at the end of their row, the lyric line being sung (bright) with the next one below it (dim and
+smaller), a progress slider and transport buttons. Behind it, a glow of the artwork's average colour spreads from the artwork in an ellipse that has
+faded out by the top edge, so the bends where the pill meets the black flares show no seam (numbers
+in `HomeLayout.glowRadii` and `home_layout.h`). "Glow behind the page" and "Tint the progress bar"
+turn the glow and the bar's colour on or off.
 
 - **Lyrics.** When the song moves on one line, the bright line rises and fades, the dim line grows
   into its place and the following line rises in below: three text layers take turns, and only
   position, scale and opacity move, so no text is redrawn during the motion. Any other change,
   such as a seek or a new track, crossfades. Before the first line and on empty lines, "♪" holds the
   place. On Windows the surface is redrawn in place, without the slide.
+- **Lyrics stage.** The lyrics button turns the whole page into lyrics, and back. See
+  [Lyrics stage](#lyrics-stage).
 - **A new track** rises a few points into place as its title and artist crossfade.
 - **Next and previous** answer at once. Until the player reports a different title, the old title,
   artist and artwork stay at 40% and the clock reads 0:00; after 4 s without a new title it ends
@@ -181,8 +185,9 @@ Opening reveals the current page after a 0.06 s head start for the pill: it fade
 8 pt out of the notch over 0.42 s, on an ease-out curve. Closing fades it out in 0.14 s. Reopening
 mid-fade continues from what is on screen.
 
-- macOS reveals the header first, then the page's groups 0.045 s apart (Home: artwork and lyrics
-  button, text, slider, transport; Usage: one per column), and scales the whole of it from 0.94
+- macOS reveals the header first, then the page's groups 0.045 s apart (Home: artwork, lyrics
+  button, text, slider, transport, calendar; on the lyrics stage, the lyrics then the button; Usage:
+  one per column), and scales the whole of it from 0.94
   with the opening spring. Reduce Motion drops the slide.
 - Windows draws each layer into one surface, so the content fades and slides as a whole: no
   stagger and no scale. The
@@ -192,6 +197,33 @@ mid-fade continues from what is on screen.
 Home has no data while the island is closed, so there is no now playing indicator on the collapsed
 pill. Adding one would mean keeping the source running at rest, which needs measuring first.
 
+### Lyrics stage
+
+A 22 pt button with a speech bubble sits at the end of the title row. Clicking it gives the whole of
+Home to the lyrics; clicking it again brings Home back. Numbers are in `HomeLayout` (macOS) and
+`home_layout.h` (Windows).
+
+- **Lines.** Four lines, centred across the page with 30 pt clear at each side: the one before (30%),
+  the one being sung (20 pt bold, a little above the middle), and the two after (55% and 26%). Lines
+  other than the sung one are drawn at 70% of its size. Empty lines and the intro show "♪". Without
+  synced lyrics the middle shows the same status as Home, smaller and dimmer.
+- **Motion (macOS).** When the song moves on one line, every line rises one slot: the sung line grows
+  into the middle, the one before drifts up and away, and the next rises in from below. Five text
+  layers take turns, and only position, scale and opacity move. A seek or new track crossfades.
+  Windows redraws the surface in place, without the slide.
+- **Switching (macOS).** Home's own layers fade out and shrink to 96% as the lyrics fade in and rise
+  12 pt; the glow moves from the artwork to beneath the sung line; the button glides to the page's
+  top-right corner (the same place unless the calendar is showing) and turns into a white disc
+  with a black bubble. Every part starts from what is on screen, so a quick second click reverses.
+  Windows redraws in one step.
+- **Jumping.** Clicking a line seeks to its start, shifted by the timing setting. Hovering one
+  brightens it to 85%. On the stage the only other control is the button.
+- **Rest.** The stage shows no clock, so its one-shot timer fires only at the next line, not every
+  second. With no line left, nothing is scheduled.
+- **Memory.** The choice lasts until the app quits, through closing and the release after it, so the
+  island reopens on the stage if it was left there. It isn't saved. Turning "Show lyrics" off hides the
+  button and leaves the stage.
+
 ### Now playing on macOS
 
 macOS has no public API for this, and since 15.4 MediaRemote only answers platform binaries. Noitch
@@ -199,7 +231,13 @@ uses [MediaRemoteAdapter](https://github.com/ungive/mediaremote-adapter), the sa
 framework loaded by `/usr/bin/perl`. This is a deliberate, approved exception to the single-process,
 no-private-API and no-dependency rules, limited as follows.
 
-- `stream` runs only while the island is open, plus the grace period. At rest there is no child.
+- `stream` runs while the island is open, plus the grace period, and, when "Show what's playing" is
+  on, while a media player is running (approved on 2026-11-11). Players are a fixed list of music
+  apps and browsers in `MediaPlayers`; launches and quits arrive as `NSWorkspace` notifications, so
+  nothing polls. With no player running, or the setting off, there is no child at rest. A browser
+  open all day keeps the child running all day: about 26 MB of its own, outside our budgets.
+- `NowPlayingMonitor` owns the one stream; Home and the closed island both read it, so there is
+  never a second child.
 - Commands are short-lived `perl` children too, about 90 ms each.
 - Seeking is the exception. The adapter's `seek` reports failure on macOS 26.6, so `seek` calls
   `MRMediaRemoteSetElapsedTime` directly, as Boring Notch does. MediaRemote enters our process only
@@ -208,6 +246,53 @@ no-private-API and no-dependency rules, limited as follows.
 - If the child exits it isn't restarted until the next opening, so a broken adapter can't spin.
 
 A macOS update could break the adapter. Home then shows "Nothing playing"; nothing else is affected.
+
+### Calendar in Home (macOS)
+
+With "Show calendar" on, Home gains a 150 pt panel on the right, past a thin divider, and the music
+column narrows to make room (numbers in `HomeLayout`). The island stays 580 pt wide: a 720 pt island
+was tried and found too long.
+
+- **Week strip.** Seven days of the week that holds today, starting on the locale's first weekday:
+  a letter over each date, a dot under days with events, today's date in red. A plate marks the
+  chosen day and springs to a clicked one; hovering a day shows a faint plate.
+- **Day.** "Today", "Tomorrow", "Yesterday" or "Fri 13", with "+2 more" on the same line when the day
+  has more than three events. Then up to three rows: a bar in the calendar's colour, the time ("All
+  day", "Now", "14:00"), the title. Today drops what has ended and makes the current event bold.
+- **Access.** EventKit, read only while Home shows and released with Home's layers. Noitch never
+  prompts on its own: the panel shows "Show your calendar", and the system prompt appears when that is
+  clicked. After a refusal the same place opens System Settings. The app is hardened, so it carries
+  the `com.apple.security.personal-information.calendars` entitlement and a usage description.
+- **Opening.** The store, the read and the first text wait 0.2 s after Home opens, when the panel
+  reveals anyway, so opening costs no more than before. A first hover run without this was slow
+  enough to fail the hover check.
+- **Events.** `EKEventStoreChanged` notifications reload the week; one one-shot timer fires at the
+  next start, end or midnight so rows change on time. Nothing polls. Each opening starts on today.
+- **Windows.** Not supported: Windows' calendar API (`AppointmentStore`) is only available to packaged
+  (MSIX) apps, and the Windows app isn't packaged.
+
+### Closed island while music plays
+
+While something plays, the closed pill widens into a wing on each side of the notch, with the same
+kind of spring as opening (response 0.42 s, bounce 0.16): the artwork on the left, six thin level bars
+on the right, tinted with the artwork's colour when "Tint the progress bar" is on. Numbers are in
+`LiveLayout` (macOS) and `live_layout.h` (Windows). Hovering the wings opens the island as the notch
+does.
+
+- **Bars.** Six thin bars (1.5 pt, 1.5 pt apart), each rising and falling from its middle on its
+  own looping compositor animation (0.40 to 0.61 s), so they never line up. The outer bars take the
+  artwork's colour and the middle ones are mixed toward white, so the group reads as one glow. They
+  are a rhythm, not the audio: reading real levels would need an audio-capture permission and work
+  on every frame. Paused, they rest low and nothing animates. Our own design: four plain white bars
+  were too close to Boring Notch, and a drifting wave was tried and dropped.
+- **Pause.** The wings stay 10 s after a pause, so a quick pause doesn't flicker the pill, then
+  narrow away. One one-shot timer.
+- **Track change.** The artwork crossfades; the pill doesn't move.
+- **Resizing.** As with opening, the window (macOS) or hit region (Windows) grows before widening
+  and shrinks after narrowing, never per frame.
+- **Lifetime.** The layers are made when the wings first show and released 2 s after they go.
+- **Windows.** The media session subscription now runs from launch while the setting is on, so WinRT
+  loads at start instead of on first opening. It needs no other process.
 
 ### Usage
 
@@ -311,6 +396,8 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | Home | Show shuffle and repeat | On | The two outer transport buttons |
 | Home | Tint the progress bar | On | Average artwork color, lifted so dark covers stay visible |
 | Home | Glow behind the page | On | The wash of that color behind the page |
+| Home | Show calendar | On | macOS only: this week and the chosen day's events beside the music, which narrows for it. See [Calendar in Home](#calendar-in-home-macos) |
+| Home | Show what's playing | On | The closed island's wings with artwork and level bars. On macOS this keeps the now playing helper running while a player app is open |
 | AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
 | AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
 | AI Usage | Check Claude every | Minute | Or 5 or 15 minutes. Never more often than the approved once a minute; logs are still read every minute |
@@ -338,11 +425,13 @@ The spec both apps follow. Change it here and in both apps together.
 | Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
+| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
+| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek. See [Lyrics stage](#lyrics-stage) |
 | Release after closing | 10 s |
 
 The Windows spring is computed from the same parameters. For the collapse spring its stiffness

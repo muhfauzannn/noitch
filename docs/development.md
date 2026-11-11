@@ -24,6 +24,14 @@ To check Home's layout without the adapter or the network, run a Debug build wit
 macos/build/Build/Products/Debug/Noitch.app/Contents/MacOS/Noitch --demo-media
 ```
 
+`measure.sh --hover` expects the island to open at once, so set Hover delay to None in settings
+first (`defaults write app.noitch.mac hoverDelay -float 0`), and restore it after.
+
+Debug builds also take `--open`, which opens the island at launch so it can be captured with
+`screencapture -l <window id>` without moving the cursor, and `--settings`, which opens the settings
+window. The demo track has a coloured cover, so the artwork tint shows, and the calendar shows sample events
+without asking for access.
+
 Quit other notch apps such as Boring Notch while testing. They compete for the same screen area and
 the same mouse events.
 
@@ -90,7 +98,10 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 60 unit tests | Passing |
+| Builds; 64 unit tests | Passing |
+| Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
+| Calendar in Home: week strip, rows, narrower music column | Checked by a window screenshot with `--demo-media --open` (sample events, no EventKit); the access prompt, real calendars, change notifications and the timers **not checked on screen** |
+| Closed island with music (wings, six moving bars) | Checked by window screenshots with `--demo-media`; real playback, artwork, pause timing and the player-app watching **not checked on screen** |
 | Settings window with sidebar | General page checked by a window screenshot (`--settings`, Debug only); other pages and every control's effect **not checked on screen** |
 | Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |
 | Usage page ring design | Checked by an offscreen render with sample numbers |
@@ -124,6 +135,8 @@ Keep this honest and up to date.
 | Pages, header, usage page with rings, shared painter, Claude limit request, `WM_MOUSEHWHEEL` swipe | **Never compiled**: no Windows toolchain was available |
 | Settings values, panes, page and usage settings tests | Passing on macOS with clang |
 | Settings window with sidebar, registry store, hover delay, page settings in the pager | **Never compiled** |
+| Live layout, bar curves and pixels | Passing on macOS with clang |
+| Closed island with music: shared media monitor, `LiveScene`, `AddRepeat` bar animations | **Never compiled** |
 | Compiles | With Zig and mingw, using a stub for the WinRT header. It no longer links there |
 | `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |

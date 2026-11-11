@@ -14,8 +14,11 @@ final class HomeController {
     private var layout: HomeLayout?
     private var scale: CGFloat = 2
     private var scene: HomeScene?
-    private lazy var source = NowPlayingSource { [unowned self] in receive($0) }
+    private let monitor: NowPlayingMonitor
+    private var source: NowPlayingSource { monitor.source }
     private lazy var lyricsSource = LyricsSource()
+    /// Made the first time Home is wide enough for it.
+    private var calendar: CalendarController?
 
     private var nowPlaying = NowPlaying()
     private var lyrics: Lyrics?
@@ -32,33 +35,43 @@ final class HomeController {
 
     private var hovered: HomeControl?
     private var pressed: HomeControl?
+    /// A press that began on the calendar, answered when it is released.
+    private var pendingCalendarClick = false
     /// While set, the slider shows this instead of the playback clock.
     private var scrubFraction: Double?
+    /// The lyrics stage was chosen. Kept through closing, so the island reopens the way it was left.
+    private var prefersStage = false
+    /// A stage line pressed, answered with a jump to it when released over the same line.
+    private var pressedStageSlot: Int?
+    private var isOnStage: Bool { prefersStage && settings.showLyrics }
 
-    #if DEBUG
-    /// `--demo-media` shows sample data with no adapter and no network, for checking the layout.
-    private let isDemo = ProcessInfo.processInfo.arguments.contains("--demo-media")
-    #else
-    private let isDemo = false
-    #endif
+    private var isDemo: Bool { monitor.isDemo }
 
-    init(settings: HomeSettings) {
+    init(settings: HomeSettings, monitor: NowPlayingMonitor) {
         self.settings = settings
+        self.monitor = monitor
+        monitor.onHomeUpdate = { [unowned self] update in if isHolding { receive(update) } }
     }
+
+    /// True from opening until the grace period ends: Home keeps the stream running meanwhile.
+    private var isHolding = false
 
     /// True during a slider drag, which may leave the island without closing it.
     var isInteracting: Bool { pressed == .slider }
 
     func stop() {
-        source.stop()
+        monitor.stop()
     }
 
     // MARK: Island lifecycle
 
-    func islandWillOpen(layout: HomeLayout, scale: CGFloat) {
+    func islandWillOpen(layout given: HomeLayout, scale: CGFloat) {
         releaseTimer?.invalidate()
         releaseTimer = nil
         isOpen = true
+        // A changed calendar setting gives a new layout, and so new layers, at the next opening.
+        var layout = given
+        layout.showsCalendar = settings.showCalendar
         if scene == nil || layout != self.layout || scale != self.scale {
             scene?.root.removeFromSuperlayer()
             let scene = HomeScene(layout: layout, scale: scale)
@@ -67,9 +80,20 @@ final class HomeController {
             self.scale = scale
             onSceneCreated?(scene.root)
             updateArtwork(force: true)
+            if layout.showsCalendar {
+                let panel = CalendarScene(layout: layout, scale: scale)
+                scene.addGroup(panel.root)
+                if calendar == nil { calendar = CalendarController() }
+                calendar?.attach(panel, layout: layout)
+            } else {
+                calendar?.release()
+            }
         }
-        if isDemo { loadDemo() } else { source.start() }
-        refresh()
+        if layout.showsCalendar { calendar?.pageWillShow() }
+        isHolding = true
+        monitor.setNeeded(true, by: .home)
+        if isDemo { loadDemo() }
+        receive(monitor.nowPlaying)
     }
 
     /// The scene's layers, if they are still alive, so a new pager can take them back.
@@ -79,12 +103,15 @@ final class HomeController {
 
     func islandWillClose() {
         isOpen = false
+        calendar?.pageWillHide()
         tickTimer?.invalidate()
         tickTimer = nil
         hovered = nil
         pressed = nil
+        pressedStageSlot = nil
         scrubFraction = nil
         scene?.setHover(nil, isPressed: false)
+        scene?.setStageHover(nil)
         let timer = Timer(timeInterval: Self.releaseDelay, repeats: false) { [unowned self] _ in
             MainActor.assumeIsolated { release() }
         }
@@ -99,7 +126,9 @@ final class HomeController {
         skipTimer?.invalidate()
         skipTimer = nil
         skippingFrom = nil
-        source.stop()
+        isHolding = false
+        monitor.setNeeded(false, by: .home)
+        calendar?.release()
         lyricsSource.cancel()
         scene?.root.removeFromSuperlayer()
         scene = nil
@@ -157,39 +186,9 @@ final class HomeController {
         guard let scene, force || nowPlaying.artwork != shownArtwork else { return }
         shownArtwork = nowPlaying.artwork
         let size = (layout?.artwork.width ?? 0) * scale
-        let image = nowPlaying.artwork.flatMap { Self.decode($0, maxPixelSize: size) }
-        let tint = settings.tintWithArtwork || settings.artworkGlow ? image.flatMap(Self.averageColor) : nil
+        let image = nowPlaying.artwork.flatMap { ArtworkImage.decode($0, maxPixelSize: size) }
+        let tint = settings.tintWithArtwork || settings.artworkGlow ? image.flatMap(ArtworkImage.averageColor) : nil
         scene.setArtwork(image, barTint: settings.tintWithArtwork ? tint : nil, glow: settings.artworkGlow ? tint : nil)
-    }
-
-    /// Decodes straight to display size, so a large cover never exists in memory at full size.
-    private static func decode(_ data: Data, maxPixelSize: CGFloat) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-    }
-
-    /// Scaled to one pixel, then lifted so a dark cover still gives a visible bar.
-    private static func averageColor(of image: CGImage) -> NSColor? {
-        var pixel = [UInt8](repeating: 0, count: 4)
-        let drawn = pixel.withUnsafeMutableBytes { bytes -> Bool in
-            guard let context = CGContext(
-                data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else { return false }
-            context.interpolationQuality = .medium
-            context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-            return true
-        }
-        guard drawn else { return nil }
-        let color = NSColor(red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255, blue: CGFloat(pixel[2]) / 255, alpha: 1)
-        var (hue, saturation, brightness, alpha): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
-        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        return NSColor(hue: hue, saturation: saturation, brightness: max(brightness, 0.75), alpha: 1)
     }
 
     // MARK: Showing it
@@ -218,7 +217,8 @@ final class HomeController {
             isLoadingLyrics: isLoadingLyrics,
             position: currentPosition(),
             settings: settings,
-            isSkipping: skippingFrom != nil
+            isSkipping: skippingFrom != nil,
+            onStage: isOnStage
         ))
     }
 
@@ -231,7 +231,8 @@ final class HomeController {
         // Lyrics run on their own clock, shifted by the timing setting.
         let offset = settings.lyricsOffset
         let nextLyric = lyrics?.nextChange(after: position + offset).map { $0 - offset }
-        let delay = HomeModel.nextTick(position: position, rate: nowPlaying.rate, nextLyric: nextLyric)
+        // The stage shows no clock, so only the next line wakes it.
+        guard let delay = HomeModel.nextTick(position: position, rate: nowPlaying.rate, nextLyric: nextLyric, wholeSeconds: !isOnStage) else { return }
         let timer = Timer(timeInterval: delay, repeats: false) { [unowned self] _ in
             MainActor.assumeIsolated {
                 render()
@@ -247,14 +248,27 @@ final class HomeController {
 
     func pointerMoved(to point: CGPoint) {
         guard let layout, pressed == nil else { return }
-        let control = layout.control(at: point)
+        if isOnStage {
+            scene?.setStageHover(stageLineIndex(at: point) != nil ? layout.stageSlot(at: point) : nil)
+        } else {
+            calendar?.pointerMoved(to: point)
+        }
+        let control = layout.control(at: point, onStage: isOnStage)
         guard control != hovered else { return }
         hovered = control
         scene?.setHover(control, isPressed: false)
     }
 
     func pointerDown(at point: CGPoint) {
-        guard let layout, let control = layout.control(at: point) else { return }
+        guard let layout else { return }
+        guard let control = layout.control(at: point, onStage: isOnStage) else {
+            if isOnStage {
+                pressedStageSlot = stageLineIndex(at: point) != nil ? layout.stageSlot(at: point) : nil
+            } else {
+                pendingCalendarClick = layout.showsCalendar && layout.calendarPanel.contains(point)
+            }
+            return
+        }
         pressed = control
         scene?.setHover(control, isPressed: true)
         if control == .slider, nowPlaying.hasTrack, skippingFrom == nil {
@@ -270,15 +284,46 @@ final class HomeController {
     }
 
     func pointerUp(at point: CGPoint) {
+        if pendingCalendarClick {
+            pendingCalendarClick = false
+            _ = calendar?.click(at: point)
+            return
+        }
+        if let slot = pressedStageSlot {
+            pressedStageSlot = nil
+            if layout?.stageSlot(at: point) == slot, let line = stageLineIndex(at: point) { jump(toLine: line) }
+            return
+        }
         guard let layout, let control = pressed else { return }
         pressed = nil
         if control == .slider, let scrubFraction {
             finishScrub(at: scrubFraction)
-        } else if layout.control(at: point) == control {
+        } else if layout.control(at: point, onStage: isOnStage) == control {
             activate(control)
         }
-        hovered = layout.control(at: point)
+        hovered = layout.control(at: point, onStage: isOnStage)
         scene?.setHover(hovered, isPressed: false)
+    }
+
+    /// The synced line shown in the stage slot under `point`, if there is one to jump to.
+    private func stageLineIndex(at point: CGPoint) -> Int? {
+        guard let slot = layout?.stageSlot(at: point), let lyrics, !lyrics.synced.isEmpty,
+              nowPlaying.hasTrack, skippingFrom == nil else { return nil }
+        let current = lyrics.lineIndex(at: currentPosition() + settings.lyricsOffset)
+        // Before the first line the middle slot holds a note, not a line.
+        if current == nil && slot <= 0 { return nil }
+        let line = (current ?? -1) + slot
+        return lyrics.synced.indices.contains(line) ? line : nil
+    }
+
+    /// Seeks to just inside the line, so the timing setting can't leave it a hair before.
+    private func jump(toLine line: Int) {
+        guard let lyrics else { return }
+        let position = max(lyrics.synced[line].start - settings.lyricsOffset + 0.02, 0)
+        nowPlaying.elapsed = position
+        nowPlaying.timestamp = Date()
+        if !isDemo { source.seek(to: position) }
+        refresh()
     }
 
     private func finishScrub(at fraction: Double) {
@@ -322,6 +367,11 @@ final class HomeController {
             nowPlaying.repeatMode = nowPlaying.repeatMode.next
             if !isDemo { source.setRepeat(nowPlaying.repeatMode) }
             refresh()
+        case .lyrics:
+            guard settings.showLyrics else { return }
+            prefersStage.toggle()
+            scene?.setStageHover(nil)
+            refresh()
         }
     }
 
@@ -353,17 +403,9 @@ final class HomeController {
     }
 
     #if DEBUG
+    /// The track itself comes from the monitor's demo.
     private func loadDemo() {
-        guard !nowPlaying.hasTrack else { return }
-        var demo = NowPlaying()
-        demo.title = "Sample Track With a Long Enough Title to Need Truncating in the Column"
-        demo.artist = "Sample Artist"
-        demo.album = "Sample Album"
-        demo.duration = 215
-        demo.elapsed = 62
-        demo.timestamp = Date()
-        demo.isPlaying = true
-        nowPlaying = demo
+        guard lyrics == nil else { return }
         lyrics = Lyrics(synced: (0..<60).map { LyricLine(start: Double($0) * 4, text: "Sample lyric line number \($0)") })
     }
     #else

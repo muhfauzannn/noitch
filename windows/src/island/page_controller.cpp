@@ -18,11 +18,11 @@ constexpr UINT kReleaseDelayMs = 11000;
 
 }  // namespace
 
-void PageController::Initialize(HWND window, Compositor* compositor, double (*now)()) {
+void PageController::Initialize(HWND window, Compositor* compositor, double (*now)(), NowPlayingMonitor* monitor) {
     window_ = window;
     compositor_ = compositor;
     now_ = now;
-    home_.Initialize(window, compositor, now);
+    home_.Initialize(window, compositor, now, monitor);
     usage_.Initialize(window, compositor);
 }
 

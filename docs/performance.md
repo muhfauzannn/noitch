@@ -15,6 +15,37 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the lyrics stage (2026-11-11, same M5): 9.80, 10.08 and 10.05 MB, 1.42, 6.08 and 0.86 ms/min,
+0.10 to 0.13 wakeups/s, 4.71 to 5.61 ms per transition, all 23 hover checks passing on the run with
+Hover delay at None; the binary is 1130 KB, against 1090 KB last recorded with the calendar. One idle
+run read 15.11 MB because the cursor had been left on the notch, so the island was open while it
+measured; with the cursor moved away first it read 10.05 MB. Keep the cursor off the notch before
+measuring. Switching to the stage was not timed.
+
+With the calendar in Home at 580 pt (2026-11-11, same M5): 9.59 MB, 0.89 and 1.04 ms/min, 0.10
+wakeups/s, 5.03 and 5.22 ms per transition. The first hover run failed "stays expanded while the
+pointer remains over the notch" and the check after it; the repeat passed all 23. Treat it as flaky
+until it recurs.
+
+With the calendar in Home and a 720 pt island, since narrowed back to 580 (2026-11-11, same M5): 9.77 MB, 2.88 ms/min, 0.10
+wakeups/s, 5.10 ms per transition, all 23 hover checks passing; the binary grew from 981 KB to 1090
+KB. A first run failed the first two checks because the opening also built and read the calendar;
+the calendar's first read now waits 0.2 s, and the checks passed. Runs with the owner's hover delay
+of 0.3 s fail most opening checks by design; the hover check needs Hover delay set to None.
+
+With six thin graded bars replacing the wave (2026-11-11, same M5): 9.74 MB, 1.74 ms/min, 0.17
+wakeups/s; the binary is 981 KB.
+
+With the wave replacing the bars (2026-11-11, same M5): 10.13 MB, 1.70 ms/min, 0.17 wakeups/s; the
+binary is 983 KB. The run before, with the Home glow change, read 9.59 MB, 1.26 ms/min and 0.10
+wakeups/s. Whether music played during this run, and so whether the wings were up, is not known.
+
+With the closed island's music wings (2026-11-11, same M5): 9.77 and 9.72 MB, 2.72 and 3.45 ms/min,
+0.13 wakeups/s, 4.18 ms per transition, all 23 hover checks passing. Nothing was playing, so the
+hover run never widened the pill, and the moving bars are not in these figures; they run in the
+render server. A browser was open, so the now playing helper may have been running beside the app;
+its memory is not counted. The binary grew from 920 KB to 981 KB.
+
 With the settings window split into per-feature pages (2026-11-11, same M5): 9.47 and 9.39 MB, 1.43
 and 2.10 ms/min, 0.13 wakeups/s, 4.12 ms per transition, all 23 hover checks passing. Just before,
 the same machine read 9.36 MB, 1.68 ms/min and 0.13 wakeups/s. The binary grew from 776 KB to 920

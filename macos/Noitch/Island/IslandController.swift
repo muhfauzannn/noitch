@@ -8,17 +8,23 @@ final class IslandController: NSObject {
     private var state = IslandState.collapsed
     private var latestTransition = 0
     private var settings = AppSettings.load()
+    private let monitor = NowPlayingMonitor()
     private let pages: PageController
+    private let live: LiveController
     private var settingsWindow: SettingsWindowController?
     /// A one-shot wait while the pointer rests in the notch, when a hover delay is set.
     private var hoverTimer: Timer?
 
     override init() {
         geometry = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
-        pages = PageController(settings: settings)
+        pages = PageController(settings: settings, monitor: monitor)
+        live = LiveController(monitor: monitor, settings: settings.home)
         super.init()
         panel.contentView = view
-        pages.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: IslandGeometry.expandedSize) }
+        live.onSceneCreated = { [unowned self] layer in view.setLive(layer) }
+        live.onActiveChange = { [unowned self] active in liveChanged(active) }
+        live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
+        pages.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: geometry.expandedSize) }
         pages.onOpenSettings = { [unowned self] in openSettings() }
         view.onHorizontalScroll = { [unowned self] delta, time in if state == .expanded { pages.scrolled(by: delta, at: time) } }
         view.onPointerMoved = { [unowned self] point in if state == .expanded { pages.pointerMoved(to: point) } }
@@ -64,6 +70,8 @@ final class IslandController: NSObject {
         #if DEBUG
         // `--settings` opens the settings window at launch, for checking its layout.
         if ProcessInfo.processInfo.arguments.contains("--settings") { openSettings() }
+        // `--open` opens the island at launch, for screenshots without moving the cursor.
+        if ProcessInfo.processInfo.arguments.contains("--open") { transition(to: .expanded) }
         #endif
     }
 
@@ -103,12 +111,13 @@ final class IslandController: NSObject {
         // Grow before expanding and shrink after collapsing: the window changes size twice per
         // round trip instead of on every frame.
         cancelHoverTimer()
+        if newState == .expanded { live.islandWillOpen() } else { live.islandWillClose() }
         if newState == .expanded {
             if settings.general.haptics {
                 NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
             }
             resizePanel(for: .expanded)
-            pages.islandWillOpen(size: IslandGeometry.expandedSize, headerHeight: geometry.collapsedSize.height, scale: panel.backingScaleFactor)
+            pages.islandWillOpen(size: geometry.expandedSize, headerHeight: geometry.collapsedSize.height, scale: panel.backingScaleFactor)
         } else {
             pages.islandWillClose()
         }
@@ -126,6 +135,23 @@ final class IslandController: NSObject {
         }
     }
 
+    /// The closed pill widens into its wings when music starts, and narrows when it ends. Like
+    /// opening, the window grows before widening and shrinks after narrowing, never per frame.
+    private func liveChanged(_ active: Bool) {
+        geometry.isLive = active
+        guard state == .collapsed else { return }
+        latestTransition += 1
+        let transition = latestTransition
+        if active { resizePanel(for: .collapsed) }
+        view.animatePill(
+            to: geometry.pillSize(for: .collapsed),
+            cornerRadius: geometry.cornerRadius(for: .collapsed),
+            spring: IslandGeometry.liveSpring
+        ) { [unowned self] in
+            if transition == latestTransition, state == .collapsed { resizePanel(for: .collapsed) }
+        }
+    }
+
     private func resizePanel(for state: IslandState) {
         panel.setFrame(geometry.panelFrame(for: state), display: false)
         view.pinPill()
@@ -138,9 +164,10 @@ final class IslandController: NSObject {
     }
 
     @objc private func screenParametersChanged() {
-        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
+        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive)
         guard updated != geometry else { return }
         geometry = updated
+        live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
         applyLayout()
         if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }
     }
@@ -160,6 +187,7 @@ final class IslandController: NSObject {
                 let old = settings
                 settings = updated
                 pages.apply(updated)
+                live.apply(updated.home)
                 if updated.general.display != old.general.display { screenParametersChanged() }
             }
             window.onClose = { [unowned self] in settingsWindow = nil }

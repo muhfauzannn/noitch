@@ -57,6 +57,7 @@ AppSettings LoadSettings() {
     Read(L"ShowShuffleAndRepeat", settings.home.showShuffleAndRepeat);
     Read(L"TintWithArtwork", settings.home.tintWithArtwork);
     Read(L"ArtworkGlow", settings.home.artworkGlow);
+    Read(L"ShowLive", settings.home.showLive);
     Read(L"UsageShowClaude", settings.usage.showClaude);
     Read(L"UsageShowCodex", settings.usage.showCodex);
     Read(L"UsageWarnAt", settings.usage.warnAt, 30, 95);
@@ -77,6 +78,7 @@ void SaveSettings(const AppSettings& settings) {
     Write(key, L"ShowShuffleAndRepeat", settings.home.showShuffleAndRepeat);
     Write(key, L"TintWithArtwork", settings.home.tintWithArtwork);
     Write(key, L"ArtworkGlow", settings.home.artworkGlow);
+    Write(key, L"ShowLive", settings.home.showLive);
     Write(key, L"UsageShowClaude", settings.usage.showClaude);
     Write(key, L"UsageShowCodex", settings.usage.showCodex);
     Write(key, L"UsageWarnAt", settings.usage.warnAt);

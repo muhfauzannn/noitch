@@ -7,6 +7,7 @@
 
 #include "features/home/home_layout.h"
 #include "features/home/home_model.h"
+#include "features/live/live_layout.h"
 #include "features/home/home_settings_pane.h"
 #include "features/settings/settings_panes.h"
 #include "features/usage/usage_settings_pane.h"
@@ -309,6 +310,59 @@ void TestNextTickIsTheNextSecondOrAnEarlierLyric() {
     assert(Near(NextHomeTick(10.25, 1, -1), 0.75, 1e-6));
     assert(Near(NextHomeTick(10.25, 1, 10.5), 0.25, 1e-6));
     assert(Near(NextHomeTick(10.5, 2, -1), 0.25, 1e-6));
+}
+
+void TestStageWakesOnlyForTheNextLine() {
+    assert(NextHomeTick(10.25, 1, -1, false) < 0);
+    assert(Near(NextHomeTick(10.25, 1, 14.25, false), 4, 1e-6));
+}
+
+void TestLyricsButtonAndStageFitThePage() {
+    for (float header : {24.0f, 32.0f, 38.0f}) {
+        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
+        const HeaderLayout headerLayout(IslandGeometry::ExpandedWidth(), header, 1);
+        const HomeRect button = layout.LyricsButton(true);
+        assert(!button.Intersects(headerLayout.Frame(HeaderControl::Settings)));
+        assert(layout.Title().Right() <= layout.LyricsButton(false).x);
+        for (int slot = kFirstStageSlot; slot <= kLastStageSlot; ++slot) {
+            assert(!button.Intersects(layout.StageLine(slot)));
+            if (slot < kLastStageSlot) assert(layout.StageLine(slot).Bottom() <= layout.StageLine(slot + 1).y);
+        }
+        assert(layout.StageLine(-1).y >= header);
+        assert(layout.StageLine(2).Bottom() <= layout.Height() - 12);
+        assert(layout.StageGlowRadiusY() >= layout.StageGlowCenterY());
+        assert(layout.StageGlowCenterX() + layout.StageGlowRadiusX() < layout.Width());
+        const float middleY = layout.StageLine(0).y + layout.StageLine(0).height / 2;
+        assert(layout.StageSlotAt(layout.Width() / 2, middleY) == 0);
+        assert(layout.ControlAt(layout.Width() / 2, middleY, true) == HomeControl::None);
+        assert(layout.ControlAt(button.x + 5, button.y + 5, true) == HomeControl::Lyrics);
+        const HomeRect play = layout.Frame(HomeControl::PlayPause);
+        assert(layout.ControlAt(play.x + 5, play.y + 5, true) == HomeControl::None);
+    }
+}
+
+void TestStageShowsTheLineBeforeAndTheTwoAfter() {
+    NowPlaying nowPlaying;
+    nowPlaying.title = "Song";
+    nowPlaying.duration = 100;
+    Lyrics lyrics;
+    lyrics.synced = {{1, "one"}, {2, ""}, {3, "three"}, {4, "four"}};
+    const HomeSettings settings;
+    const std::string note = "\xE2\x99\xAA";
+    const HomeModel middle = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, settings, false, true);
+    assert(middle.isOnStage && !middle.stageIsStatus);
+    assert(middle.stageLines[0] == "one" && middle.stageLines[1] == note && middle.stageLines[2] == "three" && middle.stageLines[3] == "four");
+    const HomeModel intro = MakeHomeModel(nowPlaying, &lyrics, false, 0, settings);
+    assert(intro.stageLines[0].empty() && intro.stageLines[1] == note && intro.stageLines[2] == "one" && intro.stageLines[3] == note);
+    const HomeModel end = MakeHomeModel(nowPlaying, &lyrics, false, 9, settings);
+    assert(end.stageLines[0] == "three" && end.stageLines[1] == "four" && end.stageLines[2].empty());
+    const HomeModel loading = MakeHomeModel(nowPlaying, nullptr, true, 0, settings, false, true);
+    assert(loading.stageIsStatus && loading.stageLines[1] == "Looking for lyrics\xE2\x80\xA6");
+    assert(MakeHomeModel({}, nullptr, false, 0, settings).stageLines[1] == "Nothing playing");
+    HomeSettings off;
+    off.showLyrics = false;
+    const HomeModel hidden = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, off, false, true);
+    assert(!hidden.isOnStage && !hidden.showsLyricsButton);
 }
 
 void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
@@ -637,6 +691,61 @@ void TestSettingsPanesWriteWhatTheyRead() {
     assert(SecondsLabel(0.15) == L"0.15 s" && SecondsLabel(-0.5, true) == L"\x2212" L"0.5 s" && SecondsLabel(1, true) == L"+1 s");
 }
 
+void TestGlowFadesBeforeTheTopEdge() {
+    for (float header : {24.0f, 32.0f, 38.0f}) {
+        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 2);
+        assert(layout.GlowRadiusY() >= layout.GlowCenterY());
+        assert(layout.GlowCenterX() + layout.GlowRadiusX() < layout.Width());
+    }
+}
+
+void TestLiveWingsFitBesideTheNotch() {
+    const LiveLayout layout(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight());
+    assert(layout.Width() > IslandGeometry::CollapsedWidth());
+    assert(Near(layout.ArtSide(), 18, 1e-6) && Near(layout.Wing(), 35, 1e-6));
+    // The artwork stays in the left wing and the bars in the right, clear of the notch.
+    assert(layout.Artwork().Right() <= layout.Wing() - LiveLayout::kInnerGap + 0.01f);
+    assert(layout.Bars().x >= layout.Wing() + IslandGeometry::CollapsedWidth() + LiveLayout::kInnerGap - 0.01f);
+    assert(layout.Bars().Right() <= layout.Width() - LiveLayout::kOuterPadding + 0.01f);
+    assert(layout.Bars().y >= 0 && layout.Bars().Bottom() <= layout.Height());
+    IslandGeometry geometry(1);
+    const float narrow = geometry.PillFor(IslandState::Collapsed).right - geometry.PillFor(IslandState::Collapsed).left;
+    geometry.SetLive(true);
+    const Pill live = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(live.right - live.left, layout.Width(), 1e-3) && live.right - live.left > narrow);
+    assert(live.left >= geometry.FlareRadius() && live.right <= geometry.Window().width - geometry.FlareRadius());
+}
+
+void TestLiveShowsWhilePlayingAndBrieflyAfterAPause() {
+    NowPlaying playing;
+    playing.title = "Song";
+    playing.isPlaying = true;
+    assert(LiveRule::Shows(playing, true, -1, 100));
+    assert(!LiveRule::Shows(playing, false, -1, 100));
+    NowPlaying paused = playing;
+    paused.isPlaying = false;
+    assert(LiveRule::Shows(paused, true, 95, 100));
+    assert(!LiveRule::Shows(paused, true, 80, 100));
+    assert(!LiveRule::Shows(NowPlaying{}, true, -1, 100));
+}
+
+void TestBarsRiseAndFallSmoothlyInGradedShades() {
+    const auto cycle = BarCycle(0.5, 0.3f, 1.0f);
+    assert(cycle.size() == 2);
+    assert(Near(BarSegmentValue(cycle[0], 0), 0.3, 1e-6) && Near(BarSegmentValue(cycle[0], 0.5), 1.0, 1e-5));
+    assert(Near(BarSegmentValue(cycle[1], 0), 1.0, 1e-6) && Near(BarSegmentValue(cycle[1], 0.5), 0.3, 1e-5));
+    // Flat at both ends, so the repeat joins without a kink.
+    assert(cycle[0].c1 == 0 && cycle[1].c1 == 0);
+    const auto bar = BarPixels(3, 12, 0xFFFFFFFF);
+    assert((bar[0] >> 24) < 0xFF && (bar[1 + 6 * 3] >> 24) == 0xFF);
+    for (int i = 0; i < LiveLayout::kBarCount; ++i) assert(LiveLayout::kBarWhiteness[i] == LiveLayout::kBarWhiteness[LiveLayout::kBarCount - 1 - i]);
+    assert(TowardWhite(0xFF000000, 0) == 0xFF000000 && TowardWhite(0xFF000000, 1) == 0xFFFFFFFF);
+    assert(TowardWhite(0xFF804020, 0.5f) == 0xFFC0A090);
+    const std::vector<uint32_t> square(16 * 16, 0xFFFFFFFF);
+    const auto rounded = RoundedCorners(square.data(), 16, 4);
+    assert((rounded[0] >> 24) == 0 && rounded[8 * 16 + 8] == 0xFFFFFFFF);
+}
+
 int main() {
     TestTimesParseInUtcAndWithAnOffset();
     TestScannerReadsOnlyTheObjectsOwnFields();
@@ -681,11 +790,18 @@ int main() {
     TestFormatTime();
     TestNextTickIsTheNextSecondOrAnEarlierLyric();
     TestHomeModelShowsThePlaceholderAndFollowsLyrics();
+    TestStageWakesOnlyForTheNextLine();
+    TestLyricsButtonAndStageFitThePage();
+    TestStageShowsTheLineBeforeAndTheTwoAfter();
     TestArtworkTintIsAverageAndLifted();
     TestLyricsTimingShiftsWhichLineIsSung();
     TestPagesOpenWhereTheSettingsSay();
     TestUsageSettingsPickColumnsAndWhereAmberStarts();
     TestSettingsPanesWriteWhatTheyRead();
+    TestGlowFadesBeforeTheTopEdge();
+    TestLiveWingsFitBesideTheNotch();
+    TestLiveShowsWhilePlayingAndBrieflyAfterAPause();
+    TestBarsRiseAndFallSmoothlyInGradedShades();
     std::puts("island_tests: all passed");
     return 0;
 }

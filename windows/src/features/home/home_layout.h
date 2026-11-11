@@ -4,6 +4,7 @@
 // is unit-testable on any host. The macOS app uses the same numbers.
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace noitch {
 
@@ -19,12 +20,18 @@ struct HomeRect {
     bool Intersects(const HomeRect& o) const { return x < o.Right() && o.x < Right() && y < o.Bottom() && o.y < Bottom(); }
 };
 
-enum class HomeControl { None, Artwork, Slider, Shuffle, Previous, PlayPause, Next, Repeat };
+// Lyrics turns Home into the lyrics stage and back.
+enum class HomeControl { None, Artwork, Slider, Shuffle, Previous, PlayPause, Next, Repeat, Lyrics };
 
 inline constexpr HomeControl kHomeControls[] = {
     HomeControl::Artwork, HomeControl::Slider, HomeControl::Shuffle,
-    HomeControl::Previous, HomeControl::PlayPause, HomeControl::Next, HomeControl::Repeat,
+    HomeControl::Previous, HomeControl::PlayPause, HomeControl::Next, HomeControl::Repeat, HomeControl::Lyrics,
 };
+
+// The lyrics stage's slots run from -1 (the line before) through 0 (being sung) to 2.
+inline constexpr int kFirstStageSlot = -1;
+inline constexpr int kLastStageSlot = 2;
+inline constexpr int kNoStageSlot = -100;
 
 class HomeLayout {
 public:
@@ -39,8 +46,46 @@ public:
     float Height() const { return height_ * scale_; }
 
     HomeRect Artwork() const { return Px({kSidePadding, BodyTop(), BodyHeight(), BodyHeight()}); }
-    HomeRect Title() const { return Px({ColumnX(), BodyTop() - 2, ColumnWidth(), 20}); }
-    HomeRect Artist() const { return Px({ColumnX(), BodyTop() + 17, ColumnWidth(), 17}); }
+    // The artwork's glow: an ellipse around the artwork that has faded out by the top edge, where the
+    // pill meets the black flares, and well before the right side. In pixels.
+    float GlowCenterX() const { return (kSidePadding + BodyHeight() / 2) * scale_; }
+    float GlowCenterY() const { return (BodyTop() + BodyHeight() / 2) * scale_; }
+    float GlowRadiusX() const { return width_ * 0.62f * scale_; }
+    float GlowRadiusY() const { return (BodyTop() + BodyHeight() / 2 + 4) * scale_; }
+    // Title and artist end before the lyrics button.
+    HomeRect Title() const { return Px({ColumnX(), BodyTop() - 2, HeadingWidth(), 20}); }
+    HomeRect Artist() const { return Px({ColumnX(), BodyTop() + 17, HeadingWidth(), 17}); }
+
+    // At the end of the title row; on the stage it moves to the page's top-right corner, which is
+    // the same place while there is no calendar.
+    HomeRect LyricsButton(bool onStage) const {
+        const float right = onStage ? width_ - kSidePadding : ColumnX() + ColumnWidth();
+        return Px({right - kLyricsButton, BodyTop() - 2, kLyricsButton, kLyricsButton});
+    }
+
+    // A stage slot's line: full size for the one being sung, scaled for the rest. In pixels.
+    HomeRect StageLine(int slot) const {
+        const float offset = slot == 0 ? 0 : (slot > 0 ? 1.0f : -1.0f) * (27 + static_cast<float>(std::abs(slot) - 1) * 23);
+        const float height = kStageLineHeight * (slot == 0 ? 1 : kStageScale);
+        const float x = kSidePadding + kStageMargin;
+        return Px({x, StageCenterY() + offset - height / 2, width_ - x * 2, height});
+    }
+
+    int StageSlotAt(float x, float y) const {
+        for (int slot = kFirstStageSlot; slot <= kLastStageSlot; ++slot) {
+            HomeRect line = StageLine(slot);
+            line.y -= 2 * scale_;
+            line.height += 4 * scale_;
+            if (line.Contains(x, y)) return slot;
+        }
+        return kNoStageSlot;
+    }
+
+    // On the stage the glow gathers under the line being sung, still gone by the top edge. In pixels.
+    float StageGlowCenterX() const { return width_ / 2 * scale_; }
+    float StageGlowCenterY() const { return StageCenterY() * scale_; }
+    float StageGlowRadiusX() const { return width_ * 0.46f * scale_; }
+    float StageGlowRadiusY() const { return (StageCenterY() + 4) * scale_; }
     // The bright line; the dim one is kLyricStep below it, drawn smaller.
     HomeRect Lyric() const { return Px({ColumnX(), BodyTop() + 38, ColumnWidth(), 19}); }
     HomeRect NextLyric() const { return Px({ColumnX(), BodyTop() + 38 + kLyricStep, ColumnWidth(), 19}); }
@@ -60,11 +105,14 @@ public:
             case HomeControl::PlayPause: return TransportButton(2);
             case HomeControl::Next: return TransportButton(3);
             case HomeControl::Repeat: return TransportButton(4);
+            case HomeControl::Lyrics: return LyricsButton(false);
             default: return {};
         }
     }
 
-    HomeControl ControlAt(float x, float y) const {
+    // On the stage only the lyrics button answers; the lines are found with StageSlotAt.
+    HomeControl ControlAt(float x, float y, bool onStage = false) const {
+        if (onStage) return LyricsButton(true).Contains(x, y) ? HomeControl::Lyrics : HomeControl::None;
         for (const HomeControl control : kHomeControls) {
             if (Frame(control).Contains(x, y)) return control;
         }
@@ -88,11 +136,21 @@ private:
     static constexpr float kTimeWidth = 40;
     static constexpr float kSliderHeight = 14;
     static constexpr float kSliderTrackHeight = 4;
+    static constexpr float kLyricsButton = 22;
+    static constexpr float kLyricsButtonGap = 6;
+    // The line being sung is this tall; the others are drawn at kStageScale of it.
+    static constexpr float kStageLineHeight = 26;
+    static constexpr float kStageScale = 0.7f;
+    // Each side, so centred lines stay clear of the lyrics button in the corner.
+    static constexpr float kStageMargin = 30;
 
     float BodyTop() const { return header_ + kHeaderGap; }
     float BodyHeight() const { return height_ - BodyTop() - kBottomPadding; }
     float ColumnX() const { return kSidePadding + BodyHeight() + kColumnGap; }
     float ColumnWidth() const { return width_ - ColumnX() - kSidePadding; }
+    float HeadingWidth() const { return ColumnWidth() - kLyricsButton - kLyricsButtonGap; }
+    // A little above the middle, so two lines fit below the one being sung.
+    float StageCenterY() const { return BodyTop() + BodyHeight() * 0.42f; }
     float SliderY() const { return height_ - kBottomPadding - kTransportButton - kSliderHeight - 2; }
 
     HomeRect LogicalTrack() const {

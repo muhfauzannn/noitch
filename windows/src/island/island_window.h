@@ -4,6 +4,8 @@
 
 #include "compositor.h"
 #include "features/settings/app_settings.h"
+#include "features/live/live_controller.h"
+#include "features/now_playing/now_playing_monitor.h"
 #include "features/settings/settings_window.h"
 #include "island_geometry.h"
 #include "page_controller.h"
@@ -30,6 +32,7 @@ private:
     bool CursorInCollapsedHitRegion() const;
     bool CursorInWindow() const;
     void OpenSettings();
+    void LiveChanged(bool active);
     float PointerX(LPARAM lparam) const;
     float PointerY(LPARAM lparam) const;
 
@@ -46,7 +49,9 @@ private:
     bool hoverPending_ = false;
     int compositorGeneration_ = 0;
     AppSettings settings_;
+    NowPlayingMonitor monitor_;
     PageController pages_;
+    LiveController live_;
     SettingsWindow settingsWindow_;
 };
 
