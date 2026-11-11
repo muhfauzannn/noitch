@@ -650,11 +650,11 @@ void TestLiveWingsFitBesideTheNotch() {
     const LiveLayout layout(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight());
     assert(layout.Width() > IslandGeometry::CollapsedWidth());
     assert(Near(layout.ArtSide(), 18, 1e-6) && Near(layout.Wing(), 35, 1e-6));
-    // The artwork stays in the left wing and the wave in the right, clear of the notch.
+    // The artwork stays in the left wing and the bars in the right, clear of the notch.
     assert(layout.Artwork().Right() <= layout.Wing() - LiveLayout::kInnerGap + 0.01f);
-    assert(layout.WaveBox().x >= layout.Wing() + IslandGeometry::CollapsedWidth() + LiveLayout::kInnerGap - 0.01f);
-    assert(layout.WaveBox().Right() <= layout.Width() - LiveLayout::kOuterPadding + 0.01f);
-    assert(layout.WaveBox().y >= 0 && layout.WaveBox().Bottom() <= layout.Height());
+    assert(layout.Bars().x >= layout.Wing() + IslandGeometry::CollapsedWidth() + LiveLayout::kInnerGap - 0.01f);
+    assert(layout.Bars().Right() <= layout.Width() - LiveLayout::kOuterPadding + 0.01f);
+    assert(layout.Bars().y >= 0 && layout.Bars().Bottom() <= layout.Height());
     IslandGeometry geometry(1);
     const float narrow = geometry.PillFor(IslandState::Collapsed).right - geometry.PillFor(IslandState::Collapsed).left;
     geometry.SetLive(true);
@@ -676,28 +676,18 @@ void TestLiveShowsWhilePlayingAndBrieflyAfterAPause() {
     assert(!LiveRule::Shows(NowPlaying{}, true, -1, 100));
 }
 
-void TestWaveLinesRepeatAndStayInTheirBox() {
-    const LiveLayout layout(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight());
-    for (const LiveLayout::Wave& wave : LiveLayout::kWaves) {
-        for (float x = -wave.length; x <= layout.WaveBox().width + wave.length; x += 0.5f) {
-            const float y = layout.WaveY(wave, x);
-            assert(y - LiveLayout::kLineWidth / 2 >= -0.01f && y + LiveLayout::kLineWidth / 2 <= layout.WaveBox().height + 0.01f);
-            // Sliding by a length is seamless.
-            assert(std::fabs(layout.WaveY(wave, x + wave.length) - y) < 0.001f);
-        }
-        int width = 0, height = 0;
-        const auto pixels = WavePixels(layout, wave, 2, 0xFFFFFFFF, &width, &height);
-        assert(width == static_cast<int>((layout.WaveBox().width + wave.length * 2) * 2 + 0.5f) && height > 0);
-        // Every column holds some of the line, and nothing is drawn far from it.
-        for (int x = 0; x < width; x += 3) {
-            bool any = false;
-            for (int y = 0; y < height; ++y) any = any || (pixels[static_cast<size_t>(y * width + x)] >> 24) > 0;
-            assert(any);
-        }
-    }
-    assert(LiveLayout::kWaves[0].length != LiveLayout::kWaves[1].length && LiveLayout::kWaves[0].direction != LiveLayout::kWaves[1].direction);
-    const auto fade = EdgeFadePixels(8, 2, true);
-    assert((fade[0] >> 24) > (fade[7] >> 24) && (fade[0] & 0xFFFFFF) == 0);
+void TestBarsRiseAndFallSmoothlyInGradedShades() {
+    const auto cycle = BarCycle(0.5, 0.3f, 1.0f);
+    assert(cycle.size() == 2);
+    assert(Near(BarSegmentValue(cycle[0], 0), 0.3, 1e-6) && Near(BarSegmentValue(cycle[0], 0.5), 1.0, 1e-5));
+    assert(Near(BarSegmentValue(cycle[1], 0), 1.0, 1e-6) && Near(BarSegmentValue(cycle[1], 0.5), 0.3, 1e-5));
+    // Flat at both ends, so the repeat joins without a kink.
+    assert(cycle[0].c1 == 0 && cycle[1].c1 == 0);
+    const auto bar = BarPixels(3, 12, 0xFFFFFFFF);
+    assert((bar[0] >> 24) < 0xFF && (bar[1 + 6 * 3] >> 24) == 0xFF);
+    for (int i = 0; i < LiveLayout::kBarCount; ++i) assert(LiveLayout::kBarWhiteness[i] == LiveLayout::kBarWhiteness[LiveLayout::kBarCount - 1 - i]);
+    assert(TowardWhite(0xFF000000, 0) == 0xFF000000 && TowardWhite(0xFF000000, 1) == 0xFFFFFFFF);
+    assert(TowardWhite(0xFF804020, 0.5f) == 0xFFC0A090);
     const std::vector<uint32_t> square(16 * 16, 0xFFFFFFFF);
     const auto rounded = RoundedCorners(square.data(), 16, 4);
     assert((rounded[0] >> 24) == 0 && rounded[8 * 16 + 8] == 0xFFFFFFFF);
@@ -755,7 +745,7 @@ int main() {
     TestGlowFadesBeforeTheTopEdge();
     TestLiveWingsFitBesideTheNotch();
     TestLiveShowsWhilePlayingAndBrieflyAfterAPause();
-    TestWaveLinesRepeatAndStayInTheirBox();
+    TestBarsRiseAndFallSmoothlyInGradedShades();
     std::puts("island_tests: all passed");
     return 0;
 }

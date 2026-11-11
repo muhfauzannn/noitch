@@ -12,7 +12,7 @@ struct HomeSettings: Equatable {
     var tintWithArtwork = true
     /// A soft wash of the artwork's color behind the page.
     var artworkGlow = true
-    /// While something plays, the closed island widens to show its artwork and a wave.
+    /// While something plays, the closed island widens to show its artwork and level bars.
     var showLive = true
 
     static let lyricsOffsets = [-1.0, -0.5, -0.25, 0, 0.25, 0.5, 1.0]

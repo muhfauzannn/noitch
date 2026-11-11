@@ -4,7 +4,7 @@ import AppKit
 enum HomeSettingsPane {
     static let pane = SettingsPane(title: "Home", glyph: .icon(.music), color: .systemPink) { form in
         form.section("Closed island", footer: "Needs the now playing helper to run while a music app or browser is open.") {
-            form.toggle("Show what's playing", caption: "Artwork and a flowing wave beside the notch.", \.home.showLive)
+            form.toggle("Show what's playing", caption: "Artwork and level bars beside the notch.", \.home.showLive)
         }
         form.section("Lyrics", footer: "Lyrics come from lrclib.net, which receives the track, artist and album names.") {
             form.toggle("Show lyrics", \.home.showLyrics)

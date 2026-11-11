@@ -82,7 +82,7 @@ void LiveController::Receive() {
         SetTimer(window_, kPauseTimer, static_cast<UINT>(LiveRule::kPauseGrace * 1000) + 100, nullptr);
     }
     ShowArtwork();
-    scene_.SetPlaying(playing, now_());
+    scene_.SetPlaying(playing);
     Evaluate();
 }
 
@@ -112,7 +112,7 @@ void LiveController::BuildScene() {
     }
     shownArtwork_.reset();
     ShowArtwork();
-    scene_.SetPlaying(nowPlaying_.isPlaying && nowPlaying_.HasTrack(), now_());
+    scene_.SetPlaying(nowPlaying_.isPlaying && nowPlaying_.HasTrack());
 }
 
 // Nothing holding an image outlives the wings.

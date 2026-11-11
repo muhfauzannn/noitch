@@ -6,28 +6,18 @@ import Testing
 struct LiveTests {
     private let notch = CGSize(width: 185, height: 32)
 
-    @Test func `the wings hold the artwork and the wave, clear of the notch`() {
+    @Test func `the wings hold the artwork and six bars, clear of the notch`() {
         let layout = LiveLayout(collapsed: notch)
         #expect(layout.artSide == 18 && layout.wing == 35)
         #expect(layout.size == CGSize(width: notch.width + 70, height: notch.height))
         #expect(layout.artwork.maxX <= layout.wing - LiveLayout.innerGap)
-        #expect(layout.wave.minX >= layout.wing + notch.width + LiveLayout.innerGap)
-        #expect(layout.wave.maxX <= layout.size.width - LiveLayout.outerPadding)
-        #expect(layout.wave.minY >= 0 && layout.wave.maxY <= notch.height)
-    }
-
-    @Test func `each wave line stays inside its box and repeats every length`() {
-        let layout = LiveLayout(collapsed: notch)
-        for wave in LiveLayout.waves {
-            for x in stride(from: -wave.length, through: layout.wave.width + wave.length, by: 0.5) {
-                let y = layout.waveY(wave, at: x)
-                #expect(y - LiveLayout.lineWidth / 2 >= -0.01 && y + LiveLayout.lineWidth / 2 <= layout.wave.height + 0.01)
-                // Sliding by a length is seamless.
-                #expect(abs(layout.waveY(wave, at: x + wave.length) - y) < 0.001)
-            }
-        }
-        // The two lines differ in length and drift, so their sum never visibly repeats.
-        #expect(LiveLayout.waves[0].length != LiveLayout.waves[1].length && LiveLayout.waves[0].direction != LiveLayout.waves[1].direction)
+        #expect(layout.bars.minX >= layout.wing + notch.width + LiveLayout.innerGap)
+        #expect(layout.bars.maxX <= layout.size.width - LiveLayout.outerPadding)
+        #expect(layout.bars.minY >= 0 && layout.bars.maxY <= notch.height)
+        #expect(layout.bar(LiveLayout.barCount - 1).maxX.rounded() == layout.bars.maxX.rounded())
+        #expect(LiveLayout.barPeriods.count == LiveLayout.barCount && LiveLayout.barWhiteness.count == LiveLayout.barCount)
+        // Symmetric shades, so the group reads as one glow.
+        #expect(LiveLayout.barWhiteness == LiveLayout.barWhiteness.reversed())
     }
 
     @Test func `the closed pill widens only while live`() {
