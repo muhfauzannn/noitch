@@ -60,10 +60,13 @@ final class HomeController {
 
     // MARK: Island lifecycle
 
-    func islandWillOpen(layout: HomeLayout, scale: CGFloat) {
+    func islandWillOpen(layout given: HomeLayout, scale: CGFloat) {
         releaseTimer?.invalidate()
         releaseTimer = nil
         isOpen = true
+        // A changed calendar setting gives a new layout, and so new layers, at the next opening.
+        var layout = given
+        layout.showsCalendar = settings.showCalendar
         if scene == nil || layout != self.layout || scale != self.scale {
             scene?.root.removeFromSuperlayer()
             let scene = HomeScene(layout: layout, scale: scale)

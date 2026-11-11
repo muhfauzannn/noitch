@@ -68,19 +68,24 @@ struct CalendarTests {
         #expect(!model(ended, selected: 2, access: .denied).days[2].hasEvents)
     }
 
-    @Test func `the calendar fits beside the music in the wide island`() {
+    @Test func `the calendar fits beside the music in the normal island`() {
         for header in [CGFloat(24), 32, 38] {
-            let layout = HomeLayout(size: IslandGeometry.wideExpandedSize, headerHeight: header)
-            let pill = CGRect(origin: .zero, size: IslandGeometry.wideExpandedSize)
-            #expect(layout.showsCalendar)
+            var layout = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: header)
+            layout.showsCalendar = true
+            let pill = CGRect(origin: .zero, size: IslandGeometry.expandedSize)
             #expect(pill.contains(layout.calendarPanel))
             #expect(layout.calendarRow(CalendarModel.maxRows - 1).maxY <= pill.height - HomeLayout.bottomPadding)
             #expect(layout.calendarDay(0).minY >= header - 2)
             for control in HomeControl.allCases {
                 #expect(layout.frame(of: control).maxX < layout.calendarDivider.minX, "\(control)")
+                for other in HomeControl.allCases where other != control {
+                    #expect(!layout.frame(of: control).intersects(layout.frame(of: other)), "\(control) \(other)")
+                }
             }
+            // The transport still starts after the column does.
+            #expect(layout.frame(of: .shuffle).minX >= layout.title.minX)
             #expect(layout.calendarDayIndex(at: CGPoint(x: layout.calendarDay(6).midX, y: layout.calendarDay(6).midY)) == 6)
         }
-        #expect(!HomeLayout(size: IslandGeometry.expandedSize, headerHeight: 32).showsCalendar)
     }
+
 }

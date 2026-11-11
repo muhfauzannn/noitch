@@ -14,7 +14,7 @@ struct HomeSettings: Equatable {
     var artworkGlow = true
     /// While something plays, the closed island widens to show its artwork and level bars.
     var showLive = true
-    /// A week and the chosen day's events beside the music, in a wider island. macOS only.
+    /// A week and the chosen day's events beside the music, which narrows for it. macOS only.
     var showCalendar = true
 
     static let lyricsOffsets = [-1.0, -0.5, -0.25, 0, 0.25, 0.5, 1.0]

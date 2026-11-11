@@ -32,6 +32,8 @@ struct HomeLayout: Equatable {
     let size: CGSize
     /// Height of the band the notch occupies. Nothing but header buttons goes there.
     let headerHeight: CGFloat
+    /// The calendar panel takes the right side, and the music column narrows for it.
+    var showsCalendar = false
 
     private var bodyTop: CGFloat { headerHeight + Self.headerGap }
     private var bodyHeight: CGFloat { size.height - bodyTop - Self.bottomPadding }
@@ -43,13 +45,10 @@ struct HomeLayout: Equatable {
 
     // MARK: Calendar
 
-    static let calendarWidth: CGFloat = 176
+    static let calendarWidth: CGFloat = 150
     /// Each side of the divider between music and calendar.
     static let calendarGap: CGFloat = 14
     static let calendarRowHeight: CGFloat = 18
-
-    /// Only the wide island has room for it.
-    var showsCalendar: Bool { size.width >= IslandGeometry.wideExpandedSize.width }
 
     var calendarPanel: CGRect {
         CGRect(x: size.width - Self.sidePadding - Self.calendarWidth, y: bodyTop - 2, width: Self.calendarWidth, height: size.height - bodyTop + 2 - Self.bottomPadding)
@@ -121,9 +120,11 @@ struct HomeLayout: Equatable {
 
     private func transportButton(slot: CGFloat) -> CGRect {
         let side = Self.transportButton
-        let total = side * 5 + Self.transportGap * 4
+        // Beside the calendar the column can be narrower than the usual row; the gaps give first.
+        let gap = min(Self.transportGap, max((columnWidth - side * 5) / 4, 2))
+        let total = side * 5 + gap * 4
         return CGRect(
-            x: columnX + (columnWidth - total) / 2 + slot * (side + Self.transportGap),
+            x: columnX + (columnWidth - total) / 2 + slot * (side + gap),
             y: size.height - Self.bottomPadding - side,
             width: side,
             height: side

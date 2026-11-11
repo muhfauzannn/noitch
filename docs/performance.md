@@ -15,7 +15,12 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
-With the calendar in Home and the 720 pt island (2026-11-11, same M5): 9.77 MB, 2.88 ms/min, 0.10
+With the calendar in Home at 580 pt (2026-11-11, same M5): 9.59 MB, 0.89 and 1.04 ms/min, 0.10
+wakeups/s, 5.03 and 5.22 ms per transition. The first hover run failed "stays expanded while the
+pointer remains over the notch" and the check after it; the repeat passed all 23. Treat it as flaky
+until it recurs.
+
+With the calendar in Home and a 720 pt island, since narrowed back to 580 (2026-11-11, same M5): 9.77 MB, 2.88 ms/min, 0.10
 wakeups/s, 5.10 ms per transition, all 23 hover checks passing; the binary grew from 981 KB to 1090
 KB. A first run failed the first two checks because the opening also built and read the calendar;
 the calendar's first read now waits 0.2 s, and the checks passed. Runs with the owner's hover delay

@@ -100,7 +100,7 @@ Keep this honest and up to date.
 | --- | --- |
 | Builds; 64 unit tests | Passing |
 | Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
-| Calendar in Home: week strip, rows, wide island | Checked by a window screenshot with `--demo-media --open` (sample events, no EventKit); the access prompt, real calendars, change notifications and the timers **not checked on screen** |
+| Calendar in Home: week strip, rows, narrower music column | Checked by a window screenshot with `--demo-media --open` (sample events, no EventKit); the access prompt, real calendars, change notifications and the timers **not checked on screen** |
 | Closed island with music (wings, six moving bars) | Checked by window screenshots with `--demo-media`; real playback, artwork, pause timing and the player-app watching **not checked on screen** |
 | Settings window with sidebar | General page checked by a window screenshot (`--settings`, Debug only); other pages and every control's effect **not checked on screen** |
 | Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |

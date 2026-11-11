@@ -79,8 +79,8 @@ final class CalendarScene {
             let row = layout.calendarRow(index)
             bars[index].frame = CGRect(x: row.minX, y: row.minY + 3, width: 2.5, height: row.height - 6)
             bars[index].cornerRadius = 1.25
-            times[index].frame = CGRect(x: row.minX + 9, y: row.minY + 2, width: 46, height: row.height - 2)
-            titles[index].frame = CGRect(x: row.minX + 57, y: row.minY + 1, width: row.width - 57, height: row.height - 1)
+            times[index].frame = CGRect(x: row.minX + 8, y: row.minY + 2, width: 38, height: row.height - 2)
+            titles[index].frame = CGRect(x: row.minX + 47, y: row.minY + 1, width: row.width - 47, height: row.height - 1)
             list.addSublayer(bars[index])
             for layer in [times[index], titles[index]] {
                 layer.contentsScale = scale

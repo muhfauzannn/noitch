@@ -219,9 +219,9 @@ A macOS update could break the adapter. Home then shows "Nothing playing"; nothi
 
 ### Calendar in Home (macOS)
 
-With "Show calendar" on, the open island is 720 pt wide instead of 580, on every page, so switching
-pages never resizes the window; the usage page simply gets wider columns. Home keeps its music column
-and gains a panel on the right, past a thin divider (numbers in `HomeLayout`):
+With "Show calendar" on, Home gains a 150 pt panel on the right, past a thin divider, and the music
+column narrows to make room (numbers in `HomeLayout`). The island stays 580 pt wide: a 720 pt island
+was tried and found too long.
 
 - **Week strip.** Seven days of the week that holds today, starting on the locale's first weekday:
   a letter over each date, a dot under days with events, today's date in red. A plate marks the
@@ -239,7 +239,7 @@ and gains a panel on the right, past a thin divider (numbers in `HomeLayout`):
 - **Events.** `EKEventStoreChanged` notifications reload the week; one one-shot timer fires at the
   next start, end or midnight so rows change on time. Nothing polls. Each opening starts on today.
 - **Windows.** Not supported: Windows' calendar API (`AppointmentStore`) is only available to packaged
-  (MSIX) apps, and the Windows app isn't packaged. It stays 580 pt wide.
+  (MSIX) apps, and the Windows app isn't packaged.
 
 ### Closed island while music plays
 
@@ -366,7 +366,7 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | Home | Show shuffle and repeat | On | The two outer transport buttons |
 | Home | Tint the progress bar | On | Average artwork color, lifted so dark covers stay visible |
 | Home | Glow behind the page | On | The wash of that color behind the page |
-| Home | Show calendar | On | macOS only: this week and the chosen day's events beside the music; the island opens 720 pt wide. See [Calendar in Home](#calendar-in-home-macos) |
+| Home | Show calendar | On | macOS only: this week and the chosen day's events beside the music, which narrows for it. See [Calendar in Home](#calendar-in-home-macos) |
 | Home | Show what's playing | On | The closed island's wings with artwork and level bars. On macOS this keeps the now playing helper running while a player app is open |
 | AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
 | AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
@@ -383,7 +383,7 @@ The spec both apps follow. Change it here and in both apps together.
 
 | Property | Value |
 | --- | --- |
-| Expanded size | 580 × 180 pt; 720 × 180 on macOS with the calendar on (Windows has no calendar) |
+| Expanded size | 580 × 180 pt |
 | Collapsed size | Physical notch if present, otherwise 180 pt wide |
 | Collapsed height without a notch | macOS: menu bar height. Windows: 32 |
 | Corner radius | 10 collapsed, 24 expanded, bottom corners only |

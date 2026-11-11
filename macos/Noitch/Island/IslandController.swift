@@ -16,7 +16,7 @@ final class IslandController: NSObject {
     private var hoverTimer: Timer?
 
     override init() {
-        geometry = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isWide: settings.home.showCalendar)
+        geometry = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
         pages = PageController(settings: settings, monitor: monitor)
         live = LiveController(monitor: monitor, settings: settings.home)
         super.init()
@@ -152,19 +152,6 @@ final class IslandController: NSObject {
         }
     }
 
-    /// Turning the calendar on or off changes the open width. Open, the pill springs to it now; the
-    /// pages are rebuilt for it the next time the island opens.
-    private func widthChanged() {
-        geometry.isWide = settings.home.showCalendar
-        guard state == .expanded else { return }
-        latestTransition += 1
-        let transition = latestTransition
-        resizePanel(for: .expanded)
-        view.animatePill(to: geometry.pillSize(for: .expanded), cornerRadius: geometry.cornerRadius(for: .expanded), spring: IslandGeometry.expandSpring) { [unowned self] in
-            if transition == latestTransition, state == .expanded { resizePanel(for: .expanded) }
-        }
-    }
-
     private func resizePanel(for state: IslandState) {
         panel.setFrame(geometry.panelFrame(for: state), display: false)
         view.pinPill()
@@ -177,7 +164,7 @@ final class IslandController: NSObject {
     }
 
     @objc private func screenParametersChanged() {
-        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive, isWide: settings.home.showCalendar)
+        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive)
         guard updated != geometry else { return }
         geometry = updated
         live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
@@ -201,7 +188,6 @@ final class IslandController: NSObject {
                 settings = updated
                 pages.apply(updated)
                 live.apply(updated.home)
-                if updated.home.showCalendar != old.home.showCalendar { widthChanged() }
                 if updated.general.display != old.general.display { screenParametersChanged() }
             }
             window.onClose = { [unowned self] in settingsWindow = nil }

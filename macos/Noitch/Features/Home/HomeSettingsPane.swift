@@ -7,7 +7,7 @@ enum HomeSettingsPane {
             form.toggle("Show what's playing", caption: "Artwork and level bars beside the notch.", \.home.showLive)
         }
         form.section("Calendar", footer: "Read from the Calendar app on this Mac, only while Home is on screen. Nothing leaves your Mac.") {
-            form.toggle("Show calendar", caption: "This week and the day's events beside the music. Widens the island.", \.home.showCalendar)
+            form.toggle("Show calendar", caption: "This week and the day's events beside the music.", \.home.showCalendar)
         }
         form.section("Lyrics", footer: "Lyrics come from lrclib.net, which receives the track, artist and album names.") {
             form.toggle("Show lyrics", \.home.showLyrics)
