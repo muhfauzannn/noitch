@@ -53,7 +53,18 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
     const HRESULT hr = compositor_.Create(hwnd_);
     if (FAILED(hr)) return hr;
     monitor_.Initialize(hwnd_, NowSeconds);
-    pages_.Initialize(hwnd_, &compositor_, NowSeconds, &monitor_);
+    watch_.context = this;
+    watch_.onChange = [](void* context) { static_cast<IslandWindow*>(context)->pages_.TasksChanged(); };
+    watch_.onNew = [](void* context, const std::vector<MoodleTask>& tasks) { static_cast<IslandWindow*>(context)->taskAlert_.Announce(tasks, LocalUtcOffset()); };
+    watch_.onReminder = [](void* context, const MoodleTask& task, double lead) { static_cast<IslandWindow*>(context)->taskAlert_.Remind(task, lead); };
+    watch_.onUnviewedChange = [](void* context) {
+        auto* self = static_cast<IslandWindow*>(context);
+        self->taskAlert_.SetUnviewed(!self->watch_.Unviewed().empty());
+    };
+    taskAlert_.context = this;
+    taskAlert_.onShapeChange = [](void* context) { static_cast<IslandWindow*>(context)->ShapeChanged(); };
+    taskAlert_.Initialize(hwnd_, &compositor_, NowSeconds, settings_.pages.showTasks && settings_.tasks.alerts);
+    pages_.Initialize(hwnd_, &compositor_, NowSeconds, &monitor_, &watch_);
     pages_.Apply(settings_);
     live_.onActiveChange = [](void* context, bool active) { static_cast<IslandWindow*>(context)->LiveChanged(active); };
     live_.context = this;
@@ -66,8 +77,13 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
         self->settings_ = settings;
         self->pages_.Apply(settings);
         self->live_.Apply(settings.home);
+        self->watch_.Apply(settings.tasks, settings.pages.showTasks);
+        self->taskAlert_.SetEnabled(settings.pages.showTasks && settings.tasks.alerts);
     };
     ApplyLayout();
+    // After the layout, so an alert from the remembered list has a pill to grow from.
+    watch_.Initialize(hwnd_, settings_.tasks, settings_.pages.showTasks);
+    taskAlert_.SetUnviewed(!watch_.Unviewed().empty());
 
     ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
     if (CursorInCollapsedHitRegion()) {
@@ -99,6 +115,8 @@ float IslandWindow::PointerY(LPARAM lparam) const {
 LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (monitor_.HandleMessage(message, wparam, lparam)) return 0;
     if (live_.HandleMessage(message, wparam, lparam)) return 0;
+    if (watch_.HandleMessage(message, wparam, lparam)) return 0;
+    if (taskAlert_.HandleMessage(message, wparam, lparam)) return 0;
     if (pages_.HandleMessage(message, wparam, lparam)) return 0;
     switch (message) {
         case WM_LBUTTONDOWN:
@@ -131,6 +149,10 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             }
             [[fallthrough]];
         case WM_MOUSEWHEEL:
+            if (message == WM_MOUSEWHEEL && state_ == IslandState::Expanded) {
+                // Wheel up moves the list up, as a trackpad's content follows the fingers.
+                pages_.ScrolledVertically(GET_WHEEL_DELTA_WPARAM(wparam) / 5.0);
+            }
             if (!trackingLeave_) {
                 // One-shot: the system posts WM_MOUSELEAVE on exit, so hover costs nothing at rest.
                 TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd_, 0};
@@ -168,6 +190,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
                 compositorGeneration_ = compositor_.Generation();
                 pages_.DeviceLost();
                 live_.DeviceLost();
+                taskAlert_.DeviceLost();
             }
             return 0;
         case WM_DESTROY:
@@ -190,6 +213,7 @@ void IslandWindow::ApplyLayout() {
     geometry_ = IslandGeometry(static_cast<float>(dpiX) / USER_DEFAULT_SCREEN_DPI);
     geometry_.SetLive(live_.IsActive());
     geometry_.SetLiveLyric(live_.ShowsLyric());
+    geometry_.SetTaskAlert(taskAlert_.Shape());
     const WindowSize size = geometry_.Window();
     const RECT& screen = info.rcMonitor;
     const int x = screen.left + (screen.right - screen.left - size.width) / 2;
@@ -202,15 +226,21 @@ void IslandWindow::ApplyLayout() {
     compositor_.SetFlareRadius(geometry_.FlareRadius());
     compositor_.ShowPill(pill);
     live_.SetGeometry(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight(), size.width, geometry_.Scale());
+    taskAlert_.SetGeometry(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight(), size.width, geometry_.Scale());
 }
 
 // The closed pill widens into its wings when music starts and narrows when it ends; it grows down for
 // the lyric line and back. Like opening, the hit region grows before the pill does and shrinks after
 // (in FinishTransition), never per frame.
-void IslandWindow::LiveChanged(bool active) {
+void IslandWindow::LiveChanged(bool) { ShapeChanged(); }
+
+void IslandWindow::ShapeChanged() {
     const Pill before = geometry_.PillFor(IslandState::Collapsed);
-    geometry_.SetLive(active);
+    geometry_.SetLive(live_.IsActive());
     geometry_.SetLiveLyric(live_.ShowsLyric());
+    geometry_.SetTaskAlert(taskAlert_.Shape());
+    taskAlert_.SetLiveShown(live_.IsActive());
+    live_.SetLyricHeld(taskAlert_.Shape() == TaskAlertShape::Slip);
     const Pill after = geometry_.PillFor(IslandState::Collapsed);
     if (state_ != IslandState::Collapsed) return;
     const double now = NowSeconds();
@@ -237,12 +267,17 @@ void IslandWindow::TransitionTo(IslandState next) {
     // Grow the hit region before expanding and shrink it after collapsing.
     if (next == IslandState::Expanded) {
         live_.IslandWillOpen();
+        // An alert on the pill opens straight onto what it was about.
+        const std::optional<IslandPage> preferred = taskAlert_.WantsTasksPage() ? std::optional<IslandPage>(IslandPage::Tasks) : std::nullopt;
+        taskAlert_.IslandWillOpen();
         UpdateHitRegion();
         pages_.IslandWillOpen(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(),
-                              geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale());
+                              geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale(), preferred);
+        watch_.IslandWillOpen();
         AnimateContent(true, now);
     } else {
         live_.IslandWillClose();
+        taskAlert_.IslandWillClose();
         pages_.IslandWillClose();
         AnimateContent(false, now);
     }

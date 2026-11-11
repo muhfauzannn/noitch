@@ -13,6 +13,8 @@ final class IslandView: NSView {
     var onPrimaryUp: ((CGPoint) -> Void)?
     /// Horizontal trackpad scroll in points, positive toward the next page, and the event time.
     var onHorizontalScroll: ((Double, Double) -> Void)?
+    /// Vertical scroll in points, positive when the content should move down.
+    var onVerticalScroll: ((Double) -> Void)?
 
     /// Flares reach this far into the pill, so no seam shows at a fractional position.
     private static let flareOverlap: CGFloat = 1
@@ -133,11 +135,24 @@ final class IslandView: NSView {
     }
 
     private weak var live: CALayer?
+    private weak var taskAlert: CALayer?
+
+    /// Shows the closed island's task alert, hung like the music layers and above them.
+    func setTaskAlert(_ layer: CALayer) {
+        taskAlert = layer
+        withoutImplicitAnimations {
+            layer.anchorPoint = CGPoint(x: 0.5, y: 1)
+            layer.zPosition = -0.5
+            clip.addSublayer(layer)
+            placeLive()
+        }
+    }
 
     /// Top center of the content area, which moves when the open width changes.
     private func placeLive() {
         let full = contentSize == .zero ? IslandGeometry.expandedSize : contentSize
         live?.position = CGPoint(x: full.width / 2, y: full.height)
+        taskAlert?.position = CGPoint(x: full.width / 2, y: full.height)
     }
 
     /// Shows a feature's layers on the pill. `size` is the area they cover when expanded.
@@ -159,6 +174,8 @@ final class IslandView: NSView {
             let points = event.scrollingDeltaX * (event.hasPreciseScrollingDeltas ? 1 : 10)
             // Fingers moving left bring the next page in, whichever scroll direction is set.
             onHorizontalScroll?(Double(event.isDirectionInvertedFromDevice ? -points : points), event.timestamp)
+        } else if abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX) {
+            onVerticalScroll?(Double(event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 1 : 10)))
         }
         super.scrollWheel(with: event)
     }

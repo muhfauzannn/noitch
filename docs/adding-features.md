@@ -21,8 +21,8 @@ feature. Write it concretely. Extract an abstraction when a second feature shows
 shared.
 
 A feature that needs its own page adds a case to `IslandPage` (both platforms), a tab in the header,
-and a branch in `PageController`'s show, hide and reveal switches. With two pages that is still
-simpler than a protocol; reconsider at the third.
+and a branch in `PageController`'s show, hide and reveal switches. Tasks made it three, and the
+switches are still simpler than a protocol, so they stay; reconsider at the fourth.
 
 A feature with preferences adds a settings part and a settings page in its own folder (see
 [Settings](architecture.md#settings)): a `<Name>Settings` value added to `AppSettings`, and a pane
@@ -81,7 +81,7 @@ SwiftUI over a small AppKit window. The numbers are in [tech-stack.md](tech-stac
 ## Where the events come from
 
 Starting points for likely features. Verify each against current OS documentation before relying on
-it. Now playing, AI usage, the calendar (macOS) and launch at login are implemented so far.
+it. Now playing, AI usage, Moodle tasks, the calendar (macOS) and launch at login are implemented so far.
 
 | Feature | macOS | Windows |
 | --- | --- | --- |
@@ -92,6 +92,7 @@ it. Now playing, AI usage, the calendar (macOS) and launch at login are implemen
 | File shelf | `NSDraggingDestination`; keep URLs, not file data | `IDropTarget`; keep paths |
 | Now playing | [Implemented](architecture.md#now-playing-on-macos), shared through `NowPlayingMonitor` | `GlobalSystemMediaTransportControlsSessionManager`, shared through `NowPlayingMonitor` |
 | AI usage | [Implemented](architecture.md#usage): reads local logs when shown | Same |
+| Moodle tasks | [Implemented](architecture.md#tasks): no event exists, so one approved check every 30 min, plus `NSWorkspace.didWakeNotification` | Same, `SetCoalescableTimer` and `WM_POWERBROADCAST` |
 | Launch at login | `SMAppService` | Run registry key or Startup task |
 | Calendar | [Implemented](architecture.md#calendar-in-home-macos): EventKit, `EKEventStoreChanged` | `AppointmentStore`, packaged apps only; not implemented |
 | Full-screen detection | `NSWorkspace` and Space notifications | `SHQueryUserNotificationState` on foreground change |

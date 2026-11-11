@@ -55,8 +55,21 @@ final class SettingsForm {
         view = scroll
     }
 
-    /// A titled group. Rows added inside `content` go into one rounded box.
-    func section(_ title: String? = nil, footer: String? = nil, _ content: () -> Void) {
+    /// The settings as they are now, for panes with controls of their own.
+    var settings: AppSettings { read() }
+
+    /// Changes settings from a pane's own control, as the form's controls do.
+    func update(_ change: (inout AppSettings) -> Void) {
+        var settings = read()
+        change(&settings)
+        commit(settings)
+    }
+
+    /// A titled group. Rows added inside `content` go into one rounded box. Returns the views it
+    /// added, so a pane can hide the whole group.
+    @discardableResult
+    func section(_ title: String? = nil, footer: String? = nil, _ content: () -> Void) -> [NSView] {
+        let first = stack.arrangedSubviews.count
         if let title {
             let label = NSTextField(labelWithString: title)
             label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
@@ -91,6 +104,7 @@ final class SettingsForm {
             fill(Self.caption(footer))
         }
         stack.setCustomSpacing(18, after: stack.arrangedSubviews.last ?? box)
+        return Array(stack.arrangedSubviews[first...])
     }
 
     func toggle(_ title: String, caption: String? = nil, _ key: WritableKeyPath<AppSettings, Bool>, enabledBy: KeyPath<AppSettings, Bool>? = nil) {

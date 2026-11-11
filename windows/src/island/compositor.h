@@ -31,7 +31,7 @@ public:
     // What sits on the pill is a container inside the pill's clip, holding one visual per layer:
     // the shared header above the pages. `left` is the expanded pill's left edge.
     static constexpr int kHeaderLayer = 0;
-    static constexpr int kLayerCount = 1 + 2;  // The header, then one per page.
+    static constexpr int kLayerCount = 1 + 3;  // The header, then one per page.
     HRESULT CreateLayerSurface(int layer, UINT width, UINT height, float left, IDCompositionSurface** surface);
     HRESULT RemoveLayer(int layer);
     // Fades and slides the whole container: the open reveal. Does not commit: the pill transition

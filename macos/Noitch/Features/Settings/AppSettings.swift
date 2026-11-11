@@ -7,10 +7,11 @@ struct AppSettings: Equatable {
     var pages = PageSettings()
     var home = HomeSettings()
     var usage = UsageSettings()
+    var tasks = TasksSettings()
 
     static func load(from defaults: UserDefaults = .standard) -> AppSettings {
         let store = SettingsStore(defaults: defaults)
-        return AppSettings(general: .load(store), pages: .load(store), home: .load(store), usage: .load(store))
+        return AppSettings(general: .load(store), pages: .load(store), home: .load(store), usage: .load(store), tasks: .load(store))
     }
 
     func save(to defaults: UserDefaults = .standard) {
@@ -19,6 +20,7 @@ struct AppSettings: Equatable {
         pages.save(store)
         home.save(store)
         usage.save(store)
+        tasks.save(store)
     }
 }
 
@@ -68,22 +70,27 @@ enum DisplayChoice: String, CaseIterable {
 /// Which pages the island has, and which it opens on.
 struct PageSettings: Equatable {
     var showUsage = true
+    var showTasks = true
     var openOn = OpenPage.last
 
     static func load(_ store: SettingsStore) -> PageSettings {
         var settings = PageSettings()
         store.read("showUsagePage", into: &settings.showUsage)
+        store.read("showTasksPage", into: &settings.showTasks)
         store.read("openOn", into: &settings.openOn)
         return settings
     }
 
     func save(_ store: SettingsStore) {
         store.write("showUsagePage", showUsage)
+        store.write("showTasksPage", showTasks)
         store.write("openOn", openOn)
     }
 
     /// Home is always there: the island needs one page, and it is the one with the controls.
-    var visible: [IslandPage] { showUsage ? [.home, .usage] : [.home] }
+    var visible: [IslandPage] {
+        [.home] + (showUsage ? [.usage] : []) + (showTasks ? [.tasks] : [])
+    }
 
     /// The page to show on opening, given the one shown last.
     func page(opening last: IslandPage) -> IslandPage {
@@ -91,6 +98,7 @@ struct PageSettings: Equatable {
         case .last: last
         case .home: .home
         case .usage: .usage
+        case .tasks: .tasks
         }
         return visible.contains(wanted) ? wanted : .home
     }
@@ -100,12 +108,14 @@ enum OpenPage: String, CaseIterable {
     case last
     case home
     case usage
+    case tasks
 
     var title: String {
         switch self {
         case .last: "The page used last"
         case .home: "Home"
         case .usage: "AI Usage"
+        case .tasks: "Tasks"
         }
     }
 }
@@ -126,7 +136,12 @@ struct SettingsStore {
         if let raw = defaults.string(forKey: key), let choice = Choice(rawValue: raw) { value = choice }
     }
 
+    func read(_ key: String, into value: inout String) {
+        if let text = defaults.string(forKey: key) { value = text }
+    }
+
     func write(_ key: String, _ value: Bool) { defaults.set(value, forKey: key) }
+    func write(_ key: String, _ value: String) { defaults.set(value, forKey: key) }
     func write(_ key: String, _ value: Double) { defaults.set(value, forKey: key) }
     func write<Choice: RawRepresentable<String>>(_ key: String, _ value: Choice) { defaults.set(value.rawValue, forKey: key) }
 }

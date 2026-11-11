@@ -34,6 +34,7 @@ passing or to frames drawn. The spec for "at rest" is simple: **zero threads run
 | Text and images | `CATextLayer`, layer `contents` | One Direct2D + DirectWrite surface |
 | Settings | AppKit window, `UserDefaults` | Win32 window, `HKCU\Software\Noitch` |
 | Claude limits | Undocumented usage endpoint, Keychain login, only while the usage page shows | Same endpoint, `.credentials.json` login |
+| Moodle tasks | Moodle web service, key in the Keychain, one check every 30 min | Same service, key in Credential Manager |
 | Dependencies | MediaRemoteAdapter (BSD 3-Clause, vendored) | None beyond the OS and Windows SDK |
 
 Why each technology was chosen, and the evidence, is in [tech-stack.md](tech-stack.md).
@@ -49,7 +50,7 @@ macos/
   Noitch.xcodeproj         Synchronized folders: new files need no project edits
   Noitch/App/              Process entry and lifecycle
   Noitch/Island/           The island: window, layers, geometry, state
-  Noitch/Features/         Home, NowPlaying, Lyrics, Usage, Settings
+  Noitch/Features/         Home, NowPlaying, Lyrics, Usage, Tasks, Settings
   Vendor/MediaRemoteAdapter/ Third-party adapter, embedded in the app bundle
   NoitchTests/             Swift Testing, pure logic
   scripts/                 Budget and hover checks against the real app
@@ -58,7 +59,7 @@ windows/
   CMakeLists.txt
   src/main.cpp             Process entry and message loop
   src/island/              The island: window, compositor, geometry, spring
-  src/features/            home, now_playing, lyrics, usage, settings
+  src/features/            home, now_playing, lyrics, usage, tasks, settings
   tests/                   Pure logic tests; run on any host
   scripts/                 Budget check against the real app
 ```
@@ -72,9 +73,9 @@ The two apps have the same shape, with three kinds of module:
 
 | Role | macOS | Windows | Rule |
 | --- | --- | --- | --- |
-| Controller: owns state, reacts to events | `IslandController`, `PageController`, `HomeController`, `UsageController` | `IslandWindow`, `PageController`, `HomeController`, `UsageController` | The only places state changes |
-| Scene: owns compositor objects | `IslandView`, `IslandPanel`, `PagerScene`, `HomeScene`, `UsageScene` | `Compositor`, `Painter`, `HeaderScene`, `HomeScene`, `UsageScene` | Makes no decisions |
-| Pure logic: values in, values out | `IslandGeometry`, `IslandState`, `IslandPage`, `HomeLayout`, `HomeModel`, `NowPlaying`, `Lyrics`, `AIUsage`, `UsageModel`, `UsageLayout` | `island_geometry.h`, `spring.h`, `island_page.h`, `home_layout.h`, `home_model.h`, `now_playing.h`, `lyrics.h`, `ai_usage.h`, `usage_model.h`, `usage_layout.h` | No OS headers, fully tested |
+| Controller: owns state, reacts to events | `IslandController`, `PageController`, `HomeController`, `UsageController`, `TasksController`, `TaskWatch`, `TaskAlertController` | `IslandWindow`, `PageController`, `HomeController`, `UsageController`, `TasksController`, `TaskWatch`, `TaskAlertController` | The only places state changes |
+| Scene: owns compositor objects | `IslandView`, `IslandPanel`, `PagerScene`, `HomeScene`, `UsageScene`, `TasksScene`, `TaskAlertScene` | `Compositor`, `Painter`, `HeaderScene`, `HomeScene`, `UsageScene`, `TasksScene`, `TaskAlertScene` | Makes no decisions |
+| Pure logic: values in, values out | `IslandGeometry`, `IslandState`, `IslandPage`, `HomeLayout`, `HomeModel`, `NowPlaying`, `Lyrics`, `AIUsage`, `UsageModel`, `UsageLayout`, `MoodleFormat`, `TaskModel`, `TasksLayout` | `island_geometry.h`, `spring.h`, `island_page.h`, `home_layout.h`, `home_model.h`, `now_playing.h`, `lyrics.h`, `ai_usage.h`, `usage_model.h`, `usage_layout.h`, `task_model.h`, `tasks_layout.h` | No OS headers, fully tested |
 
 `PageController` owns which page is showing. The island tells it when it opens and closes and
 forwards pointer and scroll events; it passes them on to the current page. Each feature controller
@@ -122,7 +123,7 @@ single settle timer is simply reset, so a stale completion cannot occur.
 
 ## Pages
 
-The expanded island has pages, in tab order: Home, then Usage. A shared header in the band beside the
+The expanded island has pages, in tab order: Home, Usage, then Tasks. A shared header in the band beside the
 notch holds a tab per page at the left and settings at the right; pages keep their own buttons clear
 of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
 
@@ -382,6 +383,66 @@ Reading the logs:
   Release build; later reads took about 3 ms. The request runs off the main thread: a Swift task on
   macOS, a short-lived pool thread on Windows, as lyrics do.
 
+### Tasks
+
+The third page tracks what is still due on a Moodle site: by default Scele, the Fasilkom UI site
+(`https://scele.cs.ui.ac.id`). The design was approved on 2026-11-12, and its
+[design page](https://claude.ai/artifact/HpTrJWPxU23AkJzVzJr8Ae) has the reasoning and the mockups.
+
+- **Page.** On the left, the next task as a countdown ("1d 2h"), white with more than three days to
+  go, amber within three days, red within a day or overdue, over its title, course and due time, with
+  "Open in Scele". On the right, a runway of the next 14 days from now, a dot per task (stacked on a
+  busy day, ringed in blue while new), and under it three rows: icon, title and course, and when it is
+  due ("Tomorrow 23:55", "Fri 10:00", "Overdue 2d"). Scroll up and down to move through the rest.
+  Hovering a row lights its dot; clicking a row or the button opens the task in the browser, only for
+  links on the signed-in site. Signed out, the page offers "Sign in…", which opens settings. With
+  nothing due it says "All clear", and on macOS the tick draws itself.
+- **Closed island.** When a check finds a task that wasn't there before, the pill takes the music's
+  wing and strip shape (the live spring) for 8 s: the module's icon in the left wing, "+1" in the right
+  and "New · Fri 23:55 · PBP · Tugas 3" under the notch. With music playing the wings keep the artwork
+  and bars, and the alert takes the lyric strip for those 8 s. Then the pill narrows to a 6 pt blue dot
+  in a 14 pt wing on each side, which stays, with nothing running, until the page has been seen.
+  Hovering or clicking opens the island straight onto Tasks. Numbers are in `TaskAlertLayout`
+  (macOS) and `tasks_layout.h` (Windows). Windows draws the alert into one surface and redraws it in
+  place, in one colour.
+- **Reminders.** The same slip in red, a day and an hour before a deadline, from one one-shot timer
+  at the next reminder time. No request: the list is already known. A reminder that fell while the Mac
+  slept for more than 10 minutes is dropped, not shown late.
+- **New.** A task is new if its id isn't among those already announced and it is still ahead. The
+  first list after signing in is taken as already seen, so signing in announces nothing. Opening the
+  page marks everything seen.
+- **Remembered.** The last list, the ids announced and those not yet seen are kept in a small cache
+  file (`Caches/Noitch/tasks` on macOS, `%LOCALAPPDATA%\Noitch\tasks` on Windows, the same format),
+  so the page shows at once and a restart neither empties it nor announces everything again. Signing
+  out deletes it.
+
+Where the tasks come from: the site's web service, the documented API Moodle's own app uses
+(`webservice/rest/server.php`), approved by the owner on 2026-11-12 with these limits:
+
+- **Signing in.** The username and password go once, in a POST over HTTPS, to `login/token.php` with
+  `service=moodle_mobile_app`; the password is never stored, logged or kept in a field. Scele allows
+  this: its public config (`tool_mobile_get_public_config`) has web services and the mobile service on
+  and in-app login (`typeoflogin` 1), checked on 2026-11-11. Or a key pasted from the site's
+  Preferences › Security keys. Then `core_webservice_get_site_info` checks the key and gives the name
+  for settings.
+- **The key** is kept in the Keychain (a generic password, service `app.noitch.moodle`, this device
+  only) on macOS, and in Credential Manager (`Noitch/Moodle/<host>`, this user on this PC) on Windows.
+  It is read for each request and dropped after it, sent in the request body, never in a URL, and never
+  logged. A rebuilt macOS app has a new signature, so macOS asks once whether it may still read it.
+- **The request.** `core_calendar_get_action_events_by_timesort` from a week ago, at most 50: what the
+  Dashboard's Timeline block shows. Moodle drops an item once it is done, so the list is what is still
+  to do. One request, a few kilobytes. `mod_assign_get_submission_status` was in the design for an
+  assignment's details on click; it isn't built.
+- **When.** Moodle can't push to other apps, so this is the one feature that checks on a timer
+  while the island is closed, approved at once every 30 minutes at most: one one-shot timer with up to 5
+  minutes of tolerance (`Timer` on macOS, `SetCoalescableTimer` on Windows), re-armed after each check.
+  Also when the island opens (at most every 10 minutes), when the page shows (every 2), and when the
+  computer wakes. "Every hour" and "Only when I open the island" check less. A refused key stops the
+  timer until the next sign-in. Signed out, or with the page off, nothing is scheduled.
+- **Cost.** Each check is one HTTPS request: 11 to 26 ms of CPU on the M5. The networking frameworks it
+  loads stay loaded; see [performance.md](performance.md).
+- If the site changes or is down, the page says so over the remembered list; nothing else breaks.
+
 ### Lyrics
 
 Both apps look up the track on [LRCLIB](https://lrclib.net), which sends the track, artist and album
@@ -391,13 +452,13 @@ found later. "Show lyrics" in settings turns off both the display and the lookup
 
 ## Settings
 
-A window with a sidebar of pages: General, Pages, then one page per feature (Home, AI Usage), and
+A window with a sidebar of pages: General, Pages, then one page per feature (Home, AI Usage, Tasks), and
 About. Each feature owns its part of the settings and its page, next to its code:
 
 | Part | macOS | Windows |
 | --- | --- | --- |
-| Values | `AppSettings` holds `GeneralSettings`, `PageSettings`, `HomeSettings`, `UsageSettings` | `app_settings.h`, `home_settings.h`, `usage_settings.h` |
-| Page | `SettingsPane` built by `SettingsPanes`, `HomeSettingsPane`, `UsageSettingsPane` | `SettingsPane` data from `settings_panes.h`, `home_settings_pane.h`, `usage_settings_pane.h` |
+| Values | `AppSettings` holds `GeneralSettings`, `PageSettings`, `HomeSettings`, `UsageSettings`, `TasksSettings` | `app_settings.h`, `home_settings.h`, `usage_settings.h`, `tasks_settings.h` |
+| Page | `SettingsPane` built by `SettingsPanes`, `HomeSettingsPane`, `UsageSettingsPane`, `TasksSettingsPane` | `SettingsPane` data from `settings_panes.h`, `home_settings_pane.h`, `usage_settings_pane.h`, `tasks_settings_pane.h`; the account block is built by `SettingsWindow` |
 | Controls | `SettingsForm` turns a pane into AppKit rows in rounded groups | `SettingsWindow` turns a pane into Win32 controls |
 | Storage | `UserDefaults`, keys unchanged from before the split | `HKCU\Software\Noitch`; fractions stored in thousandths |
 
@@ -411,7 +472,8 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | General | Haptic feedback | Off | macOS only: a tap on a Force Touch trackpad as the island opens. Windows has no such API for desktop apps |
 | General | Show the island on | Built-in display with a notch | macOS only: or the main (menu bar) display. Windows always uses the primary display |
 | Pages | AI Usage | On | Off removes its tab and swipe stop. Home is always there |
-| Pages | Open on | The page used last | Or always Home, or always AI Usage |
+| Pages | Tasks | On | Off removes its tab, swipe stop, checks and alerts |
+| Pages | Open on | The page used last | Or always Home, AI Usage or Tasks |
 | Home | Show lyrics | On | The lyric lines and the LRCLIB lookup |
 | Home | Show the next line | On | The dimmer second line |
 | Home | Timing | As published | Shifts which line is sung by −1 to +1 s |
@@ -424,6 +486,11 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
 | AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
 | AI Usage | Check Claude every | Minute | Or 5 or 15 minutes. Never more often than the approved once a minute; logs are still read every minute |
+| Tasks | Account | Signed out | Site (default `https://scele.cs.ui.ac.id`, HTTPS only), username and password, or a security key; signed in, the name and Sign out |
+| Tasks | Check for new tasks | Every 30 minutes | Or every hour, or only when the island opens. Never more often than the approved 30 minutes |
+| Tasks | Alert on the closed island | On | The slip, then the dot |
+| Tasks | Remind before due | 1 day and 1 hour | Or 1 hour, or off |
+| Tasks | Show | Assignments and quizzes | Or everything with a due date, such as forums |
 
 Open settings with the header's gear or the secondary-click menu. The window is created on first use
 and released on close, and only the page on screen has controls. macOS uses AppKit, not SwiftUI,
@@ -444,10 +511,12 @@ The spec both apps follow. Change it here and in both apps together.
 | Corner shape | macOS: continuous. Windows: circular (DirectComposition has no continuous corner) |
 | Overshoot margin | 16 pt |
 | Spring | Expand: response 0.5 s, bounce 0.14. Collapse: response 0.38 s, bounce 0.18 |
-| Pages | Home, Usage. Tabs left in the header band, settings right; header numbers in `HeaderLayout` and `island_page.h` |
+| Pages | Home, Usage, Tasks. Tabs left in the header band, settings right; a page turned off gives its slot to the next; header numbers in `HeaderLayout` and `island_page.h` |
 | Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
+| Tasks layout | Numbers in `TasksLayout` and `TaskAlertLayout` (macOS) and `tasks_layout.h` (Windows), which must match; 14-day runway, three rows |
+| Task rules | `TaskRule` (macOS) and `task_model.h` (Windows): amber within 3 days, red within 1; overdue kept a week; slip 8 s; reminders 1 day and 1 hour before; checks every 30 min at most |
 | Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause; a 20 pt lyric strip under the notch, 12 pt text. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |

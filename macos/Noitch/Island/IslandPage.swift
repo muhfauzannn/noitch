@@ -4,6 +4,7 @@ import CoreGraphics
 enum IslandPage: Int, CaseIterable {
     case home
     case usage
+    case tasks
 
     /// The page `step` places away among `pages`, if there is one.
     func neighbor(_ step: Int, in pages: [IslandPage]) -> IslandPage? {

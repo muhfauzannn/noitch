@@ -44,6 +44,7 @@ final class PagerScene {
             switch page {
             case .home: (.tab(.home), .music)
             case .usage: (.tab(.usage), .usage)
+            case .tasks: (.tab(.tasks), .tasks)
             }
         }
         for (control, icon) in tabs + [(.settings, .settings)] {

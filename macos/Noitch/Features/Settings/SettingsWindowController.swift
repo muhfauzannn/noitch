@@ -22,7 +22,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
 
     init(settings: AppSettings) {
         self.settings = settings
-        panes = [SettingsPanes.general, SettingsPanes.pages, HomeSettingsPane.pane, UsageSettingsPane.pane, SettingsPanes.about]
+        panes = [SettingsPanes.general, SettingsPanes.pages, HomeSettingsPane.pane, UsageSettingsPane.pane, TasksSettingsPane.pane, SettingsPanes.about]
         window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Self.size),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],

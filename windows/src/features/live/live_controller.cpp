@@ -119,12 +119,18 @@ bool LiveController::CurrentLyric(std::string* line) const {
     return LiveRule::LyricLine(lyrics_.get(), nowPlaying_.Position(now_()), lyricsOffset_, line);
 }
 
+void LiveController::SetLyricHeld(bool held) {
+    if (held == lyricHeld_) return;
+    lyricHeld_ = held;
+    UpdateLyric();
+}
+
 void LiveController::UpdateLyric() {
     KillTimer(window_, kLyricTimer);
     std::string line;
-    if (!showsLyric_ || !CurrentLyric(&line)) line.clear();
+    if (!showsLyric_ || lyricHeld_ || !CurrentLyric(&line)) line.clear();
     scene_.SetLyric(line);
-    if (!showsLyric_ || islandOpen_ || !nowPlaying_.isPlaying || !lyrics_) return;
+    if (!showsLyric_ || lyricHeld_ || islandOpen_ || !nowPlaying_.isPlaying || !lyrics_) return;
     const double position = nowPlaying_.Position(now_());
     const double next = lyrics_->NextChange(position + lyricsOffset_);
     if (next < 0) return;

@@ -22,6 +22,7 @@ enum SettingsPanes {
     static let pages = SettingsPane(title: "Pages", glyph: .pages, color: .systemIndigo) { form in
         form.section("Pages", footer: "Home is always there. Swipe sideways in the island to move between pages.") {
             form.toggle("AI Usage", caption: "Claude Code and Codex limits.", \.pages.showUsage)
+            form.toggle("Tasks", caption: "What's still due on your Moodle site, such as Scele.", \.pages.showTasks)
         }
         form.section("Opening") {
             form.choice("Open on", \.pages.openOn, options: OpenPage.allCases.map { ($0.title, $0) })

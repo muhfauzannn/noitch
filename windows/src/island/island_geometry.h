@@ -3,6 +3,7 @@
 // Pure layout. No Windows headers, so it is unit-testable on any host.
 
 #include "features/live/live_layout.h"
+#include "features/tasks/tasks_layout.h"
 
 namespace noitch {
 
@@ -40,6 +41,8 @@ public:
     bool IsLive() const { return live_; }
     // The live pill also shows the line being sung, under the notch.
     void SetLiveLyric(bool lyric) { liveLyric_ = lyric; }
+    // A task alert on the closed pill, see TaskAlertLayout.
+    void SetTaskAlert(TaskAlertShape shape) { taskAlert_ = shape; }
     static constexpr float CollapsedWidth() { return kCollapsedWidth; }
 
     // Logical sizes for laying out what sits on the expanded pill.
@@ -49,9 +52,9 @@ public:
 
     Pill PillFor(IslandState state) const {
         const bool expanded = state == IslandState::Expanded;
-        const LiveLayout live(kCollapsedWidth, kCollapsedHeight);
-        const float collapsed = live_ ? live.Width() : kCollapsedWidth;
-        const float collapsedHeight = live_ ? live.Height(liveLyric_) : kCollapsedHeight;
+        float collapsed = 0;
+        float collapsedHeight = 0;
+        TaskAlertLayout::PillSize(kCollapsedWidth, kCollapsedHeight, live_, liveLyric_, taskAlert_, &collapsed, &collapsedHeight);
         const float halfWidth = (expanded ? kExpandedWidth : collapsed) * scale_ / 2;
         const float center = Window().width / 2.0f;
         return {
@@ -78,6 +81,7 @@ private:
     float scale_;
     bool live_ = false;
     bool liveLyric_ = false;
+    TaskAlertShape taskAlert_ = TaskAlertShape::None;
 };
 
 }  // namespace noitch

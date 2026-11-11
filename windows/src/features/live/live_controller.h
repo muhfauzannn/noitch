@@ -33,6 +33,8 @@ public:
     // The pill also shows the line being sung, under the notch.
     bool ShowsLyric() const { return showsLyric_; }
 
+    // While a task alert has the strip, the line steps aside; it comes back when the alert ends.
+    void SetLyricHeld(bool held);
     void IslandWillOpen();
     void IslandWillClose();
     void DeviceLost();
@@ -76,6 +78,7 @@ private:
     bool lyricsEnabled_ = true;
     double lyricsOffset_ = 0;
     bool showsLyric_ = false;
+    bool lyricHeld_ = false;
     std::unique_ptr<Lyrics> lyrics_;
     std::string lyricsKey_;
     uintptr_t lyricsGeneration_ = 0;

@@ -2,9 +2,13 @@
 
 #include <windows.h>
 
+#include <optional>
+
 #include "compositor.h"
 #include "features/home/home_controller.h"
 #include "features/settings/app_settings.h"
+#include "features/tasks/task_watch.h"
+#include "features/tasks/tasks_controller.h"
 #include "features/usage/usage_controller.h"
 #include "header_scene.h"
 #include "island_page.h"
@@ -21,11 +25,14 @@ public:
     static constexpr UINT_PTR kSettleTimer = 6;
     static constexpr UINT_PTR kReleaseTimer = 7;
 
-    void Initialize(HWND window, Compositor* compositor, double (*now)(), NowPlayingMonitor* monitor);
+    void Initialize(HWND window, Compositor* compositor, double (*now)(), NowPlayingMonitor* monitor, TaskWatch* watch);
+    // The task list changed while the island may be showing it.
+    void TasksChanged() { tasks_.WatchChanged(); }
     void Apply(const AppSettings& settings);
 
     // `left` is the expanded pill's left edge; sizes are logical.
-    void IslandWillOpen(float width, float height, float headerHeight, float left, float scale);
+    // `preferred` opens on that page instead of the usual one, when it is turned on.
+    void IslandWillOpen(float width, float height, float headerHeight, float left, float scale, std::optional<IslandPage> preferred = std::nullopt);
     void IslandWillClose();
     void DeviceLost();
 
@@ -38,6 +45,8 @@ public:
     void PointerUp(float x, float y);
     // `delta` is in points, positive toward the next page; `time` in seconds.
     void Scrolled(double delta, double time);
+    // Vertical wheel, in points; only the tasks page scrolls its list.
+    void ScrolledVertically(double delta);
 
     bool IsInteracting() const { return home_.IsInteracting(); }
 
@@ -49,7 +58,7 @@ private:
     void Select(IslandPage next);
     // Shows a page at once, for an island that is out of sight.
     void Jump(IslandPage page);
-    HeaderLayout Header() const { return HeaderLayout(width_, headerHeight_, scale_, pages_.showUsage); }
+    HeaderLayout Header() const { return HeaderLayout(width_, headerHeight_, scale_, pages_.Visible()); }
     void ShowFeature(IslandPage page);
     void HideFeature(IslandPage page);
     void PaintHeader();
@@ -61,6 +70,7 @@ private:
     double (*now_)() = nullptr;
     HomeController home_;
     UsageController usage_;
+    TasksController tasks_;
     Painter painter_;
     HeaderScene header_;
     PageSettings pages_;
@@ -73,7 +83,7 @@ private:
     float scale_ = 1;
     PageSwipe swipe_;
     // Windows can't read values back from DWM, so each page's fade is known analytically.
-    ContentFade opacity_[kPageCount] = {{0, 0, 0, 1, 1}, {0, 0, 0, 0, 0}};
+    ContentFade opacity_[kPageCount] = {{0, 0, 0, 1, 1}, {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}};
     ContentFade offset_[kPageCount];
 
     HeaderControl hovered_ = HeaderControl::None;

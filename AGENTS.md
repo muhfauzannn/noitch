@@ -55,7 +55,9 @@ MediaRemoteAdapter on macOS is the one approved exception for dependencies, extr
 private APIs. Its limits are in [docs/architecture.md](docs/architecture.md#now-playing-on-macos);
 don't widen them without asking. The usage page's Claude limits use an undocumented Anthropic
 endpoint with Claude Code's login, also approved within the limits in
-[docs/architecture.md](docs/architecture.md#usage).
+[docs/architecture.md](docs/architecture.md#usage). The tasks page's Moodle checks (a request every
+30 minutes while closed, and a key kept in the Keychain or Credential Manager) are approved within
+the limits in [docs/architecture.md](docs/architecture.md#tasks).
 
 Moving to a shared cross-platform layer is out of scope. The duplication is deliberate.
 

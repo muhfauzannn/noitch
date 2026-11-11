@@ -7,6 +7,8 @@
 #include "features/live/live_controller.h"
 #include "features/now_playing/now_playing_monitor.h"
 #include "features/settings/settings_window.h"
+#include "features/tasks/task_alert.h"
+#include "features/tasks/task_watch.h"
 #include "island_geometry.h"
 #include "page_controller.h"
 #include "spring.h"
@@ -33,6 +35,8 @@ private:
     bool CursorInWindow() const;
     void OpenSettings();
     void LiveChanged(bool active);
+    // The closed pill's shape follows the music and the task alert together.
+    void ShapeChanged();
     float PointerX(LPARAM lparam) const;
     float PointerY(LPARAM lparam) const;
 
@@ -52,6 +56,8 @@ private:
     NowPlayingMonitor monitor_;
     PageController pages_;
     LiveController live_;
+    TaskWatch watch_;
+    TaskAlertController taskAlert_;
     SettingsWindow settingsWindow_;
 };
 

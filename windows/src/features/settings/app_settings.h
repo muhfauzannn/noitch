@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "features/home/home_settings.h"
+#include "features/tasks/tasks_settings.h"
 #include "features/usage/usage_settings.h"
 #include "island/island_page.h"
 
@@ -24,19 +25,24 @@ struct GeneralSettings {
 
 inline constexpr double kHoverDelays[] = {0, 0.15, 0.3, 0.5};
 
-enum class OpenPage { Last, Home, Usage };
+enum class OpenPage { Last, Home, Usage, Tasks };
 
 // Which pages the island has, and which it opens on. Home is always there: the island needs one
 // page, and it is the one with the controls.
 struct PageSettings {
     bool showUsage = true;
+    bool showTasks = true;
     OpenPage openOn = OpenPage::Last;
 
-    bool Shows(IslandPage page) const { return page == IslandPage::Home || showUsage; }
+    VisiblePages Visible() const { return {showUsage, showTasks}; }
+    bool Shows(IslandPage page) const { return Visible().Shows(page); }
 
     // The page to show on opening, given the one shown last.
     IslandPage Opening(IslandPage last) const {
-        const IslandPage wanted = openOn == OpenPage::Home ? IslandPage::Home : openOn == OpenPage::Usage ? IslandPage::Usage : last;
+        const IslandPage wanted = openOn == OpenPage::Home    ? IslandPage::Home
+                                  : openOn == OpenPage::Usage ? IslandPage::Usage
+                                  : openOn == OpenPage::Tasks ? IslandPage::Tasks
+                                                              : last;
         return Shows(wanted) ? wanted : IslandPage::Home;
     }
 
@@ -48,6 +54,7 @@ struct AppSettings {
     PageSettings pages;
     HomeSettings home;
     UsageSettings usage;
+    TasksSettings tasks;
 
     bool operator==(const AppSettings&) const = default;
 };

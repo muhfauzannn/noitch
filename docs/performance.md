@@ -15,6 +15,18 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the tasks page and its closed-island alert (2026-11-12, same M5), signed out, so no check runs:
+10.50 and 10.45 MB, 2.38 and 1.91 ms/min, 0.13 and 0.10 wakeups/s, 4.28 ms per transition, all 23
+hover checks passing with Hover delay at None. Just before, on main: 9.97 MB, 2.89 ms/min, 0.10
+wakeups/s. The binary grew from 1135 KB to 1499 KB. Two runs in between read 40.27 and 16.84 MB with
+hundreds of ms/min; the app was idle at 0% CPU when checked straight after, so the pointer or other
+work was the likely cause. **Signed in, not yet measured.** One check is one HTTPS request: measured
+apart from the app, 25.9 ms of CPU the first time and 10.6 to 13.1 ms after, and the networking
+frameworks added 2.9 to 3.6 MB that stayed. At one check per 30 minutes that is under 1 ms/min and
+0.0006 wakeups/s, but the memory may take the app over 12 MB at rest, unless the lyric lookup has
+loaded the same frameworks already. Whether to accept that is the owner's call once it is measured
+signed in.
+
 With the closed island's lyric line, rising lyrics and the stage's new background (2026-11-11, same
 M5), measured while Spotify or Music played a track with synced lyrics, so the wings and the line
 were up: with "Show the lyric line" off, 10.52 MB, 9.12 ms/min and 0.20 wakeups/s; with it on,

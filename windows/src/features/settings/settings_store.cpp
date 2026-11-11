@@ -2,7 +2,9 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <string>
 
 namespace noitch {
 
@@ -30,6 +32,24 @@ void Read(const wchar_t* name, double& value, double low, double high) {
     value = read < low ? low : read > high ? high : read;
 }
 
+std::string ReadText(const wchar_t* name, const std::string& fallback) {
+    wchar_t buffer[512];
+    DWORD size = sizeof(buffer);
+    if (RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, name, RRF_RT_REG_SZ, nullptr, buffer, &size) != ERROR_SUCCESS) return fallback;
+    const int length = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, nullptr, 0, nullptr, nullptr);
+    if (length <= 1) return std::string();
+    std::string text(static_cast<size_t>(length - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, buffer, -1, text.data(), length, nullptr, nullptr);
+    return text;
+}
+
+void WriteText(HKEY key, const wchar_t* name, const std::string& text) {
+    const int length = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+    std::wstring wide(static_cast<size_t>(std::max(length, 1)), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, wide.data(), length);
+    RegSetValueExW(key, name, 0, REG_SZ, reinterpret_cast<const BYTE*>(wide.c_str()), static_cast<DWORD>((wcslen(wide.c_str()) + 1) * sizeof(wchar_t)));
+}
+
 void Write(HKEY key, const wchar_t* name, DWORD stored) {
     RegSetValueExW(key, name, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&stored), sizeof(stored));
 }
@@ -49,8 +69,9 @@ AppSettings LoadSettings() {
     Read(L"OpenOnHover", settings.general.openOnHover);
     Read(L"HoverDelay", settings.general.hoverDelay, 0, 1);
     Read(L"ShowUsagePage", settings.pages.showUsage);
+    Read(L"ShowTasksPage", settings.pages.showTasks);
     DWORD openOn = 0;
-    if (ReadDword(L"OpenOn", openOn) && openOn <= static_cast<DWORD>(OpenPage::Usage)) settings.pages.openOn = static_cast<OpenPage>(openOn);
+    if (ReadDword(L"OpenOn", openOn) && openOn <= static_cast<DWORD>(OpenPage::Tasks)) settings.pages.openOn = static_cast<OpenPage>(openOn);
     Read(L"ShowLyrics", settings.home.showLyrics);
     Read(L"ShowNextLyric", settings.home.showNextLyric);
     Read(L"LyricsOffset", settings.home.lyricsOffset, -5, 5);
@@ -63,6 +84,16 @@ AppSettings LoadSettings() {
     Read(L"UsageShowCodex", settings.usage.showCodex);
     Read(L"UsageWarnAt", settings.usage.warnAt, 30, 95);
     Read(L"UsageRefreshMinutes", settings.usage.refreshMinutes, 1, 60);
+    const std::string site = NormalizedTasksSite(ReadText(L"TasksSite", kDefaultTasksSite));
+    settings.tasks.site = site.empty() ? kDefaultTasksSite : site;
+    settings.tasks.accountName = ReadText(L"TasksAccountName", "");
+    Read(L"TasksCheckMinutes", settings.tasks.checkMinutes, 0, 24 * 60);
+    // Never more often than approved.
+    if (settings.tasks.checkMinutes != 0) settings.tasks.checkMinutes = std::max(settings.tasks.checkMinutes, 30.0);
+    Read(L"TasksAlerts", settings.tasks.alerts);
+    DWORD choice = 0;
+    if (ReadDword(L"TasksReminders", choice) && choice <= static_cast<DWORD>(ReminderChoice::Off)) settings.tasks.reminders = static_cast<ReminderChoice>(choice);
+    if (ReadDword(L"TasksScope", choice) && choice <= static_cast<DWORD>(TaskScope::Everything)) settings.tasks.scope = static_cast<TaskScope>(choice);
     return settings;
 }
 
@@ -85,6 +116,13 @@ void SaveSettings(const AppSettings& settings) {
     Write(key, L"UsageShowCodex", settings.usage.showCodex);
     Write(key, L"UsageWarnAt", settings.usage.warnAt);
     Write(key, L"UsageRefreshMinutes", settings.usage.refreshMinutes);
+    Write(key, L"ShowTasksPage", settings.pages.showTasks);
+    WriteText(key, L"TasksSite", settings.tasks.site);
+    WriteText(key, L"TasksAccountName", settings.tasks.accountName);
+    Write(key, L"TasksCheckMinutes", settings.tasks.checkMinutes);
+    Write(key, L"TasksAlerts", settings.tasks.alerts);
+    Write(key, L"TasksReminders", static_cast<DWORD>(settings.tasks.reminders));
+    Write(key, L"TasksScope", static_cast<DWORD>(settings.tasks.scope));
     RegCloseKey(key);
 }
 

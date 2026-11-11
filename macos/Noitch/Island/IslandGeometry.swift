@@ -43,10 +43,14 @@ struct IslandGeometry: Equatable {
     /// The live pill also shows the line being sung, under the notch.
     var showsLiveLyric = false
 
-    init(display: Display, isLive: Bool = false, showsLiveLyric: Bool = false) {
+    /// A task alert on the closed pill, see `TaskAlertLayout`.
+    var taskAlert = TaskAlertShape.none
+
+    init(display: Display, isLive: Bool = false, showsLiveLyric: Bool = false, taskAlert: TaskAlertShape = .none) {
         self.display = display
         self.isLive = isLive
         self.showsLiveLyric = showsLiveLyric
+        self.taskAlert = taskAlert
     }
 
     var expandedSize: CGSize { Self.expandedSize }
@@ -63,7 +67,15 @@ struct IslandGeometry: Equatable {
 
     func pillSize(for state: IslandState) -> CGSize {
         if state == .expanded { return expandedSize }
-        return isLive ? LiveLayout(collapsed: collapsedSize).size(withLyric: showsLiveLyric) : collapsedSize
+        let live = LiveLayout(collapsed: collapsedSize)
+        var size = isLive ? live.size(withLyric: showsLiveLyric) : collapsedSize
+        switch taskAlert {
+        case .none: break
+        // The slip takes the music's wings and strip, so it is the same shape with or without music.
+        case .slip: size = live.size(withLyric: true)
+        case .dot: size.width += TaskAlertLayout.dotWing * 2
+        }
+        return size
     }
 
     func cornerRadius(for state: IslandState) -> CGFloat {

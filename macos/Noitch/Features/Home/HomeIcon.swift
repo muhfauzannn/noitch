@@ -14,14 +14,20 @@ enum HomeIcon {
     case music
     case usage
     case lyrics
+    /// A list on a card, for the tasks page's tab.
+    case tasks
+    /// A page with a folded corner.
+    case assignment
+    /// A tick cut out of a disc.
+    case quiz
 
-    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics]
+    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .tasks, .assignment, .quiz]
 
     /// Only the gear and the lyrics bubble rely on the even-odd rule. Others have overlapping parts
     /// that it would punch out.
     var hasHole: Bool {
         switch self {
-        case .settings, .lyrics: true
+        case .settings, .lyrics, .tasks, .assignment, .quiz: true
         default: false
         }
     }
@@ -76,6 +82,21 @@ enum HomeIcon {
             path.addRoundedRect(in: CGRect(x: 16, y: 9, width: 4, height: 11), cornerWidth: 1, cornerHeight: 1)
         case .lyrics:
             Self.addBubble(to: path)
+        case .tasks:
+            path.addRoundedRect(in: CGRect(x: 4, y: 3, width: 16, height: 18), cornerWidth: 3.5, cornerHeight: 3.5)
+            for (y, width) in [(7.5, 8.0), (11.0, 8.0), (14.5, 5.0)] as [(CGFloat, CGFloat)] {
+                path.addRoundedRect(in: CGRect(x: 8, y: y, width: width, height: 2), cornerWidth: 1, cornerHeight: 1)
+            }
+        case .assignment:
+            path.addLines(between: [CGPoint(x: 5, y: 2), CGPoint(x: 14, y: 2), CGPoint(x: 20, y: 8), CGPoint(x: 20, y: 22), CGPoint(x: 5, y: 22)])
+            path.closeSubpath()
+            path.addRoundedRect(in: CGRect(x: 8.5, y: 11, width: 8, height: 2.2), cornerWidth: 1.1, cornerHeight: 1.1)
+            path.addRoundedRect(in: CGRect(x: 8.5, y: 15.5, width: 8, height: 2.2), cornerWidth: 1.1, cornerHeight: 1.1)
+        case .quiz:
+            path.addEllipse(in: CGRect(x: 2.5, y: 2.5, width: 19, height: 19))
+            path.addLines(between: [CGPoint(x: 6.8, y: 12.4), CGPoint(x: 8.6, y: 10.6), CGPoint(x: 10.8, y: 12.8),
+                                    CGPoint(x: 15.6, y: 8), CGPoint(x: 17.4, y: 9.8), CGPoint(x: 10.8, y: 16.4)])
+            path.closeSubpath()
         case .music:
             path.addEllipse(in: CGRect(x: 4, y: 15, width: 8, height: 6.5))
             path.addRect(CGRect(x: 10, y: 4, width: 2, height: 14))

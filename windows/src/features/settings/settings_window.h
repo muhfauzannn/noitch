@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <string>
 #include <vector>
 
 #include "app_settings.h"
@@ -26,6 +27,12 @@ private:
     void Changed(int row, HWND control);
     void UpdateEnabled();
     int Scaled(int value) const;
+    // The Moodle account block of the tasks page: sign-in fields, or who is signed in.
+    int BuildAccount(int left, int width, int y);
+    void StartSignIn(bool withKey);
+    void FinishSignIn(LPARAM result);
+    void SignOut();
+    void Report(const std::wstring& text);
 
     HWND hwnd_ = nullptr;
     HWND sidebar_ = nullptr;
@@ -42,6 +49,16 @@ private:
     std::vector<HWND> secondary_;
     std::vector<const SettingsRow*> rows_;
     std::vector<HWND> rowControls_;
+    HWND siteEdit_ = nullptr;
+    HWND userEdit_ = nullptr;
+    HWND passwordEdit_ = nullptr;
+    HWND keyEdit_ = nullptr;
+    HWND signInButton_ = nullptr;
+    HWND useKeyButton_ = nullptr;
+    HWND statusLabel_ = nullptr;
+    // A sign-in answer that arrives after the window or page changed is dropped.
+    uintptr_t signInGeneration_ = 0;
+    std::string pendingSite_;
 };
 
 }  // namespace noitch

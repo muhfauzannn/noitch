@@ -14,7 +14,8 @@
 namespace noitch {
 
 struct SettingsRow {
-    enum class Kind { Toggle, Choice, LaunchAtLogin, Text };
+    // Account is the Moodle sign-in block, which the window builds itself (see TasksSettingsPane).
+    enum class Kind { Toggle, Choice, LaunchAtLogin, Text, Account };
 
     Kind kind = Kind::Toggle;
     std::wstring title;

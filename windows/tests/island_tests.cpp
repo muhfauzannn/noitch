@@ -11,6 +11,9 @@
 #include "features/home/home_settings_pane.h"
 #include "features/settings/settings_panes.h"
 #include "features/usage/usage_settings_pane.h"
+#include "features/tasks/tasks_settings_pane.h"
+#include "features/tasks/task_model.h"
+#include "features/tasks/tasks_layout.h"
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
 #include "features/usage/ai_limits.h"
@@ -627,7 +630,7 @@ void TestHeaderControlsStayClearOfHomesControls() {
     const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1);
     const HomeLayout home(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 32, 1);
     for (const HomeControl control : kHomeControls) {
-        for (const HeaderControl tab : {HeaderControl::HomeTab, HeaderControl::UsageTab, HeaderControl::Settings}) {
+        for (const HeaderControl tab : {HeaderControl::HomeTab, HeaderControl::UsageTab, HeaderControl::TasksTab, HeaderControl::Settings}) {
             assert(!header.Frame(tab).Intersects(home.Frame(control)));
         }
     }
@@ -642,9 +645,13 @@ void TestSwipeStepsOnePageHoweverLongItRuns() {
     assert(swipe.Add(200, 0.04) == 0);
     assert(swipe.Add(-50, 0.5) == -1);
     IslandPage next = IslandPage::Home;
-    assert(!NeighborPage(IslandPage::Home, -1, true, &next));
-    assert(NeighborPage(IslandPage::Home, 1, true, &next) && next == IslandPage::Usage);
-    assert(!NeighborPage(IslandPage::Home, 1, false, &next));
+    assert(!NeighborPage(IslandPage::Home, -1, {}, &next));
+    assert(NeighborPage(IslandPage::Home, 1, {}, &next) && next == IslandPage::Usage);
+    assert(NeighborPage(IslandPage::Usage, 1, {}, &next) && next == IslandPage::Tasks);
+    assert(!NeighborPage(IslandPage::Tasks, 1, {}, &next));
+    // With Usage off, Tasks follows Home directly.
+    assert(NeighborPage(IslandPage::Home, 1, {false, true}, &next) && next == IslandPage::Tasks);
+    assert(!NeighborPage(IslandPage::Home, 1, {false, false}, &next));
 }
 
 }  // namespace
@@ -671,8 +678,15 @@ void TestPagesOpenWhereTheSettingsSay() {
     pages.openOn = OpenPage::Usage;
     pages.showUsage = false;
     assert(pages.Opening(IslandPage::Usage) == IslandPage::Home && pages.Shows(IslandPage::Home));
-    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1, false);
-    assert(header.ControlAt(22 + 45, 16) == HeaderControl::None);
+    // Tasks moves up into Usage's slot.
+    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1, pages.Visible());
+    assert(header.ControlAt(22 + 45, 16) == HeaderControl::TasksTab);
+    pages.showTasks = false;
+    const HeaderLayout homeOnly(IslandGeometry::ExpandedWidth(), 32, 1, pages.Visible());
+    assert(homeOnly.ControlAt(22 + 45, 16) == HeaderControl::None);
+    pages = PageSettings{};
+    pages.openOn = OpenPage::Tasks;
+    assert(pages.Opening(IslandPage::Home) == IslandPage::Tasks);
 }
 
 void TestUsageSettingsPickColumnsAndWhereAmberStarts() {
@@ -698,7 +712,7 @@ void TestUsageSettingsPickColumnsAndWhereAmberStarts() {
 
 // Every row a pane describes reads back what it writes, so no control is wired to the wrong setting.
 void TestSettingsPanesWriteWhatTheyRead() {
-    for (const SettingsPane& pane : {GeneralSettingsPane(), PagesSettingsPane(), HomeSettingsPane(), UsageSettingsPane(), AboutSettingsPane()}) {
+    for (const SettingsPane& pane : {GeneralSettingsPane(), PagesSettingsPane(), HomeSettingsPane(), UsageSettingsPane(), TasksSettingsPane(), AboutSettingsPane()}) {
         assert(!pane.title.empty());
         for (const SettingsSection& section : pane.sections) {
             for (const SettingsRow& row : section.rows) {
@@ -775,6 +789,174 @@ void TestBarsRiseAndFallSmoothlyInGradedShades() {
     assert((rounded[0] >> 24) == 0 && rounded[8 * 16 + 8] == 0xFFFFFFFF);
 }
 
+namespace {
+
+// Thu 12 Nov 2026, 21:00 in Jakarta (UTC+7), as the macOS tests use.
+constexpr double kTaskNow = 1794492000;
+constexpr double kJakarta = 7 * 3600;
+
+MoodleTask SampleTask(int64_t id, double due, TaskModule module = TaskModule::Assignment) {
+    MoodleTask task;
+    task.id = id;
+    task.title = "Task " + std::to_string(id);
+    task.course = "PBP";
+    task.module = module;
+    task.due = due;
+    task.url = "https://scele.cs.ui.ac.id/mod/assign/view.php?id=" + std::to_string(id);
+    return task;
+}
+
+void TestMoodleAnswersParse() {
+    std::string token, message;
+    assert(MoodleTokenFrom(R"({"token":"abc123","privatetoken":null})", &token, &message) == MoodleProblem::None && token == "abc123");
+    assert(MoodleTokenFrom(R"({"error":"Invalid login, please try again","errorcode":"invalidlogin"})", &token, &message) == MoodleProblem::WrongLogin);
+    assert(MoodleTokenFrom(R"({"error":"Web services must be enabled","errorcode":"enablewsdescription"})", &token, &message) == MoodleProblem::NoToken &&
+           message == "Web services must be enabled");
+    assert(MoodleTokenFrom("<html>", &token, &message) == MoodleProblem::Unavailable);
+
+    MoodleSiteInfo info;
+    assert(MoodleSiteInfoFrom(R"({"sitename":"SCELE","fullname":"Ana Putri","functions":[{"name":"core_calendar_get_action_events_by_timesort"}]})", &info) == MoodleProblem::None);
+    assert(info.userName == "Ana Putri" && info.functions.count("core_calendar_get_action_events_by_timesort"));
+    const char* invalid = R"({"exception":"moodle_exception","errorcode":"invalidtoken","message":"Invalid token"})";
+    assert(MoodleSiteInfoFrom(invalid, &info) == MoodleProblem::SignedOut);
+
+    std::vector<MoodleTask> tasks;
+    assert(MoodleTasksFrom(invalid, &tasks) == MoodleProblem::SignedOut);
+    assert(MoodleTasksFrom(R"({"exception":"x","errorcode":"sitemaintenance"})", &tasks) == MoodleProblem::Maintenance);
+    const char* events = R"json({"events":[{"id":101,"name":"Tugas 3: REST API &amp; Django is due","modulename":"assign","timesort":1794589500,
+        "course":{"id":3,"fullname":"CSGE602022 - Pemrograman Berbasis Platform (A)","shortname":"CSGE602022-PBP-A-2026"},
+        "action":{"name":"Add submission","url":"https://scele.cs.ui.ac.id/x","actionable":true},"url":"https://scele.cs.ui.ac.id/mod/assign/view.php?id=55"},
+        {"id":"102","name":"Kuis 4 closes","modulename":"quiz","timesort":"1794650000","course":{"shortname":"SDA","fullname":"Struktur Data dan Algoritma"},"url":"u"},
+        {"id":9,"name":"Laporan is due","activityname":"Laporan Sprint 2","modulename":"assign","timesort":1794700000,"course":{"shortname":"PPL"}},
+        {"name":"no id"}]})json";
+    assert(MoodleTasksFrom(events, &tasks) == MoodleProblem::None && tasks.size() == 3);
+    assert(tasks[0].id == 101 && tasks[0].title == "Tugas 3: REST API & Django" && tasks[0].course == "PBP" && tasks[0].module == TaskModule::Assignment);
+    assert(tasks[0].url == "https://scele.cs.ui.ac.id/mod/assign/view.php?id=55" && tasks[0].due == 1794589500);
+    assert(tasks[1].id == 102 && tasks[1].title == "Kuis 4" && tasks[1].course == "SDA" && tasks[1].module == TaskModule::Quiz);
+    assert(tasks[2].title == "Laporan Sprint 2");
+}
+
+void TestCourseLabelsStayShort() {
+    assert(task_text::CourseLabel("PBP-A", "Pemrograman Berbasis Platform") == "PBP-A");
+    assert(task_text::CourseLabel("CSGE602022-PBP-A-2026", "CSGE602022 - Pemrograman Berbasis Platform (A)") == "PBP");
+    assert(task_text::CourseLabel("StrukturDataDanAlgoritma", "Struktur Data dan Algoritma") == "SDA");
+    assert(task_text::CourseLabel("LongCourseCode2026", "Kalkulus") == "LongCourse");
+    assert(task_text::PlainText("<span lang=\"en\">Quiz</span> &amp;  more") == "Quiz & more");
+}
+
+void TestTaskListRulesMatchMacOS() {
+    const std::vector<MoodleTask> tasks = {SampleTask(3, kTaskNow + 3 * 86400), SampleTask(1, kTaskNow + 3600), SampleTask(2, kTaskNow + 7200, TaskModule::Forum),
+                                           SampleTask(4, kTaskNow - 8 * 86400), SampleTask(5, kTaskNow - 86400)};
+    const auto ids = [](const std::vector<MoodleTask>& list) {
+        std::vector<int64_t> out;
+        for (const auto& task : list) out.push_back(task.id);
+        return out;
+    };
+    assert((ids(TaskRule::Visible(tasks, TaskScope::AssignmentsAndQuizzes, kTaskNow)) == std::vector<int64_t>{5, 1, 3}));
+    assert((ids(TaskRule::Visible(tasks, TaskScope::Everything, kTaskNow)) == std::vector<int64_t>{5, 1, 2, 3}));
+    const std::vector<MoodleTask> fresh = {SampleTask(1, kTaskNow + 60), SampleTask(2, kTaskNow + 60), SampleTask(3, kTaskNow - 60)};
+    assert((ids(TaskRule::NewTasks(fresh, {1}, kTaskNow)) == std::vector<int64_t>{2}));
+    assert(TaskRule::Urgency(kTaskNow + 4 * 86400, kTaskNow) == Severity::Calm);
+    assert(TaskRule::Urgency(kTaskNow + 2 * 86400, kTaskNow) == Severity::Watch);
+    assert(TaskRule::Urgency(kTaskNow - 3600, kTaskNow) == Severity::Critical);
+}
+
+void TestDueTimesReadAsPeopleSayThem() {
+    assert(TaskRule::DueText(kTaskNow + 3600, kTaskNow, kJakarta) == "Today 22:00");
+    assert(TaskRule::DueText(kTaskNow + 3 * 3600, kTaskNow, kJakarta) == "Tomorrow 00:00");
+    assert(TaskRule::DueText(kTaskNow + 2 * 86400, kTaskNow, kJakarta) == "Sat 21:00");
+    assert(TaskRule::DueText(kTaskNow + 10 * 86400, kTaskNow, kJakarta) == "22 Nov");
+    assert(TaskRule::DueText(kTaskNow - 2 * 86400 - 60, kTaskNow, kJakarta) == "Overdue 2d");
+    assert(TaskRule::FullDue(kTaskNow + 86400 + 10500, kJakarta) == "Fri 13 Nov, 23:55");
+    assert(TaskRule::Span(86400 + 2 * 3600 + 300, 2) == "1d 2h");
+    assert(TaskRule::Span(5 * 3600 + 20 * 60, 2) == "5h 20m");
+    assert(TaskRule::Span(2 * 86400 + 59, 2) == "2d");
+    assert(TaskRule::Span(45 * 60, 2) == "45m" && TaskRule::Span(20, 2) == "0m");
+    assert(*TaskRule::RunwayPosition(kTaskNow + 7 * 86400, kTaskNow) == 0.5);
+    assert(!TaskRule::RunwayPosition(kTaskNow + 15 * 86400, kTaskNow) && !TaskRule::RunwayPosition(kTaskNow - 60, kTaskNow));
+    const std::vector<MoodleTask> day = {SampleTask(1, kTaskNow + 3600), SampleTask(2, kTaskNow + 7200), SampleTask(3, kTaskNow + 86400)};
+    assert((TaskRule::StackLevels(day, kJakarta) == std::vector<int>{0, 1, 0}));
+}
+
+void TestRemindersFallOnceEach() {
+    const std::vector<MoodleTask> tasks = {SampleTask(1, kTaskNow + 2 * 86400), SampleTask(2, kTaskNow + 2 * 3600)};
+    const std::vector<double> leads = {86400, 3600};
+    assert(*TaskRule::NextReminder(tasks, leads, {}, kTaskNow) == kTaskNow + 3600);
+    assert(*TaskRule::NextReminder(tasks, leads, {"2@3600"}, kTaskNow) == kTaskNow + 86400);
+    assert(!TaskRule::NextReminder(tasks, {}, {}, kTaskNow));
+    const auto due = TaskRule::DueReminders(tasks, leads, {}, kTaskNow + 3600);
+    assert(due.size() == 1 && TaskRule::ReminderKey(due[0].first, due[0].second) == "2@3600");
+    assert(TaskRule::DueReminders(tasks, leads, {}, kTaskNow + 7100).empty());
+}
+
+void TestTaskCacheRoundTrips() {
+    TaskCacheRecord record;
+    record.asOf = kTaskNow;
+    MoodleTask tab = SampleTask(1, 1794589500);
+    tab.title = "With\ta tab";
+    record.tasks = {tab, SampleTask(2, 1794600000, TaskModule::Quiz)};
+    record.seen = {1, 2, 9};
+    record.unviewed = {2};
+    const auto decoded = TaskCacheRecord::Decode(record.Encode());
+    assert(decoded && decoded->asOf == kTaskNow && decoded->seen == record.seen && decoded->unviewed == record.unviewed);
+    assert(decoded->tasks.size() == 2 && decoded->tasks[0].title == "With a tab" && decoded->tasks[1].module == TaskModule::Quiz);
+    assert(!TaskCacheRecord::Decode("nonsense"));
+    // The macOS app's file reads here too.
+    const auto mac = TaskCacheRecord::Decode("asof 1794492000.0\nseen 1 2\nunviewed\n1\t1794589500.0\tassignment\tPBP\tTugas\thttps://x");
+    assert(mac && mac->tasks.size() == 1 && mac->tasks[0].due == 1794589500 && mac->unviewed.empty());
+}
+
+void TestTasksPageSaysWhatToDo() {
+    TasksPageModel model = TasksPageModel::Make({}, {}, false, false, MoodleProblem::None, std::nullopt, kTaskNow, 0, kJakarta);
+    assert(model.isMessage && model.title == "See your Scele tasks here" && !model.button.empty());
+    model = TasksPageModel::Make({}, {}, true, false, MoodleProblem::SignedOut, kTaskNow, kTaskNow, 0, kJakarta);
+    assert(model.title == "Signed out of Scele");
+    model = TasksPageModel::Make({}, {}, true, true, MoodleProblem::None, std::nullopt, kTaskNow, 0, kJakarta);
+    assert(model.title == "Checking Scele\xE2\x80\xA6");
+    model = TasksPageModel::Make({}, {}, true, false, MoodleProblem::None, kTaskNow - 60, kTaskNow, 0, kJakarta);
+    assert(model.allClear && model.detail == "Nothing to do \xC2\xB7 checked 20:59");
+    std::vector<MoodleTask> tasks;
+    for (int i = 1; i <= 5; ++i) tasks.push_back(SampleTask(i, kTaskNow + i * 3 * 3600));
+    model = TasksPageModel::Make(tasks, {2}, true, false, MoodleProblem::None, kTaskNow, kTaskNow, 0, kJakarta);
+    assert(!model.isMessage && model.heroLabel == "Next due" && model.countdown.size() == 1 && model.countdown[0].first == 3);
+    assert(model.heroSeverity == Severity::Critical && model.dots.size() == 5 && model.dots[1].isNew);
+    assert(model.rows.size() == 3 && model.rows[0].id == 1 && model.more == "+2 more \xC2\xB7 scroll");
+    assert(model.days[0] == "T" && model.days[1] == "F" && model.days[2] == "S");
+    model = TasksPageModel::Make(tasks, {}, true, false, MoodleProblem::Unavailable, kTaskNow - 600, kTaskNow, 9, kJakarta);
+    assert(model.rows[0].id == 3 && model.more == "3\xE2\x80\x93" "5 of 5" && model.heroLabel == "Next due \xC2\xB7 as of 20:50");
+}
+
+void TestTaskAlertShapesThePill() {
+    const LiveLayout live(180, 32);
+    float width = 0, height = 0;
+    TaskAlertLayout::PillSize(180, 32, false, false, TaskAlertShape::Slip, &width, &height);
+    assert(width == live.Width() && height == live.Height(true));
+    TaskAlertLayout::PillSize(180, 32, true, false, TaskAlertShape::Dot, &width, &height);
+    assert(width == live.Width() + 28 && height == 32);
+    TaskAlertLayout::PillSize(180, 32, false, false, TaskAlertShape::Dot, &width, &height);
+    assert(width == 180 + 28);
+    const TaskAlertLayout layout(180, 32);
+    const HomeRect alone = layout.Dot(false);
+    assert(alone.x > layout.Width() / 2 + 90 && alone.Right() < layout.Width() / 2 + 90 + TaskAlertLayout::kDotWing);
+    const HomeRect withMusic = layout.Dot(true);
+    assert(withMusic.x > layout.Width() / 2 + live.Width() / 2 && withMusic.Right() < layout.Width());
+    IslandGeometry geometry(1.5f);
+    geometry.SetTaskAlert(TaskAlertShape::Slip);
+    const Pill slip = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(slip.right - slip.left, live.Width() * 1.5f, 0.01) && Near(slip.bottom, live.Height(true) * 1.5f, 0.01));
+}
+
+void TestTasksPageFitsAndSitesNormalize() {
+    const TasksLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 38, 1);
+    assert(layout.More().Bottom() <= layout.Height() - 4 && layout.OpenButton().Bottom() <= layout.Height() - 4);
+    assert(layout.Row(0).y >= layout.Runway().Bottom() && layout.RowDue(0).Right() <= layout.Width() - TasksLayout::kSidePadding);
+    assert(NormalizedTasksSite("scele.cs.ui.ac.id/") == "https://scele.cs.ui.ac.id");
+    assert(NormalizedTasksSite("http://scele.cs.ui.ac.id").empty() && NormalizedTasksSite("localhost").empty());
+    assert(TasksSiteHost("https://scele.cs.ui.ac.id/moodle") == "scele.cs.ui.ac.id");
+}
+
+}  // namespace
+
 int main() {
     TestTimesParseInUtcAndWithAnOffset();
     TestScannerReadsOnlyTheObjectsOwnFields();
@@ -833,6 +1015,15 @@ int main() {
     TestLiveWingsFitBesideTheNotch();
     TestLiveShowsWhilePlayingAndBrieflyAfterAPause();
     TestBarsRiseAndFallSmoothlyInGradedShades();
+    TestMoodleAnswersParse();
+    TestCourseLabelsStayShort();
+    TestTaskListRulesMatchMacOS();
+    TestDueTimesReadAsPeopleSayThem();
+    TestRemindersFallOnceEach();
+    TestTaskCacheRoundTrips();
+    TestTasksPageSaysWhatToDo();
+    TestTaskAlertShapesThePill();
+    TestTasksPageFitsAndSitesNormalize();
     std::puts("island_tests: all passed");
     return 0;
 }

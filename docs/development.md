@@ -29,7 +29,9 @@ first (`defaults write app.noitch.mac hoverDelay -float 0`), and restore it afte
 
 Debug builds also take `--open`, which opens the island at launch so it can be captured with
 `screencapture -l <window id>` without moving the cursor, and `--settings`, which opens the settings
-window. The demo track has a coloured cover, so the artwork tint shows, and the calendar shows sample events
+window. `--demo-tasks` fills the tasks page with sample tasks, with no account or network, and
+announces a new one four seconds after launch, to see the alert; add `-openOn tasks` to open on it.
+The demo track has a coloured cover, so the artwork tint shows, and the calendar shows sample events
 without asking for access.
 
 Quit other notch apps such as Boring Notch while testing. They compete for the same screen area and

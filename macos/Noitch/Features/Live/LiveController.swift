@@ -33,6 +33,8 @@ final class LiveController {
     private var lyricsOffset: Double
     /// One shot at the next line, only while closed, playing and showing a line.
     private var lyricTimer: Timer?
+    /// A task alert has the strip under the notch for now.
+    private var lyricHeld = false
 
     init(monitor: NowPlayingMonitor, settings: HomeSettings) {
         self.monitor = monitor
@@ -78,6 +80,13 @@ final class LiveController {
     }
 
     var size: CGSize? { layout?.size }
+
+    /// While a task alert has the strip, the line steps aside; it comes back when the alert ends.
+    func setLyricHeld(_ held: Bool) {
+        guard held != lyricHeld else { return }
+        lyricHeld = held
+        updateLyric(animated: true)
+    }
 
     func islandWillOpen() {
         isIslandOpen = true
@@ -150,8 +159,8 @@ final class LiveController {
     private func updateLyric(animated: Bool) {
         lyricTimer?.invalidate()
         lyricTimer = nil
-        scene?.setLyric(showsLyric ? currentLyric : nil, animated: animated)
-        guard showsLyric, !isIslandOpen, nowPlaying.isPlaying, let lyrics else { return }
+        scene?.setLyric(showsLyric && !lyricHeld ? currentLyric : nil, animated: animated)
+        guard showsLyric, !lyricHeld, !isIslandOpen, nowPlaying.isPlaying, let lyrics else { return }
         let position = nowPlaying.position(at: Date())
         guard let next = lyrics.nextChange(after: position + lyricsOffset) else { return }
         let delay = max((next - lyricsOffset - position) / max(nowPlaying.rate, 0.1), 0.05)

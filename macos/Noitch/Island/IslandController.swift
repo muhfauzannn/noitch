@@ -11,22 +11,35 @@ final class IslandController: NSObject {
     private let monitor = NowPlayingMonitor()
     private let pages: PageController
     private let live: LiveController
+    private let watch: TaskWatch
+    private let taskAlert: TaskAlertController
     private var settingsWindow: SettingsWindowController?
     /// A one-shot wait while the pointer rests in the notch, when a hover delay is set.
     private var hoverTimer: Timer?
 
     override init() {
         geometry = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
-        pages = PageController(settings: settings, monitor: monitor)
+        watch = TaskWatch(settings: settings.tasks, pageOn: settings.pages.showTasks)
+        pages = PageController(settings: settings, monitor: monitor, watch: watch)
         live = LiveController(monitor: monitor, settings: settings.home)
+        taskAlert = TaskAlertController(enabled: settings.pages.showTasks && settings.tasks.alerts)
         super.init()
         panel.contentView = view
         live.onSceneCreated = { [unowned self] layer in view.setLive(layer) }
         live.onShapeChange = { [unowned self] in liveChanged() }
         live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
+        taskAlert.onSceneCreated = { [unowned self] layer in view.setTaskAlert(layer) }
+        taskAlert.onShapeChange = { [unowned self] in liveChanged() }
+        taskAlert.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
+        watch.onChange = { [unowned self] in pages.tasksChanged() }
+        watch.onNew = { [unowned self] tasks in taskAlert.announce(tasks) }
+        watch.onReminder = { [unowned self] task, lead in taskAlert.remind(task, lead: lead) }
+        watch.onUnviewedChange = { [unowned self] in taskAlert.setUnviewed(!watch.unviewed.isEmpty) }
+        taskAlert.setUnviewed(!watch.unviewed.isEmpty)
         pages.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: geometry.expandedSize) }
         pages.onOpenSettings = { [unowned self] in openSettings() }
         view.onHorizontalScroll = { [unowned self] delta, time in if state == .expanded { pages.scrolled(by: delta, at: time) } }
+        view.onVerticalScroll = { [unowned self] delta in if state == .expanded { pages.scrolledVertically(by: delta) } }
         view.onPointerMoved = { [unowned self] point in if state == .expanded { pages.pointerMoved(to: point) } }
         view.onPrimaryDown = { [unowned self] point in
             if state == .expanded {
@@ -70,6 +83,8 @@ final class IslandController: NSObject {
         #if DEBUG
         // `--settings` opens the settings window at launch, for checking its layout.
         if ProcessInfo.processInfo.arguments.contains("--settings") { openSettings() }
+        // `--demo-tasks` fills the tasks page with samples and announces one a few seconds in.
+        if ProcessInfo.processInfo.arguments.contains("--demo-tasks") { watch.loadDemo() }
         // `--open` opens the island at launch, for screenshots without moving the cursor.
         if ProcessInfo.processInfo.arguments.contains("--open") { transition(to: .expanded) }
         #endif
@@ -117,9 +132,14 @@ final class IslandController: NSObject {
                 NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
             }
             resizePanel(for: .expanded)
-            pages.islandWillOpen(size: geometry.expandedSize, headerHeight: geometry.collapsedSize.height, scale: panel.backingScaleFactor)
+            // An alert on the pill opens straight onto what it was about.
+            let preferred: IslandPage? = taskAlert.wantsTasksPage ? .tasks : nil
+            taskAlert.islandWillOpen()
+            pages.islandWillOpen(size: geometry.expandedSize, headerHeight: geometry.collapsedSize.height, scale: panel.backingScaleFactor, preferring: preferred)
+            watch.islandWillOpen()
         } else {
             pages.islandWillClose()
+            taskAlert.islandWillClose()
         }
         view.animatePill(
             to: geometry.pillSize(for: newState),
@@ -142,6 +162,9 @@ final class IslandController: NSObject {
         let before = geometry.pillSize(for: .collapsed)
         geometry.isLive = live.isActive
         geometry.showsLiveLyric = live.showsLyric
+        geometry.taskAlert = taskAlert.shape
+        taskAlert.setLiveShown(live.isActive)
+        live.setLyricHeld(taskAlert.shape == .slip)
         let after = geometry.pillSize(for: .collapsed)
         guard state == .collapsed, after != before else { return }
         latestTransition += 1
@@ -173,10 +196,12 @@ final class IslandController: NSObject {
     }
 
     @objc private func screenParametersChanged() {
-        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive, showsLiveLyric: live.showsLyric)
+        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive,
+                                     showsLiveLyric: live.showsLyric, taskAlert: taskAlert.shape)
         guard updated != geometry else { return }
         geometry = updated
         live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
+        taskAlert.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
         applyLayout()
         if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }
     }
@@ -197,6 +222,8 @@ final class IslandController: NSObject {
                 settings = updated
                 pages.apply(updated)
                 live.apply(updated.home)
+                watch.apply(updated.tasks, pageOn: updated.pages.showTasks)
+                taskAlert.setEnabled(updated.pages.showTasks && updated.tasks.alerts)
                 if updated.general.display != old.general.display { screenParametersChanged() }
             }
             window.onClose = { [unowned self] in settingsWindow = nil }

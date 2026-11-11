@@ -35,6 +35,11 @@ add_executable(Noitch WIN32
     src/features/now_playing/media_session_source.cpp
     src/features/settings/settings_store.cpp
     src/features/settings/settings_window.cpp
+    src/features/tasks/moodle_source.cpp
+    src/features/tasks/task_alert.cpp
+    src/features/tasks/task_watch.cpp
+    src/features/tasks/tasks_controller.cpp
+    src/features/tasks/tasks_scene.cpp
 )
 target_include_directories(Noitch PRIVATE src)
 target_compile_definitions(Noitch PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00 _HAS_EXCEPTIONS=0)
