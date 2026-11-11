@@ -39,6 +39,12 @@ public:
     float Height() const { return height_ * scale_; }
 
     HomeRect Artwork() const { return Px({kSidePadding, BodyTop(), BodyHeight(), BodyHeight()}); }
+    // The artwork's glow: an ellipse around the artwork that has faded out by the top edge, where the
+    // pill meets the black flares, and well before the right side. In pixels.
+    float GlowCenterX() const { return (kSidePadding + BodyHeight() / 2) * scale_; }
+    float GlowCenterY() const { return (BodyTop() + BodyHeight() / 2) * scale_; }
+    float GlowRadiusX() const { return width_ * 0.62f * scale_; }
+    float GlowRadiusY() const { return (BodyTop() + BodyHeight() / 2 + 4) * scale_; }
     HomeRect Title() const { return Px({ColumnX(), BodyTop() - 2, ColumnWidth(), 20}); }
     HomeRect Artist() const { return Px({ColumnX(), BodyTop() + 17, ColumnWidth(), 17}); }
     // The bright line; the dim one is kLyricStep below it, drawn smaller.

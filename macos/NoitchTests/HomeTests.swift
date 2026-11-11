@@ -48,6 +48,14 @@ struct HomeTests {
         }
     }
 
+    @Test func `the glow fades out before the top edge, where the flares meet the pill`() {
+        for header in [CGFloat(24), 32, 38] {
+            let layout = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: header)
+            #expect(layout.glowRadii.height >= layout.glowCenter.y)
+            #expect(layout.glowCenter.x + layout.glowRadii.width < layout.size.width)
+        }
+    }
+
     @Test func `formats time`() {
         #expect(HomeModel.formatTime(0) == "0:00")
         #expect(HomeModel.formatTime(65) == "1:05")

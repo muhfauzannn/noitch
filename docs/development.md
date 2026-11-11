@@ -24,6 +24,10 @@ To check Home's layout without the adapter or the network, run a Debug build wit
 macos/build/Build/Products/Debug/Noitch.app/Contents/MacOS/Noitch --demo-media
 ```
 
+Debug builds also take `--open`, which opens the island at launch so it can be captured with
+`screencapture -l <window id>` without moving the cursor, and `--settings`, which opens the settings
+window. The demo track has a coloured cover, so the artwork tint shows.
+
 Quit other notch apps such as Boring Notch while testing. They compete for the same screen area and
 the same mouse events.
 
@@ -91,6 +95,7 @@ Keep this honest and up to date.
 | Check | Status |
 | --- | --- |
 | Builds; 64 unit tests | Passing |
+| Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
 | Closed island with music (wings, moving bars) | Checked by window screenshots with `--demo-media`; real playback, artwork, pause timing and the player-app watching **not checked on screen** |
 | Settings window with sidebar | General page checked by a window screenshot (`--settings`, Debug only); other pages and every control's effect **not checked on screen** |
 | Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |

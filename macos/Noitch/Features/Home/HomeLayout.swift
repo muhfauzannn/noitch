@@ -39,6 +39,11 @@ struct HomeLayout: Equatable {
     private var columnWidth: CGFloat { size.width - columnX - Self.sidePadding }
 
     var artwork: CGRect { CGRect(x: Self.sidePadding, y: bodyTop, width: bodyHeight, height: bodyHeight) }
+
+    /// The artwork's glow: an ellipse around the artwork that has faded out by the top edge, where the
+    /// pill meets the black flares, and well before the right side.
+    var glowCenter: CGPoint { CGPoint(x: artwork.midX, y: artwork.midY) }
+    var glowRadii: CGSize { CGSize(width: size.width * 0.62, height: artwork.midY + 4) }
     var title: CGRect { CGRect(x: columnX, y: bodyTop - 2, width: columnWidth, height: 20) }
     var artist: CGRect { CGRect(x: columnX, y: bodyTop + 17, width: columnWidth, height: 17) }
     /// The bright line. The dim one is `lyricStep` below it.

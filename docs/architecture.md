@@ -145,8 +145,10 @@ of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
 
 Home is the first page: large artwork on the left, and beside it the title and artist, the lyric line
 being sung (bright) with the next one below it (dim and smaller), a progress slider and transport
-buttons. Behind it, a soft wash of the artwork's average colour fades out from the left; "Tint progress
-bar with artwork" turns both the wash and the bar's colour on or off.
+buttons. Behind it, a glow of the artwork's average colour spreads from the artwork in an ellipse that has
+faded out by the top edge, so the bends where the pill meets the black flares show no seam (numbers
+in `HomeLayout.glowRadii` and `home_layout.h`). "Glow behind the page" and "Tint the progress bar"
+turn the glow and the bar's colour on or off.
 
 - **Lyrics.** When the song moves on one line, the bright line rises and fades, the dim line grows
   into its place and the following line rises in below: three text layers take turns, and only

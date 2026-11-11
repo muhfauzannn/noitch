@@ -70,6 +70,8 @@ final class IslandController: NSObject {
         #if DEBUG
         // `--settings` opens the settings window at launch, for checking its layout.
         if ProcessInfo.processInfo.arguments.contains("--settings") { openSettings() }
+        // `--open` opens the island at launch, for screenshots without moving the cursor.
+        if ProcessInfo.processInfo.arguments.contains("--open") { transition(to: .expanded) }
         #endif
     }
 

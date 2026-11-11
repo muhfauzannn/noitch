@@ -158,18 +158,21 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
     context_->PushAxisAlignedClip(whole, D2D1_ANTIALIAS_MODE_ALIASED);
     context_->Clear(D2D1::ColorF(0, 0, 0, 0));
 
-    // A soft wash of the artwork's colour from the left, so the page takes on the track's mood.
+    // A glow of the artwork's colour around it, so the page takes on the track's mood. It fades out
+    // before the top edge, where the pill meets the black flares, so the bends show no seam.
     if (glow_ != 0xFFFFFFFF && artworkBrush_) {
         const D2D1_COLOR_F tint = FromBgra(glow_);
         const D2D1_GRADIENT_STOP stops[] = {
-            {0.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.42f)},
-            {0.45f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.12f)},
+            {0.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.55f)},
+            {0.45f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.2f)},
             {1.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.0f)},
         };
         ComPtr<ID2D1GradientStopCollection> collection;
-        ComPtr<ID2D1LinearGradientBrush> wash;
+        ComPtr<ID2D1RadialGradientBrush> wash;
+        const D2D1_POINT_2F center = D2D1::Point2F(layout_.GlowCenterX(), layout_.GlowCenterY());
         if (SUCCEEDED(context_->CreateGradientStopCollection(stops, 3, &collection)) &&
-            SUCCEEDED(context_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(layout_.Width(), 0)), collection.Get(), &wash))) {
+            SUCCEEDED(context_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(center, D2D1::Point2F(0, 0), layout_.GlowRadiusX(), layout_.GlowRadiusY()),
+                                                          collection.Get(), &wash))) {
             context_->FillRectangle(whole, wash.Get());
         }
     }

@@ -638,6 +638,14 @@ void TestSettingsPanesWriteWhatTheyRead() {
     assert(SecondsLabel(0.15) == L"0.15 s" && SecondsLabel(-0.5, true) == L"\x2212" L"0.5 s" && SecondsLabel(1, true) == L"+1 s");
 }
 
+void TestGlowFadesBeforeTheTopEdge() {
+    for (float header : {24.0f, 32.0f, 38.0f}) {
+        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 2);
+        assert(layout.GlowRadiusY() >= layout.GlowCenterY());
+        assert(layout.GlowCenterX() + layout.GlowRadiusX() < layout.Width());
+    }
+}
+
 void TestLiveWingsFitBesideTheNotch() {
     const LiveLayout layout(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight());
     assert(layout.Width() > IslandGeometry::CollapsedWidth());
@@ -731,6 +739,7 @@ int main() {
     TestPagesOpenWhereTheSettingsSay();
     TestUsageSettingsPickColumnsAndWhereAmberStarts();
     TestSettingsPanesWriteWhatTheyRead();
+    TestGlowFadesBeforeTheTopEdge();
     TestLiveWingsFitBesideTheNotch();
     TestLiveShowsWhilePlayingAndBrieflyAfterAPause();
     TestBarCycleRisesAndFallsSmoothly();

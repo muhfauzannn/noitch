@@ -94,6 +94,19 @@ final class NowPlayingMonitor: NSObject {
         demo.elapsed = 62
         demo.timestamp = Date()
         demo.isPlaying = true
+        demo.artwork = demoArtwork()
         return demo
+    }
+
+    /// A strongly coloured square, so the artwork tint shows in demo screenshots.
+    private static func demoArtwork() -> Data? {
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        NSGradient(starting: NSColor(srgbRed: 0.95, green: 0.35, blue: 0.2, alpha: 1), ending: NSColor(srgbRed: 0.6, green: 0.1, blue: 0.5, alpha: 1))?
+            .draw(in: NSRect(x: 0, y: 0, width: 64, height: 64), angle: 45)
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap.representation(using: .png, properties: [:])
     }
 }

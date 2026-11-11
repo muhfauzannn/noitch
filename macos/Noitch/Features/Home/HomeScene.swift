@@ -46,8 +46,11 @@ final class HomeScene {
         root.bounds = CGRect(origin: .zero, size: layout.size)
 
         backdrop.frame = root.bounds
-        backdrop.startPoint = CGPoint(x: 0, y: 0.5)
-        backdrop.endPoint = CGPoint(x: 1, y: 0.5)
+        backdrop.type = .radial
+        let center = layout.glowCenter
+        let radii = layout.glowRadii
+        backdrop.startPoint = CGPoint(x: center.x / layout.size.width, y: center.y / layout.size.height)
+        backdrop.endPoint = CGPoint(x: (center.x + radii.width) / layout.size.width, y: (center.y + radii.height) / layout.size.height)
         backdrop.locations = [0, 0.45, 1]
         backdrop.colors = Self.wash(.clear)
         root.addSublayer(backdrop)
@@ -301,9 +304,9 @@ final class HomeScene {
         if let layer = icons[control] { Self.show(icon, on: layer) }
     }
 
-    /// The tint at the artwork's side, fading out before the middle of the page.
+    /// Strongest behind the artwork, gone by the ellipse's edge.
     private static func wash(_ tint: NSColor) -> [CGColor] {
-        [tint.withAlphaComponent(tint.alphaComponent * 0.42).cgColor, tint.withAlphaComponent(tint.alphaComponent * 0.12).cgColor, NSColor.clear.cgColor]
+        [tint.withAlphaComponent(tint.alphaComponent * 0.55).cgColor, tint.withAlphaComponent(tint.alphaComponent * 0.2).cgColor, NSColor.clear.cgColor]
     }
 
     /// Set when an icon changes, never animated: moving a path is the expensive end of Core Animation.
