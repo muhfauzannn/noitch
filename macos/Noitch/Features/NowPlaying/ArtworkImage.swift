@@ -14,22 +14,6 @@ enum ArtworkImage {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
-    /// The stage's background: the cover averaged down to a few pixels, then smoothed up a little so
-    /// the stretch across the page shows soft blends instead of straight creases. A few kilobytes.
-    static func ambient(of image: CGImage, columns: Int = 6, rows: Int = 3, smooth: Int = 8) -> CGImage? {
-        func draw(_ image: CGImage, width: Int, height: Int, quality: CGInterpolationQuality) -> CGImage? {
-            guard let context = CGContext(
-                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
-            ) else { return nil }
-            context.interpolationQuality = quality
-            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-            return context.makeImage()
-        }
-        guard let tiny = draw(image, width: columns, height: rows, quality: .medium) else { return nil }
-        return draw(tiny, width: columns * smooth, height: rows * smooth, quality: .high)
-    }
-
     /// Scaled to one pixel, then lifted so a dark cover still gives a visible bar.
     static func averageColor(of image: CGImage) -> NSColor? {
         var pixel = [UInt8](repeating: 0, count: 4)

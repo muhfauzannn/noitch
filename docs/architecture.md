@@ -208,13 +208,11 @@ Home to the lyrics; clicking it again brings Home back. Numbers are in `HomeLayo
   the one being sung (20 pt bold, a little above the middle), and the two after (55% and 26%). Lines
   other than the sung one are drawn at 70% of its size. Empty lines and the intro show "♪". Without
   synced lyrics the middle shows the same status as Home, smaller and dimmer.
-- **Background.** With "Glow behind the page" on, the cover's colours fill the page: the artwork
-  averaged to 6 × 3 pixels, smoothed to 48 × 24 on macOS, and stretched across the page, so the
-  colours melt into each other. Two shades keep it readable: a vertical one, black at the top edge
-  (where the pill meets the flares), 50% and 32% through the middle and 75% at the bottom, and one
-  that darkens each side to 70%. Made once per track; nothing is blurred live. Windows averages
-  the same 6 × 3 pixels (`ArtworkMosaic`) and stretches them with a cubic filter. With the setting
-  off the stage is black. It replaced a radial glow under the sung line, which looked like a blob.
+- **Background.** With "Glow behind the page" on, one soft wash of the artwork's average colour
+  rises from the bottom edge: none at the top (where the pill meets the flares), 10% at 40% of the
+  height, 32% at the bottom. A single gradient, on both platforms. With the setting off the stage is
+  black. Earlier tries were a radial glow under the sung line (a blob) and the cover's colours
+  stretched under black shades (too busy).
 - **Motion (macOS).** When the song moves on one line, every line rises one slot: the sung line grows
   into the middle, the one before drifts up and away, and the next rises in from below. Five text
   layers take turns, and only position, scale and opacity move. A seek or new track fades the lines
@@ -456,7 +454,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Secondary click | Menu with Settings and Quit |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
-| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; background from 6 × 3 cover pixels under black shades. See [Lyrics stage](#lyrics-stage) |
+| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; a wash of the artwork's colour rising from the bottom. See [Lyrics stage](#lyrics-stage) |
 | Release after closing | 10 s |
 
 The Windows spring is computed from the same parameters. For the collapse spring its stiffness

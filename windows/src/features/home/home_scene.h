@@ -64,8 +64,6 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> stageSideFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> stageStatusFormat_;
     Microsoft::WRL::ComPtr<ID2D1BitmapBrush> artworkBrush_;
-    // The stage's background, a few pixels of the cover stretched across the page.
-    Microsoft::WRL::ComPtr<ID2D1Bitmap> ambient_;
     uint32_t tint_ = 0xFFFFFFFF;
     uint32_t glow_ = 0xFFFFFFFF;
 };

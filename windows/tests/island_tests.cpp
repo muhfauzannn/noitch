@@ -394,18 +394,6 @@ void TestLiveLyricLineIsTheOneBeingSung() {
     assert(!LiveRule::LyricLine(nullptr, 3, 0, &line));
 }
 
-void TestArtworkMosaicAveragesRegions() {
-    // A 4x4 cover: left half red, right half blue.
-    std::vector<uint32_t> cover(16);
-    for (int y = 0; y < 4; ++y)
-        for (int x = 0; x < 4; ++x) cover[static_cast<size_t>(y * 4 + x)] = x < 2 ? 0xFFFF0000u : 0xFF0000FFu;
-    const auto mosaic = ArtworkMosaic(cover.data(), 4, 2, 1);
-    assert(mosaic.size() == 2 && mosaic[0] == 0xFFFF0000u && mosaic[1] == 0xFF0000FFu);
-    const auto blend = ArtworkMosaic(cover.data(), 4, 1, 1);
-    assert(blend[0] == 0xFF7F007Fu);
-    assert(ArtworkMosaic(cover.data(), 4, 6, 3).size() == 18);
-}
-
 void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
     const HomeSettings settings;
     assert(!MakeHomeModel({}, nullptr, false, 0, settings).hasTrack);
@@ -833,7 +821,6 @@ int main() {
     TestHomeModelShowsThePlaceholderAndFollowsLyrics();
     TestLyricStripGrowsTheLivePillDown();
     TestLiveLyricLineIsTheOneBeingSung();
-    TestArtworkMosaicAveragesRegions();
     TestStageWakesOnlyForTheNextLine();
     TestLyricsButtonAndStageFitThePage();
     TestStageShowsTheLineBeforeAndTheTwoAfter();

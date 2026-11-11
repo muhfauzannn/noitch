@@ -21,13 +21,9 @@ final class HomeScene {
     private let layout: HomeLayout
     /// A soft wash of the artwork's colour from the left, so the page takes on the track's mood.
     private let backdrop = CAGradientLayer()
-    /// The stage's background: the artwork shrunk to a few pixels and stretched across the page, so
-    /// its colours melt into each other, under shades that keep the edges black. Shown only on the
-    /// stage; made once per track, never blurred live.
-    private let ambientGroup = CALayer()
-    private let ambient = CALayer()
-    private let ambientShade = CAGradientLayer()
-    private let ambientSides = CAGradientLayer()
+    /// The stage's background: one soft wash of the artwork's colour rising from the bottom edge and
+    /// gone before the top, where the pill meets the flares. Shown only on the stage.
+    private let stageWash = CAGradientLayer()
     private let artwork = CALayer()
     private let artworkPlaceholder = CAShapeLayer()
     /// Title and artist move together when the track changes.
@@ -76,22 +72,11 @@ final class HomeScene {
         // The pager places it and flips its geometry, so the shared y-down numbers hold.
         root.bounds = CGRect(origin: .zero, size: layout.size)
 
-        ambientGroup.frame = root.bounds
-        ambientGroup.opacity = 0
-        root.addSublayer(ambientGroup)
-        for layer in [ambient, ambientShade, ambientSides] {
-            layer.frame = root.bounds
-            ambientGroup.addSublayer(layer)
-        }
-        ambient.contentsGravity = .resize
-        ambient.magnificationFilter = .linear
-        // Black at the top edge, where the pill meets the flares, and darker toward the bottom.
-        ambientShade.colors = [1, 0.5, 0.32, 0.75].map { NSColor.black.withAlphaComponent($0).cgColor }
-        ambientShade.locations = [0, 0.32, 0.68, 1]
-        ambientSides.startPoint = CGPoint(x: 0, y: 0.5)
-        ambientSides.endPoint = CGPoint(x: 1, y: 0.5)
-        ambientSides.colors = [0.7, 0, 0, 0.7].map { NSColor.black.withAlphaComponent($0).cgColor }
-        ambientSides.locations = [0, 0.22, 0.78, 1]
+        stageWash.frame = root.bounds
+        stageWash.opacity = 0
+        stageWash.locations = [0, 0.4, 1]
+        stageWash.colors = Self.stageWash(.clear)
+        root.addSublayer(stageWash)
 
         backdrop.frame = root.bounds
         backdrop.type = .radial
@@ -358,7 +343,7 @@ final class HomeScene {
         CATransaction.commit()
     }
 
-    /// Home recedes and fades as the stage rises in, its glow gives way to the ambient colours, and
+    /// Home recedes and fades as the stage rises in, its glow gives way to the stage's wash, and
     /// the lyrics button glides to the corner and lights up. Each starts from what is on screen, so a
     /// quick second click reverses smoothly.
     private func setOnStage(_ onStage: Bool, animated: Bool, now: CFTimeInterval) {
@@ -382,7 +367,7 @@ final class HomeScene {
             let shownColor: CGColor = lyricsIcon.presentation()?.fillColor ?? lyricsIcon.fillColor ?? iconColor
             Motion.ease(lyricsIcon, "fillColor", from: shownColor, to: iconColor, duration: 0.25, begin: now)
             Motion.ease(backdrop, "opacity", from: backdrop.presentation()?.opacity ?? backdrop.opacity, to: onStage ? 0 : 1, duration: 0.5, begin: now)
-            Motion.ease(ambientGroup, "opacity", from: ambientGroup.presentation()?.opacity ?? ambientGroup.opacity, to: onStage ? 1 : 0, duration: 0.6, begin: now)
+            Motion.ease(stageWash, "opacity", from: stageWash.presentation()?.opacity ?? stageWash.opacity, to: onStage ? 1 : 0, duration: 0.6, begin: now)
         }
         music.opacity = onStage ? 0 : 1
         music.transform = CATransform3DMakeScale(musicScale, musicScale, 1)
@@ -392,7 +377,7 @@ final class HomeScene {
         lyricsIcon.fillColor = iconColor
         lyricsIcon.opacity = onStage ? 1 : 0.75
         backdrop.opacity = onStage ? 0 : 1
-        ambientGroup.opacity = onStage ? 1 : 0
+        stageWash.opacity = onStage ? 1 : 0
         // Lines left lit by a hover go back to their own opacity.
         for (slot, index) in zip(HomeLayout.stageSlots, stageOrder) where slot != 0 {
             stageLayers[index].opacity = stageTarget(slot).opacity
@@ -438,13 +423,14 @@ final class HomeScene {
         layer.opacity = target.opacity
     }
 
-    /// `barTint` colours the progress bar, `glow` the wash behind the page and `ambient` the stage's
-    /// background; nil turns them back to white and none.
-    func setArtwork(_ image: CGImage?, barTint: NSColor?, glow: NSColor?, ambient: CGImage?) {
+    /// `barTint` colours the progress bar, and `glow` the wash behind the page and the stage's; nil
+    /// turns them back to white and none.
+    func setArtwork(_ image: CGImage?, barTint: NSColor?, glow: NSColor?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        Self.addFade(to: self.ambient, duration: 0.6)
-        self.ambient.contents = ambient
+        let stageColors = Self.stageWash(glow ?? .clear)
+        Motion.ease(stageWash, "colors", from: stageWash.presentation()?.colors ?? stageWash.colors as Any, to: stageColors, duration: 0.6, begin: CACurrentMediaTime())
+        stageWash.colors = stageColors
         Self.addFade(to: artwork, duration: 0.3)
         artwork.contents = image
         artworkPlaceholder.isHidden = image != nil
@@ -525,6 +511,11 @@ final class HomeScene {
 
     private func setIcon(_ icon: HomeIcon, for control: HomeControl) {
         if let layer = icons[control] { Self.show(icon, on: layer) }
+    }
+
+    /// Gone at the top edge, faint through the lines, strongest along the bottom.
+    private static func stageWash(_ tint: NSColor) -> [CGColor] {
+        [0, 0.1, 0.32].map { tint.withAlphaComponent(tint.alphaComponent * $0).cgColor }
     }
 
     /// Strongest behind the artwork, gone by the ellipse's edge.
