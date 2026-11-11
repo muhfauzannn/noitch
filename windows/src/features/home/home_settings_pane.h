@@ -14,7 +14,7 @@ inline SettingsPane HomeSettingsPane() {
             {
                 {L"Closed island",
                  L"",
-                 {ToggleRow(L"Show what's playing", L"Artwork and level bars beside the notch.",
+                 {ToggleRow(L"Show what's playing", L"Artwork and a flowing wave beside the notch.",
                             [](const AppSettings& s) { return s.home.showLive; }, [](AppSettings& s, bool on) { s.home.showLive = on; })}},
                 {L"Lyrics",
                  L"Lyrics come from lrclib.net, which receives the track, artist and album names.",

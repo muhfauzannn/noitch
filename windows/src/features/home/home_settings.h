@@ -15,7 +15,7 @@ struct HomeSettings {
     bool tintWithArtwork = true;
     // A soft wash of the artwork's color behind the page.
     bool artworkGlow = true;
-    // While something plays, the closed island widens to show its artwork and level bars.
+    // While something plays, the closed island widens to show its artwork and a wave.
     bool showLive = true;
 
     bool operator==(const HomeSettings&) const = default;

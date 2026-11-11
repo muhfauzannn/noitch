@@ -1,7 +1,7 @@
 #pragma once
 
 // The closed island while something plays: the pill widens into a wing on each side of the notch,
-// the artwork in the left one and the level bars in the right. Pure: no Windows headers, so tests run
+// the artwork in the left one and a flowing wave in the right. Pure: no Windows headers, so tests run
 // on any host. The macOS app uses the same numbers (LiveLayout.swift).
 
 #include <algorithm>
@@ -18,14 +18,22 @@ class LiveLayout {
 public:
     static constexpr float kOuterPadding = 9;
     static constexpr float kInnerGap = 8;
-    static constexpr int kBarCount = 4;
-    static constexpr float kBarWidth = 3;
-    static constexpr float kBarGap = 2;
-    // Each bar's resting height as a share of the tallest it reaches.
-    static constexpr float kRestingScale = 0.3f;
-    // Seconds per rise and fall for each bar. Unequal and not multiples of each other, so the four
-    // never line up into a visible loop.
-    static constexpr double kBarPeriods[kBarCount] = {0.47, 0.61, 0.39, 0.53};
+    static constexpr float kLineWidth = 1.6f;
+    // Black fades this wide at each end of the wave, so the lines dissolve into the pill.
+    static constexpr float kEdgeFade = 4;
+
+    // A gentle wave, two lines of it: a bright short one drifting left and a faint long one drifting
+    // right at another speed. Where they cross the shape keeps changing, and each line is only slid
+    // sideways, so DWM does all the work.
+    struct Wave {
+        float length;     // Points per crest-to-crest.
+        float amplitude;  // Share of the half-height the line swings through.
+        double period;    // Seconds to drift one length.
+        float opacity;
+        float direction;  // -1 drifts left, 1 right.
+    };
+    static constexpr int kWaveCount = 2;
+    static constexpr Wave kWaves[kWaveCount] = {{13, 0.75f, 1.7, 1.0f, -1}, {21, 0.5f, 2.9, 0.45f, 1}};
 
     // Logical sizes of the pill without wings.
     LiveLayout(float collapsedWidth, float collapsedHeight) : width_(collapsedWidth), height_(collapsedHeight) {}
@@ -37,19 +45,16 @@ public:
 
     HomeRect Artwork() const { return {kOuterPadding, (height_ - ArtSide()) / 2, ArtSide(), ArtSide()}; }
 
-    float BarsWidth() const { return kBarCount * kBarWidth + (kBarCount - 1) * kBarGap; }
-
-    // Centered in the right wing's free space, as tall as most of the artwork.
-    HomeRect Bars() const {
-        const float start = Wing() + width_ + kInnerGap;
-        const float space = Wing() - kInnerGap - kOuterPadding;
-        const float height = std::round(ArtSide() * 0.62f);
-        return {start + (space - BarsWidth()) / 2, (height_ - height) / 2, BarsWidth(), height};
+    // The right wing's free space, as tall as most of the artwork.
+    HomeRect WaveBox() const {
+        const float height = std::round(ArtSide() * 0.7f);
+        return {Wing() + width_ + kInnerGap, (height_ - height) / 2, Wing() - kInnerGap - kOuterPadding, height};
     }
 
-    HomeRect Bar(int index) const {
-        const HomeRect area = Bars();
-        return {area.x + static_cast<float>(index) * (kBarWidth + kBarGap), area.y, kBarWidth, area.height};
+    // Height of a wave's line at `x` from the box's left edge, in points.
+    float WaveY(const Wave& wave, float x) const {
+        const float swing = (WaveBox().height - kLineWidth) / 2 * wave.amplitude;
+        return WaveBox().height / 2 + swing * std::sin(x / wave.length * 2 * 3.14159265358979f);
     }
 
 private:
@@ -70,41 +75,39 @@ struct LiveRule {
     }
 };
 
-// One cubic piece of a bar's rise or fall: value = c0 + c1 t + c2 t^2 + c3 t^3, t in seconds from
-// `offset`. Matches IDCompositionAnimation::AddCubic.
-struct BarSegment {
-    double offset;
-    float c0, c1, c2, c3;
-};
-
-// A smoothstep from `from` to `to` over `period`, then back, as two cubics. The animation repeats them
-// forever, so the render server moves the bar and the app does nothing.
-inline std::vector<BarSegment> BarCycle(double period, float from, float to) {
-    const float span = to - from;
-    const float p2 = static_cast<float>(period * period);
-    const float p3 = p2 * static_cast<float>(period);
-    return {
-        {0, from, 0, 3 * span / p2, -2 * span / p3},
-        {period, to, 0, -3 * span / p2, 2 * span / p3},
-    };
+// One wave's line drawn once into premultiplied pixels: the box's width plus one length each side,
+// so sliding by a length never shows an end. `color` is opaque BGRA.
+inline std::vector<uint32_t> WavePixels(const LiveLayout& layout, const LiveLayout::Wave& wave, float scale, uint32_t color, int* width, int* height) {
+    const HomeRect box = layout.WaveBox();
+    *width = static_cast<int>((box.width + wave.length * 2) * scale + 0.5f);
+    *height = static_cast<int>(box.height * scale + 0.5f);
+    std::vector<uint32_t> pixels(static_cast<size_t>(*width) * static_cast<size_t>(*height), 0);
+    const float half = LiveLayout::kLineWidth * scale / 2;
+    for (int x = 0; x < *width; ++x) {
+        const float px = (x + 0.5f) / scale - wave.length;
+        const float y = layout.WaveY(wave, px) * scale;
+        // Distance to the line across its slope, so steep parts are as thick as flat ones.
+        const float slope = (layout.WaveY(wave, px + 0.05f) - layout.WaveY(wave, px - 0.05f)) / 0.1f;
+        const float across = std::sqrt(1 + slope * slope);
+        for (int row = 0; row < *height; ++row) {
+            const float distance = std::fabs(row + 0.5f - y) / across;
+            const float alpha = std::clamp(half - distance + 0.5f, 0.0f, 1.0f);
+            if (alpha <= 0) continue;
+            uint32_t pixel = static_cast<uint32_t>(alpha * 255 + 0.5f) << 24;
+            for (int shift = 0; shift < 24; shift += 8) pixel |= static_cast<uint32_t>(((color >> shift) & 0xFF) * alpha + 0.5f) << shift;
+            pixels[static_cast<size_t>(row * *width + x)] = pixel;
+        }
+    }
+    return pixels;
 }
 
-inline double BarSegmentValue(const BarSegment& s, double t) { return s.c0 + s.c1 * t + s.c2 * t * t + s.c3 * t * t * t; }
-
-// A bar's surface: a vertical pill of `color` (BGRA, opaque) in premultiplied pixels.
-inline std::vector<uint32_t> BarPixels(int width, int height, uint32_t color) {
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height), 0);
-    const float radius = width / 2.0f;
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const float cx = x + 0.5f;
-            const float cy = y + 0.5f;
-            const float centerY = std::clamp(cy, radius, height - radius);
-            const float distance = std::hypot(cx - radius, cy - centerY);
-            const float alpha = std::clamp(radius - distance + 0.5f, 0.0f, 1.0f);
-            const auto channel = [&](int shift) { return static_cast<uint32_t>(((color >> shift) & 0xFF) * alpha + 0.5f) << shift; };
-            pixels[static_cast<size_t>(y * width + x)] = channel(0) | channel(8) | channel(16) | (static_cast<uint32_t>(alpha * 255 + 0.5f) << 24);
-        }
+// Black fading to clear across `width` pixels, from the left when `leading`.
+inline std::vector<uint32_t> EdgeFadePixels(int width, int height, bool leading) {
+    std::vector<uint32_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height));
+    for (int x = 0; x < width; ++x) {
+        const float t = (x + 0.5f) / static_cast<float>(width);
+        const uint32_t alpha = static_cast<uint32_t>((leading ? 1 - t : t) * 255 + 0.5f);
+        for (int y = 0; y < height; ++y) pixels[static_cast<size_t>(y * width + x)] = alpha << 24;
     }
     return pixels;
 }

@@ -220,14 +220,18 @@ A macOS update could break the adapter. Home then shows "Nothing playing"; nothi
 ### Closed island while music plays
 
 While something plays, the closed pill widens into a wing on each side of the notch, with the same
-kind of spring as opening (response 0.42 s, bounce 0.16): the artwork on the left, four level bars on
+kind of spring as opening (response 0.42 s, bounce 0.16): the artwork on the left, a flowing wave on
 the right, tinted with the artwork's colour when "Tint the progress bar" is on. Numbers are in
 `LiveLayout` (macOS) and `live_layout.h` (Windows). Hovering the wings opens the island as the notch
 does.
 
-- **Bars.** Each is a looping compositor animation with its own period (0.47, 0.61, 0.39, 0.53 s),
-  so they never line up. They are a rhythm, not the audio: reading real levels would need an
-  audio-capture permission and work on every frame. Paused, they rest low and nothing animates.
+- **Wave.** Two sine lines drawn once: a bright one (13 pt crest to crest) drifting left a length
+  every 1.7 s, and a fainter, flatter one (21 pt, 45%) drifting right every 2.9 s. Each is only
+  slid sideways by a looping compositor animation; where they cross, the shape keeps changing.
+  Black fades 4 pt wide at each end let the lines dissolve into the pill. It shows that something
+  plays, not the audio: reading real levels would need an audio-capture permission and work on
+  every frame. Paused, the lines stop where they are and fade into one still line, and nothing
+  animates. Our own design: an earlier version used four bouncing bars, too close to Boring Notch.
 - **Pause.** The wings stay 10 s after a pause, so a quick pause doesn't flicker the pill, then
   narrow away. One one-shot timer.
 - **Track change.** The artwork crossfades; the pill doesn't move.
@@ -339,7 +343,7 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | Home | Show shuffle and repeat | On | The two outer transport buttons |
 | Home | Tint the progress bar | On | Average artwork color, lifted so dark covers stay visible |
 | Home | Glow behind the page | On | The wash of that color behind the page |
-| Home | Show what's playing | On | The closed island's wings with artwork and level bars. On macOS this keeps the now playing helper running while a player app is open |
+| Home | Show what's playing | On | The closed island's wings with artwork and a flowing wave. On macOS this keeps the now playing helper running while a player app is open |
 | AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
 | AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
 | AI Usage | Check Claude every | Minute | Or 5 or 15 minutes. Never more often than the approved once a minute; logs are still read every minute |
@@ -367,7 +371,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
-| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, four 3 pt bars; spring 0.42 s, bounce 0.16; 10 s after a pause. See [Closed island while music plays](#closed-island-while-music-plays) |
+| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, two drifting wave lines (`LiveLayout.waves`); spring 0.42 s, bounce 0.16; 10 s after a pause. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |

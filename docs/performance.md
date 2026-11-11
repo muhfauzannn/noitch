@@ -15,9 +15,13 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the wave replacing the bars (2026-11-11, same M5): 10.13 MB, 1.70 ms/min, 0.17 wakeups/s; the
+binary is 983 KB. The run before, with the Home glow change, read 9.59 MB, 1.26 ms/min and 0.10
+wakeups/s. Whether music played during this run, and so whether the wings were up, is not known.
+
 With the closed island's music wings (2026-11-11, same M5): 9.77 and 9.72 MB, 2.72 and 3.45 ms/min,
 0.13 wakeups/s, 4.18 ms per transition, all 23 hover checks passing. Nothing was playing, so the
-hover run never widened the pill, and the moving bars are not in these figures; they run in the
+hover run never widened the pill, and the moving wave is not in these figures; they run in the
 render server. A browser was open, so the now playing helper may have been running beside the app;
 its memory is not counted. The binary grew from 920 KB to 981 KB.
 
