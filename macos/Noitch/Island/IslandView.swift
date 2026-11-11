@@ -121,6 +121,17 @@ final class IslandView: NSView {
         )
     }
 
+    /// Shows the closed island's music layers, hung from the top center of the pill below any page.
+    func setLive(_ layer: CALayer) {
+        let full = contentSize == .zero ? IslandGeometry.expandedSize : contentSize
+        withoutImplicitAnimations {
+            layer.anchorPoint = CGPoint(x: 0.5, y: 1)
+            layer.position = CGPoint(x: full.width / 2, y: full.height)
+            layer.zPosition = -1
+            clip.addSublayer(layer)
+        }
+    }
+
     /// Shows a feature's layers on the pill. `size` is the area they cover when expanded.
     func setContent(_ layer: CALayer, size: CGSize) {
         contentSize = size

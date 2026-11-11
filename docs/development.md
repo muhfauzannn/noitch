@@ -90,7 +90,8 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 60 unit tests | Passing |
+| Builds; 64 unit tests | Passing |
+| Closed island with music (wings, moving bars) | Checked by window screenshots with `--demo-media`; real playback, artwork, pause timing and the player-app watching **not checked on screen** |
 | Settings window with sidebar | General page checked by a window screenshot (`--settings`, Debug only); other pages and every control's effect **not checked on screen** |
 | Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |
 | Usage page ring design | Checked by an offscreen render with sample numbers |
@@ -124,6 +125,8 @@ Keep this honest and up to date.
 | Pages, header, usage page with rings, shared painter, Claude limit request, `WM_MOUSEHWHEEL` swipe | **Never compiled**: no Windows toolchain was available |
 | Settings values, panes, page and usage settings tests | Passing on macOS with clang |
 | Settings window with sidebar, registry store, hover delay, page settings in the pager | **Never compiled** |
+| Live layout, bar curves and pixels | Passing on macOS with clang |
+| Closed island with music: shared media monitor, `LiveScene`, `AddRepeat` bar animations | **Never compiled** |
 | Compiles | With Zig and mingw, using a stub for the WinRT header. It no longer links there |
 | `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |

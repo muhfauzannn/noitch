@@ -12,6 +12,10 @@ inline SettingsPane HomeSettingsPane() {
     const auto lyricsOn = [](const AppSettings& s) { return s.home.showLyrics; };
     return {L"Home",
             {
+                {L"Closed island",
+                 L"",
+                 {ToggleRow(L"Show what's playing", L"Artwork and level bars beside the notch.",
+                            [](const AppSettings& s) { return s.home.showLive; }, [](AppSettings& s, bool on) { s.home.showLive = on; })}},
                 {L"Lyrics",
                  L"Lyrics come from lrclib.net, which receives the track, artist and album names.",
                  {

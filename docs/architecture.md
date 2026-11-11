@@ -199,7 +199,13 @@ uses [MediaRemoteAdapter](https://github.com/ungive/mediaremote-adapter), the sa
 framework loaded by `/usr/bin/perl`. This is a deliberate, approved exception to the single-process,
 no-private-API and no-dependency rules, limited as follows.
 
-- `stream` runs only while the island is open, plus the grace period. At rest there is no child.
+- `stream` runs while the island is open, plus the grace period, and, when "Show what's playing" is
+  on, while a media player is running (approved on 2026-11-11). Players are a fixed list of music
+  apps and browsers in `MediaPlayers`; launches and quits arrive as `NSWorkspace` notifications, so
+  nothing polls. With no player running, or the setting off, there is no child at rest. A browser
+  open all day keeps the child running all day: about 26 MB of its own, outside our budgets.
+- `NowPlayingMonitor` owns the one stream; Home and the closed island both read it, so there is
+  never a second child.
 - Commands are short-lived `perl` children too, about 90 ms each.
 - Seeking is the exception. The adapter's `seek` reports failure on macOS 26.6, so `seek` calls
   `MRMediaRemoteSetElapsedTime` directly, as Boring Notch does. MediaRemote enters our process only
@@ -208,6 +214,26 @@ no-private-API and no-dependency rules, limited as follows.
 - If the child exits it isn't restarted until the next opening, so a broken adapter can't spin.
 
 A macOS update could break the adapter. Home then shows "Nothing playing"; nothing else is affected.
+
+### Closed island while music plays
+
+While something plays, the closed pill widens into a wing on each side of the notch, with the same
+kind of spring as opening (response 0.42 s, bounce 0.16): the artwork on the left, four level bars on
+the right, tinted with the artwork's colour when "Tint the progress bar" is on. Numbers are in
+`LiveLayout` (macOS) and `live_layout.h` (Windows). Hovering the wings opens the island as the notch
+does.
+
+- **Bars.** Each is a looping compositor animation with its own period (0.47, 0.61, 0.39, 0.53 s),
+  so they never line up. They are a rhythm, not the audio: reading real levels would need an
+  audio-capture permission and work on every frame. Paused, they rest low and nothing animates.
+- **Pause.** The wings stay 10 s after a pause, so a quick pause doesn't flicker the pill, then
+  narrow away. One one-shot timer.
+- **Track change.** The artwork crossfades; the pill doesn't move.
+- **Resizing.** As with opening, the window (macOS) or hit region (Windows) grows before widening
+  and shrinks after narrowing, never per frame.
+- **Lifetime.** The layers are made when the wings first show and released 2 s after they go.
+- **Windows.** The media session subscription now runs from launch while the setting is on, so WinRT
+  loads at start instead of on first opening. It needs no other process.
 
 ### Usage
 
@@ -311,6 +337,7 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | Home | Show shuffle and repeat | On | The two outer transport buttons |
 | Home | Tint the progress bar | On | Average artwork color, lifted so dark covers stay visible |
 | Home | Glow behind the page | On | The wash of that color behind the page |
+| Home | Show what's playing | On | The closed island's wings with artwork and level bars. On macOS this keeps the now playing helper running while a player app is open |
 | AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
 | AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
 | AI Usage | Check Claude every | Minute | Or 5 or 15 minutes. Never more often than the approved once a minute; logs are still read every minute |
@@ -338,6 +365,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
+| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, four 3 pt bars; spring 0.42 s, bounce 0.16; 10 s after a pause. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |

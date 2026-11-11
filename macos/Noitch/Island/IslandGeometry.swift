@@ -38,15 +38,27 @@ struct IslandGeometry: Equatable {
     }
 
     let display: Display
+    /// Music is playing and the closed pill has wings for it, see `LiveLayout`.
+    var isLive = false
 
+    init(display: Display, isLive: Bool = false) {
+        self.display = display
+        self.isLive = isLive
+    }
+
+    /// The notch, or the virtual one: the closed pill without wings.
     var collapsedSize: CGSize {
         display.notchHeight > 0
             ? CGSize(width: display.notchWidth, height: display.notchHeight)
             : CGSize(width: Self.virtualNotchWidth, height: display.menuBarHeight)
     }
 
+    /// Widening into the wings and back is a smaller move than opening, and a gentle one.
+    static let liveSpring = Spring(response: 0.42, bounce: 0.16)
+
     func pillSize(for state: IslandState) -> CGSize {
-        state == .expanded ? Self.expandedSize : collapsedSize
+        if state == .expanded { return Self.expandedSize }
+        return isLive ? LiveLayout(collapsed: collapsedSize).size : collapsedSize
     }
 
     func cornerRadius(for state: IslandState) -> CGFloat {

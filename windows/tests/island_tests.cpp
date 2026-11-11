@@ -7,6 +7,7 @@
 
 #include "features/home/home_layout.h"
 #include "features/home/home_model.h"
+#include "features/live/live_layout.h"
 #include "features/home/home_settings_pane.h"
 #include "features/settings/settings_panes.h"
 #include "features/usage/usage_settings_pane.h"
@@ -637,6 +638,50 @@ void TestSettingsPanesWriteWhatTheyRead() {
     assert(SecondsLabel(0.15) == L"0.15 s" && SecondsLabel(-0.5, true) == L"\x2212" L"0.5 s" && SecondsLabel(1, true) == L"+1 s");
 }
 
+void TestLiveWingsFitBesideTheNotch() {
+    const LiveLayout layout(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight());
+    assert(layout.Width() > IslandGeometry::CollapsedWidth());
+    assert(Near(layout.ArtSide(), 18, 1e-6) && Near(layout.Wing(), 35, 1e-6));
+    // The artwork stays in the left wing and the bars in the right, clear of the notch.
+    assert(layout.Artwork().Right() <= layout.Wing() - LiveLayout::kInnerGap + 0.01f);
+    assert(layout.Bars().x >= layout.Wing() + IslandGeometry::CollapsedWidth() + LiveLayout::kInnerGap - 0.01f);
+    assert(layout.Bars().Right() <= layout.Width() - LiveLayout::kOuterPadding + 0.01f);
+    assert(layout.Bars().y >= 0 && layout.Bars().Bottom() <= layout.Height());
+    IslandGeometry geometry(1);
+    const float narrow = geometry.PillFor(IslandState::Collapsed).right - geometry.PillFor(IslandState::Collapsed).left;
+    geometry.SetLive(true);
+    const Pill live = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(live.right - live.left, layout.Width(), 1e-3) && live.right - live.left > narrow);
+    assert(live.left >= geometry.FlareRadius() && live.right <= geometry.Window().width - geometry.FlareRadius());
+}
+
+void TestLiveShowsWhilePlayingAndBrieflyAfterAPause() {
+    NowPlaying playing;
+    playing.title = "Song";
+    playing.isPlaying = true;
+    assert(LiveRule::Shows(playing, true, -1, 100));
+    assert(!LiveRule::Shows(playing, false, -1, 100));
+    NowPlaying paused = playing;
+    paused.isPlaying = false;
+    assert(LiveRule::Shows(paused, true, 95, 100));
+    assert(!LiveRule::Shows(paused, true, 80, 100));
+    assert(!LiveRule::Shows(NowPlaying{}, true, -1, 100));
+}
+
+void TestBarCycleRisesAndFallsSmoothly() {
+    const auto cycle = BarCycle(0.5, 0.3f, 1.0f);
+    assert(cycle.size() == 2);
+    assert(Near(BarSegmentValue(cycle[0], 0), 0.3, 1e-6) && Near(BarSegmentValue(cycle[0], 0.5), 1.0, 1e-5));
+    assert(Near(BarSegmentValue(cycle[1], 0), 1.0, 1e-6) && Near(BarSegmentValue(cycle[1], 0.5), 0.3, 1e-5));
+    // Flat at both ends, so the repeat joins without a kink.
+    assert(cycle[0].c1 == 0 && cycle[1].c1 == 0);
+    const auto bar = BarPixels(3, 12, 0xFFFFFFFF);
+    assert((bar[0] >> 24) < 0xFF && (bar[1 + 6 * 3] >> 24) == 0xFF);
+    const std::vector<uint32_t> square(16 * 16, 0xFFFFFFFF);
+    const auto rounded = RoundedCorners(square.data(), 16, 4);
+    assert((rounded[0] >> 24) == 0 && rounded[8 * 16 + 8] == 0xFFFFFFFF);
+}
+
 int main() {
     TestTimesParseInUtcAndWithAnOffset();
     TestScannerReadsOnlyTheObjectsOwnFields();
@@ -686,6 +731,9 @@ int main() {
     TestPagesOpenWhereTheSettingsSay();
     TestUsageSettingsPickColumnsAndWhereAmberStarts();
     TestSettingsPanesWriteWhatTheyRead();
+    TestLiveWingsFitBesideTheNotch();
+    TestLiveShowsWhilePlayingAndBrieflyAfterAPause();
+    TestBarCycleRisesAndFallsSmoothly();
     std::puts("island_tests: all passed");
     return 0;
 }

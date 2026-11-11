@@ -197,6 +197,17 @@ HRESULT Compositor::CreateLayerSurface(int layer, UINT width, UINT height, float
     return S_OK;
 }
 
+HRESULT Compositor::AttachLive(IDCompositionVisual* visual) {
+    if (!body_) return E_UNEXPECTED;
+    // Above the black fill and below any page content.
+    return body_->AddVisual(visual, TRUE, fill_.Get());
+}
+
+HRESULT Compositor::DetachLive(IDCompositionVisual* visual) {
+    if (!body_) return S_OK;
+    return body_->RemoveVisual(visual);
+}
+
 HRESULT Compositor::RemoveLayer(int layer) {
     if (layer < 0 || layer >= kLayerCount || !layers_[layer]) return S_OK;
     HRESULT hr = content_->RemoveVisual(layers_[layer].Get());

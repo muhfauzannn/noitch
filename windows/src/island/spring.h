@@ -30,6 +30,8 @@ struct SpringParameters {
 // Opening is slower and softer than closing: the eye follows content in, but wants it gone fast.
 inline constexpr SpringParameters kExpandSpring{0.5, 0.14};
 inline constexpr SpringParameters kCollapseSpring{0.38, 0.18};
+// Widening into the wings and back is a smaller move than opening, and a gentle one.
+inline constexpr SpringParameters kLiveSpring{0.42, 0.16};
 
 inline constexpr SpringParameters SpringFor(IslandState state) {
     return state == IslandState::Expanded ? kExpandSpring : kCollapseSpring;

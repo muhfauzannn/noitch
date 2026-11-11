@@ -6,7 +6,7 @@
 #include <optional>
 
 #include "features/lyrics/lyrics_source.h"
-#include "features/now_playing/media_session_source.h"
+#include "features/now_playing/now_playing_monitor.h"
 #include "home_settings.h"
 #include "home_layout.h"
 #include "home_model.h"
@@ -22,10 +22,16 @@ public:
     static constexpr UINT_PTR kReleaseTimer = 3;
     static constexpr UINT_PTR kSkipTimer = 8;
 
-    void Initialize(HWND window, Compositor* compositor, double (*now)()) {
+    void Initialize(HWND window, Compositor* compositor, double (*now)(), NowPlayingMonitor* monitor) {
         window_ = window;
         compositor_ = compositor;
         now_ = now;
+        monitor_ = monitor;
+        monitor->onHome = [](void* context) {
+            auto* self = static_cast<HomeController*>(context);
+            if (self->isHolding_) self->ReceiveMedia();
+        };
+        monitor->homeContext = this;
     }
 
     void IslandWillOpen(const HomeLayout& layout, float left, float scale);
@@ -67,7 +73,10 @@ private:
     float left_ = 0;
     float scale_ = 0;
     HomeScene scene_;
-    MediaSessionSource source_;
+    NowPlayingMonitor* monitor_ = nullptr;
+    // True from opening until the grace period ends: Home keeps the subscription meanwhile.
+    bool isHolding_ = false;
+    MediaSessionSource& Source() { return monitor_->Source(); }
 
     NowPlaying nowPlaying_;
     std::unique_ptr<Lyrics> lyrics_;

@@ -15,6 +15,12 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the closed island's music wings (2026-11-11, same M5): 9.77 and 9.72 MB, 2.72 and 3.45 ms/min,
+0.13 wakeups/s, 4.18 ms per transition, all 23 hover checks passing. Nothing was playing, so the
+hover run never widened the pill, and the moving bars are not in these figures; they run in the
+render server. A browser was open, so the now playing helper may have been running beside the app;
+its memory is not counted. The binary grew from 920 KB to 981 KB.
+
 With the settings window split into per-feature pages (2026-11-11, same M5): 9.47 and 9.39 MB, 1.43
 and 2.10 ms/min, 0.13 wakeups/s, 4.12 ms per transition, all 23 hover checks passing. Just before,
 the same machine read 9.36 MB, 1.68 ms/min and 0.13 wakeups/s. The binary grew from 776 KB to 920

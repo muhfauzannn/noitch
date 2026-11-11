@@ -4,9 +4,9 @@ import os
 /// Reads system-wide now playing from the MediaRemote adapter and sends it commands.
 ///
 /// macOS has no public API for this, and since 15.4 MediaRemote only answers platform binaries, so
-/// the adapter runs inside `/usr/bin/perl`. That child process exists only while the island is open
-/// or was open moments ago, so at rest there is nothing running. Commands are short-lived children
-/// too. Seeking is the exception, see `seek`.
+/// the adapter runs inside `/usr/bin/perl`. `NowPlayingMonitor` decides when that child runs: while
+/// the island is open or was moments ago, and while a player app is running if the closed island
+/// shows music. Commands are short-lived children too. Seeking is the exception, see `seek`.
 final class NowPlayingSource {
     /// MRCommand values.
     enum Command: Int {

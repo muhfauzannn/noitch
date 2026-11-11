@@ -18,8 +18,9 @@ struct Artwork {
     std::vector<uint32_t> pixels;
 };
 
-// Reads now playing from Windows' media sessions and sends them commands. Lazily started: WinRT isn't
-// touched until the island first opens. WinRT calls back on pool threads, which only post a message,
+// Reads now playing from Windows' media sessions and sends them commands. Started by
+// NowPlayingMonitor: at launch when the closed island shows music, otherwise when the island first
+// opens. WinRT calls back on pool threads, which only post a message,
 // so all state stays on the main thread and no thread of ours exists.
 class MediaSessionSource {
 public:

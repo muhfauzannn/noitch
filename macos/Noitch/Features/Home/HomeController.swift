@@ -14,7 +14,8 @@ final class HomeController {
     private var layout: HomeLayout?
     private var scale: CGFloat = 2
     private var scene: HomeScene?
-    private lazy var source = NowPlayingSource { [unowned self] in receive($0) }
+    private let monitor: NowPlayingMonitor
+    private var source: NowPlayingSource { monitor.source }
     private lazy var lyricsSource = LyricsSource()
 
     private var nowPlaying = NowPlaying()
@@ -35,22 +36,22 @@ final class HomeController {
     /// While set, the slider shows this instead of the playback clock.
     private var scrubFraction: Double?
 
-    #if DEBUG
-    /// `--demo-media` shows sample data with no adapter and no network, for checking the layout.
-    private let isDemo = ProcessInfo.processInfo.arguments.contains("--demo-media")
-    #else
-    private let isDemo = false
-    #endif
+    private var isDemo: Bool { monitor.isDemo }
 
-    init(settings: HomeSettings) {
+    init(settings: HomeSettings, monitor: NowPlayingMonitor) {
         self.settings = settings
+        self.monitor = monitor
+        monitor.onHomeUpdate = { [unowned self] update in if isHolding { receive(update) } }
     }
+
+    /// True from opening until the grace period ends: Home keeps the stream running meanwhile.
+    private var isHolding = false
 
     /// True during a slider drag, which may leave the island without closing it.
     var isInteracting: Bool { pressed == .slider }
 
     func stop() {
-        source.stop()
+        monitor.stop()
     }
 
     // MARK: Island lifecycle
@@ -68,8 +69,10 @@ final class HomeController {
             onSceneCreated?(scene.root)
             updateArtwork(force: true)
         }
-        if isDemo { loadDemo() } else { source.start() }
-        refresh()
+        isHolding = true
+        monitor.setNeeded(true, by: .home)
+        if isDemo { loadDemo() }
+        receive(monitor.nowPlaying)
     }
 
     /// The scene's layers, if they are still alive, so a new pager can take them back.
@@ -99,7 +102,8 @@ final class HomeController {
         skipTimer?.invalidate()
         skipTimer = nil
         skippingFrom = nil
-        source.stop()
+        isHolding = false
+        monitor.setNeeded(false, by: .home)
         lyricsSource.cancel()
         scene?.root.removeFromSuperlayer()
         scene = nil
@@ -157,39 +161,9 @@ final class HomeController {
         guard let scene, force || nowPlaying.artwork != shownArtwork else { return }
         shownArtwork = nowPlaying.artwork
         let size = (layout?.artwork.width ?? 0) * scale
-        let image = nowPlaying.artwork.flatMap { Self.decode($0, maxPixelSize: size) }
-        let tint = settings.tintWithArtwork || settings.artworkGlow ? image.flatMap(Self.averageColor) : nil
+        let image = nowPlaying.artwork.flatMap { ArtworkImage.decode($0, maxPixelSize: size) }
+        let tint = settings.tintWithArtwork || settings.artworkGlow ? image.flatMap(ArtworkImage.averageColor) : nil
         scene.setArtwork(image, barTint: settings.tintWithArtwork ? tint : nil, glow: settings.artworkGlow ? tint : nil)
-    }
-
-    /// Decodes straight to display size, so a large cover never exists in memory at full size.
-    private static func decode(_ data: Data, maxPixelSize: CGFloat) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-    }
-
-    /// Scaled to one pixel, then lifted so a dark cover still gives a visible bar.
-    private static func averageColor(of image: CGImage) -> NSColor? {
-        var pixel = [UInt8](repeating: 0, count: 4)
-        let drawn = pixel.withUnsafeMutableBytes { bytes -> Bool in
-            guard let context = CGContext(
-                data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else { return false }
-            context.interpolationQuality = .medium
-            context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-            return true
-        }
-        guard drawn else { return nil }
-        let color = NSColor(red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255, blue: CGFloat(pixel[2]) / 255, alpha: 1)
-        var (hue, saturation, brightness, alpha): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
-        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        return NSColor(hue: hue, saturation: saturation, brightness: max(brightness, 0.75), alpha: 1)
     }
 
     // MARK: Showing it
@@ -353,17 +327,9 @@ final class HomeController {
     }
 
     #if DEBUG
+    /// The track itself comes from the monitor's demo.
     private func loadDemo() {
-        guard !nowPlaying.hasTrack else { return }
-        var demo = NowPlaying()
-        demo.title = "Sample Track With a Long Enough Title to Need Truncating in the Column"
-        demo.artist = "Sample Artist"
-        demo.album = "Sample Album"
-        demo.duration = 215
-        demo.elapsed = 62
-        demo.timestamp = Date()
-        demo.isPlaying = true
-        nowPlaying = demo
+        guard lyrics == nil else { return }
         lyrics = Lyrics(synced: (0..<60).map { LyricLine(start: Double($0) * 4, text: "Sample lyric line number \($0)") })
     }
     #else

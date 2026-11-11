@@ -18,11 +18,12 @@ void HomeController::IslandWillOpen(const HomeLayout& layout, float left, float 
         left_ = left;
         scale_ = scale;
         if (FAILED(scene_.Create(*compositor_, layout, left, scale))) scene_.Release();
-        source_.SetArtworkPixels(static_cast<int>(layout.Artwork().width + 0.5f));
+        monitor_->SetArtworkPixels(NowPlayingMonitor::kHome, static_cast<int>(layout.Artwork().width + 0.5f));
         shownArtwork_.reset();
     }
-    source_.Start(window_, now_);
-    Refresh();
+    isHolding_ = true;
+    monitor_->SetNeeded(NowPlayingMonitor::kHome, true);
+    ReceiveMedia();
 }
 
 void HomeController::IslandWillClose() {
@@ -40,7 +41,8 @@ void HomeController::Release() {
     KillTimer(window_, kReleaseTimer);
     KillTimer(window_, kSkipTimer);
     skippingFrom_.reset();
-    source_.Stop();
+    isHolding_ = false;
+    monitor_->SetNeeded(NowPlayingMonitor::kHome, false);
     scene_.Release();
     shownArtwork_.reset();
     nowPlaying_ = NowPlaying{};
@@ -71,9 +73,6 @@ void HomeController::DeviceLost() {
 
 bool HomeController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
-        case MediaSessionSource::kMessage:
-            if (source_.HandleMessage(wparam, lparam)) ReceiveMedia();
-            return true;
         case LyricsSource::kMessage: {
             std::unique_ptr<Lyrics> found(reinterpret_cast<Lyrics*>(lparam));
             if (wparam != lyricsGeneration_) return true;
@@ -105,14 +104,14 @@ bool HomeController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
 }
 
 void HomeController::ReceiveMedia() {
-    nowPlaying_ = source_.State();
+    nowPlaying_ = Source().State();
     if (skippingFrom_ && nowPlaying_.title != *skippingFrom_) {
         skippingFrom_.reset();
         KillTimer(window_, kSkipTimer);
     }
     RequestLyricsIfNeeded();
-    if (source_.CurrentArtwork() != shownArtwork_) {
-        shownArtwork_ = source_.CurrentArtwork();
+    if (Source().CurrentArtwork() != shownArtwork_) {
+        shownArtwork_ = Source().CurrentArtwork();
         ShowArtwork();
     }
     Refresh();
@@ -200,7 +199,7 @@ void HomeController::FinishScrub(double fraction) {
     // Shown at once. The session's own update follows and corrects any difference.
     nowPlaying_.elapsed = position;
     nowPlaying_.timestamp = now_();
-    source_.Seek(position);
+    Source().Seek(position);
 }
 
 // Answers the press at once: players can take a second or more to report the new track. Ends when
@@ -214,34 +213,34 @@ void HomeController::BeginSkip() {
 void HomeController::Activate(HomeControl control) {
     switch (control) {
         case HomeControl::Artwork:
-            source_.OpenApp();
+            Source().OpenApp();
             break;
         case HomeControl::PlayPause:
             if (!nowPlaying_.HasTrack()) break;
             nowPlaying_.elapsed = nowPlaying_.Position(now_());
             nowPlaying_.timestamp = now_();
             nowPlaying_.isPlaying = !nowPlaying_.isPlaying;
-            source_.TogglePlayPause();
+            Source().TogglePlayPause();
             break;
         case HomeControl::Previous:
             if (!nowPlaying_.HasTrack()) break;
-            source_.Previous();
+            Source().Previous();
             BeginSkip();
             break;
         case HomeControl::Next:
             if (!nowPlaying_.HasTrack()) break;
-            source_.Next();
+            Source().Next();
             BeginSkip();
             break;
         case HomeControl::Shuffle:
             if (!nowPlaying_.HasTrack() || !settings_.showShuffleAndRepeat) break;
             nowPlaying_.isShuffled = !nowPlaying_.isShuffled;
-            source_.SetShuffle(nowPlaying_.isShuffled);
+            Source().SetShuffle(nowPlaying_.isShuffled);
             break;
         case HomeControl::Repeat:
             if (!nowPlaying_.HasTrack() || !settings_.showShuffleAndRepeat) break;
             nowPlaying_.repeatMode = NextRepeatMode(nowPlaying_.repeatMode);
-            source_.SetRepeat(nowPlaying_.repeatMode);
+            Source().SetRepeat(nowPlaying_.repeatMode);
             break;
         default:
             break;

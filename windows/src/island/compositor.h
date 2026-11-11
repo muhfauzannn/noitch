@@ -43,6 +43,16 @@ public:
     HRESULT SetLayer(int layer, float opacity, float offsetX);
     HRESULT Commit() { return device_->Commit(); }
 
+    // The closed island's music sits in the pill's clip beside the content container, so it shows
+    // while the island is closed. LiveScene builds the visual from the device; these place it.
+    IDCompositionDevice* Device() const { return device_.Get(); }
+    HRESULT AttachLive(IDCompositionVisual* visual);
+    HRESULT DetachLive(IDCompositionVisual* visual);
+    // Uploads premultiplied BGRA pixels into a whole surface.
+    HRESULT Upload(IDCompositionSurface* surface, UINT width, UINT height, const void* pixels) { return Paint(surface, width, height, pixels); }
+    // An eased fade as a DirectComposition animation, for any animatable property.
+    HRESULT BuildFade(const ContentFade& fade, IDCompositionAnimation** animation);
+
     // For Direct2D, which draws on the same device as the composition surfaces.
     IDXGIDevice* DxgiDevice() const { return dxgi_.Get(); }
 
@@ -54,7 +64,6 @@ private:
     HRESULT BuildFlare(IDCompositionVisual* visual, bool mirrored);
     HRESULT Paint(IDCompositionSurface* surface, UINT width, UINT height, const void* pixels);
     HRESULT BuildAnimation(const PillMotion& motion, int channel, float bias, IDCompositionAnimation** animation);
-    HRESULT BuildFade(const ContentFade& fade, IDCompositionAnimation** animation);
 
     HWND hwnd_ = nullptr;
     int flareRadius_ = 0;
