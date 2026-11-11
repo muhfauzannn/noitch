@@ -39,6 +39,11 @@ final class HomeController {
     private var pendingCalendarClick = false
     /// While set, the slider shows this instead of the playback clock.
     private var scrubFraction: Double?
+    /// The lyrics stage was chosen. Kept through closing, so the island reopens the way it was left.
+    private var prefersStage = false
+    /// A stage line pressed, answered with a jump to it when released over the same line.
+    private var pressedStageSlot: Int?
+    private var isOnStage: Bool { prefersStage && settings.showLyrics }
 
     private var isDemo: Bool { monitor.isDemo }
 
@@ -103,8 +108,10 @@ final class HomeController {
         tickTimer = nil
         hovered = nil
         pressed = nil
+        pressedStageSlot = nil
         scrubFraction = nil
         scene?.setHover(nil, isPressed: false)
+        scene?.setStageHover(nil)
         let timer = Timer(timeInterval: Self.releaseDelay, repeats: false) { [unowned self] _ in
             MainActor.assumeIsolated { release() }
         }
@@ -210,7 +217,8 @@ final class HomeController {
             isLoadingLyrics: isLoadingLyrics,
             position: currentPosition(),
             settings: settings,
-            isSkipping: skippingFrom != nil
+            isSkipping: skippingFrom != nil,
+            onStage: isOnStage
         ))
     }
 
@@ -223,7 +231,8 @@ final class HomeController {
         // Lyrics run on their own clock, shifted by the timing setting.
         let offset = settings.lyricsOffset
         let nextLyric = lyrics?.nextChange(after: position + offset).map { $0 - offset }
-        let delay = HomeModel.nextTick(position: position, rate: nowPlaying.rate, nextLyric: nextLyric)
+        // The stage shows no clock, so only the next line wakes it.
+        guard let delay = HomeModel.nextTick(position: position, rate: nowPlaying.rate, nextLyric: nextLyric, wholeSeconds: !isOnStage) else { return }
         let timer = Timer(timeInterval: delay, repeats: false) { [unowned self] _ in
             MainActor.assumeIsolated {
                 render()
@@ -239,8 +248,12 @@ final class HomeController {
 
     func pointerMoved(to point: CGPoint) {
         guard let layout, pressed == nil else { return }
-        calendar?.pointerMoved(to: point)
-        let control = layout.control(at: point)
+        if isOnStage {
+            scene?.setStageHover(stageLineIndex(at: point) != nil ? layout.stageSlot(at: point) : nil)
+        } else {
+            calendar?.pointerMoved(to: point)
+        }
+        let control = layout.control(at: point, onStage: isOnStage)
         guard control != hovered else { return }
         hovered = control
         scene?.setHover(control, isPressed: false)
@@ -248,8 +261,12 @@ final class HomeController {
 
     func pointerDown(at point: CGPoint) {
         guard let layout else { return }
-        guard let control = layout.control(at: point) else {
-            pendingCalendarClick = layout.showsCalendar && layout.calendarPanel.contains(point)
+        guard let control = layout.control(at: point, onStage: isOnStage) else {
+            if isOnStage {
+                pressedStageSlot = stageLineIndex(at: point) != nil ? layout.stageSlot(at: point) : nil
+            } else {
+                pendingCalendarClick = layout.showsCalendar && layout.calendarPanel.contains(point)
+            }
             return
         }
         pressed = control
@@ -272,15 +289,41 @@ final class HomeController {
             _ = calendar?.click(at: point)
             return
         }
+        if let slot = pressedStageSlot {
+            pressedStageSlot = nil
+            if layout?.stageSlot(at: point) == slot, let line = stageLineIndex(at: point) { jump(toLine: line) }
+            return
+        }
         guard let layout, let control = pressed else { return }
         pressed = nil
         if control == .slider, let scrubFraction {
             finishScrub(at: scrubFraction)
-        } else if layout.control(at: point) == control {
+        } else if layout.control(at: point, onStage: isOnStage) == control {
             activate(control)
         }
-        hovered = layout.control(at: point)
+        hovered = layout.control(at: point, onStage: isOnStage)
         scene?.setHover(hovered, isPressed: false)
+    }
+
+    /// The synced line shown in the stage slot under `point`, if there is one to jump to.
+    private func stageLineIndex(at point: CGPoint) -> Int? {
+        guard let slot = layout?.stageSlot(at: point), let lyrics, !lyrics.synced.isEmpty,
+              nowPlaying.hasTrack, skippingFrom == nil else { return nil }
+        let current = lyrics.lineIndex(at: currentPosition() + settings.lyricsOffset)
+        // Before the first line the middle slot holds a note, not a line.
+        if current == nil && slot <= 0 { return nil }
+        let line = (current ?? -1) + slot
+        return lyrics.synced.indices.contains(line) ? line : nil
+    }
+
+    /// Seeks to just inside the line, so the timing setting can't leave it a hair before.
+    private func jump(toLine line: Int) {
+        guard let lyrics else { return }
+        let position = max(lyrics.synced[line].start - settings.lyricsOffset + 0.02, 0)
+        nowPlaying.elapsed = position
+        nowPlaying.timestamp = Date()
+        if !isDemo { source.seek(to: position) }
+        refresh()
     }
 
     private func finishScrub(at fraction: Double) {
@@ -323,6 +366,11 @@ final class HomeController {
             guard nowPlaying.hasTrack, settings.showShuffleAndRepeat else { return }
             nowPlaying.repeatMode = nowPlaying.repeatMode.next
             if !isDemo { source.setRepeat(nowPlaying.repeatMode) }
+            refresh()
+        case .lyrics:
+            guard settings.showLyrics else { return }
+            prefersStage.toggle()
+            scene?.setStageHover(nil)
             refresh()
         }
     }

@@ -31,6 +31,8 @@ void HomeController::IslandWillClose() {
     KillTimer(window_, kTickTimer);
     hovered_ = HomeControl::None;
     pressed_ = HomeControl::None;
+    stageHover_ = kNoStageSlot;
+    pressedStageSlot_ = kNoStageSlot;
     scrubFraction_.reset();
     // One-shot, not periodic: it fires once, unless the island reopens first.
     SetTimer(window_, kReleaseTimer, kReleaseDelayMs, nullptr);
@@ -141,7 +143,8 @@ double HomeController::CurrentPosition() const {
 
 void HomeController::Refresh() {
     if (!isOpen_) return;
-    scene_.Paint(MakeHomeModel(nowPlaying_, lyrics_.get(), isLoadingLyrics_, CurrentPosition(), settings_, skippingFrom_.has_value()), hovered_, pressed_ != HomeControl::None);
+    scene_.Paint(MakeHomeModel(nowPlaying_, lyrics_.get(), isLoadingLyrics_, CurrentPosition(), settings_, skippingFrom_.has_value(), IsOnStage()),
+                 hovered_, pressed_ != HomeControl::None, stageHover_);
     ScheduleTick();
 }
 
@@ -154,7 +157,9 @@ void HomeController::ScheduleTick() {
     const double offset = settings_.lyricsOffset;
     const double nextChange = lyrics_ ? lyrics_->NextChange(position + offset) : -1;
     const double nextLyric = nextChange >= 0 ? nextChange - offset : -1;
-    const double delay = NextHomeTick(position, nowPlaying_.rate, nextLyric);
+    // The stage shows no clock, so only the next line wakes it.
+    const double delay = NextHomeTick(position, nowPlaying_.rate, nextLyric, !IsOnStage());
+    if (delay < 0) return;
     SetTimer(window_, kTickTimer, static_cast<UINT>(delay * 1000) + 1, nullptr);
 }
 
@@ -165,15 +170,20 @@ void HomeController::PointerMoved(float x, float y) {
         return;
     }
     if (pressed_ != HomeControl::None) return;
-    const HomeControl control = layout_.ControlAt(x, y);
-    if (control == hovered_) return;
+    const HomeControl control = layout_.ControlAt(x, y, IsOnStage());
+    const int stageHover = IsOnStage() && StageLineIndex(x, y) >= 0 ? layout_.StageSlotAt(x, y) : kNoStageSlot;
+    if (control == hovered_ && stageHover == stageHover_) return;
     hovered_ = control;
+    stageHover_ = stageHover;
     Refresh();
 }
 
 void HomeController::PointerDown(float x, float y) {
-    const HomeControl control = layout_.ControlAt(x, y);
-    if (control == HomeControl::None) return;
+    const HomeControl control = layout_.ControlAt(x, y, IsOnStage());
+    if (control == HomeControl::None) {
+        if (IsOnStage() && StageLineIndex(x, y) >= 0) pressedStageSlot_ = layout_.StageSlotAt(x, y);
+        return;
+    }
     pressed_ = control;
     hovered_ = control;
     if (control == HomeControl::Slider && nowPlaying_.HasTrack() && !skippingFrom_) scrubFraction_ = layout_.SliderFraction(x);
@@ -181,15 +191,42 @@ void HomeController::PointerDown(float x, float y) {
 }
 
 void HomeController::PointerUp(float x, float y) {
+    if (pressedStageSlot_ != kNoStageSlot) {
+        const int slot = pressedStageSlot_;
+        pressedStageSlot_ = kNoStageSlot;
+        const int line = StageLineIndex(x, y);
+        if (layout_.StageSlotAt(x, y) == slot && line >= 0) JumpToLine(line);
+        return;
+    }
     const HomeControl control = pressed_;
     if (control == HomeControl::None) return;
     pressed_ = HomeControl::None;
     if (control == HomeControl::Slider && scrubFraction_) {
         FinishScrub(*scrubFraction_);
-    } else if (layout_.ControlAt(x, y) == control) {
+    } else if (layout_.ControlAt(x, y, IsOnStage()) == control) {
         Activate(control);
     }
-    hovered_ = layout_.ControlAt(x, y);
+    hovered_ = layout_.ControlAt(x, y, IsOnStage());
+    Refresh();
+}
+
+// The synced line shown in the stage slot under the point, or -1 when there is none to jump to.
+int HomeController::StageLineIndex(float x, float y) const {
+    const int slot = layout_.StageSlotAt(x, y);
+    if (slot == kNoStageSlot || !lyrics_ || lyrics_->synced.empty() || !nowPlaying_.HasTrack() || skippingFrom_) return -1;
+    const int current = lyrics_->LineIndex(CurrentPosition() + settings_.lyricsOffset);
+    // Before the first line the middle slot holds a note, not a line.
+    if (current < 0 && slot <= 0) return -1;
+    const int line = current + slot;
+    return line >= 0 && line < static_cast<int>(lyrics_->synced.size()) ? line : -1;
+}
+
+// Seeks to just inside the line, so the timing setting can't leave it a hair before.
+void HomeController::JumpToLine(int line) {
+    const double position = std::max(lyrics_->synced[static_cast<size_t>(line)].start - settings_.lyricsOffset + 0.02, 0.0);
+    nowPlaying_.elapsed = position;
+    nowPlaying_.timestamp = now_();
+    Source().Seek(position);
     Refresh();
 }
 
@@ -241,6 +278,11 @@ void HomeController::Activate(HomeControl control) {
             if (!nowPlaying_.HasTrack() || !settings_.showShuffleAndRepeat) break;
             nowPlaying_.repeatMode = NextRepeatMode(nowPlaying_.repeatMode);
             Source().SetRepeat(nowPlaying_.repeatMode);
+            break;
+        case HomeControl::Lyrics:
+            if (!settings_.showLyrics) break;
+            prefersStage_ = !prefersStage_;
+            stageHover_ = kNoStageSlot;
             break;
         default:
             break;

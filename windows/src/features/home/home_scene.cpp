@@ -17,6 +17,9 @@ constexpr float kDimmedOpacity = 0.35f;
 constexpr float kIdleOpacity = 0.55f;
 constexpr float kSkippingOpacity = 0.4f;
 constexpr float kNextLyricOpacity = 0.38f;
+// The stage's lines by slot, from -1: the one before, the one being sung, the two after.
+constexpr float kStageOpacity[] = {0.3f, 1.0f, 0.55f, 0.26f};
+constexpr float kStageHoverOpacity = 0.85f;
 
 // Segoe MDL2 Assets ships with Windows 10 and 11, so icons need no image files.
 constexpr wchar_t kGlyphPlay[] = L"\xE768";
@@ -27,6 +30,8 @@ constexpr wchar_t kGlyphShuffle[] = L"\xE8B1";
 constexpr wchar_t kGlyphRepeatAll[] = L"\xE8EE";
 constexpr wchar_t kGlyphRepeatOne[] = L"\xE8ED";
 constexpr wchar_t kGlyphMusic[] = L"\xEC4F";
+// Message: a speech bubble, standing for the words of the song.
+constexpr wchar_t kGlyphLyrics[] = L"\xE8BD";
 
 std::wstring Widen(const std::string& text) {
     const int count = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
@@ -86,6 +91,10 @@ HRESULT HomeScene::CreateFormats() {
     if (FAILED(hr = make(L"Segoe UI", 11, DWRITE_FONT_WEIGHT_NORMAL, left, &timeFormat_))) return hr;
     if (FAILED(hr = make(L"Segoe UI", 11, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_TRAILING, &remainingFormat_))) return hr;
     if (FAILED(hr = make(L"Segoe MDL2 Assets", 15, DWRITE_FONT_WEIGHT_NORMAL, center, &iconFormat_))) return hr;
+    if (FAILED(hr = make(L"Segoe MDL2 Assets", 12, DWRITE_FONT_WEIGHT_NORMAL, center, &smallIconFormat_))) return hr;
+    if (FAILED(hr = make(L"Segoe UI", 20, DWRITE_FONT_WEIGHT_BOLD, center, &stageFormat_))) return hr;
+    if (FAILED(hr = make(L"Segoe UI", 14, DWRITE_FONT_WEIGHT_BOLD, center, &stageSideFormat_))) return hr;
+    if (FAILED(hr = make(L"Segoe UI", 16, DWRITE_FONT_WEIGHT_SEMI_BOLD, center, &stageStatusFormat_))) return hr;
     return make(L"Segoe MDL2 Assets", 21, DWRITE_FONT_WEIGHT_NORMAL, center, &largeIconFormat_);
 }
 
@@ -101,6 +110,10 @@ void HomeScene::Release() {
     nextLyricFormat_.Reset();
     iconFormat_.Reset();
     largeIconFormat_.Reset();
+    smallIconFormat_.Reset();
+    stageFormat_.Reset();
+    stageSideFormat_.Reset();
+    stageStatusFormat_.Reset();
     writeFactory_.Reset();
     brush_.Reset();
     context_.Reset();
@@ -135,7 +148,67 @@ void HomeScene::PaintIcon(const wchar_t* glyph, HomeControl control, float opaci
     context_->DrawText(glyph, 1, isLarge ? largeIconFormat_.Get() : iconFormat_.Get(), ToD2D(layout_.Frame(control)), brush_.Get());
 }
 
-HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPressed) {
+// A glow of the artwork's colour, so the page takes on the track's mood: around the artwork, or on
+// the stage under the line being sung. It fades out before the top edge, where the pill meets the
+// black flares, so the bends show no seam.
+void HomeScene::PaintGlow(const D2D1_RECT_F& whole, bool onStage) {
+    if (glow_ == 0xFFFFFFFF || !artworkBrush_) return;
+    const D2D1_COLOR_F tint = FromBgra(glow_);
+    const D2D1_GRADIENT_STOP stops[] = {
+        {0.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.55f)},
+        {0.45f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.2f)},
+        {1.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.0f)},
+    };
+    ComPtr<ID2D1GradientStopCollection> collection;
+    ComPtr<ID2D1RadialGradientBrush> wash;
+    const D2D1_POINT_2F center = onStage ? D2D1::Point2F(layout_.StageGlowCenterX(), layout_.StageGlowCenterY())
+                                         : D2D1::Point2F(layout_.GlowCenterX(), layout_.GlowCenterY());
+    const float radiusX = onStage ? layout_.StageGlowRadiusX() : layout_.GlowRadiusX();
+    const float radiusY = onStage ? layout_.StageGlowRadiusY() : layout_.GlowRadiusY();
+    if (SUCCEEDED(context_->CreateGradientStopCollection(stops, 3, &collection)) &&
+        SUCCEEDED(context_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(center, D2D1::Point2F(0, 0), radiusX, radiusY),
+                                                      collection.Get(), &wash))) {
+        context_->FillRectangle(whole, wash.Get());
+    }
+}
+
+// The line being sung, large in the middle; the one before above it and the two after below, smaller
+// and dimmer. Lines are redrawn in place; the slide macOS does would need a visual per line.
+void HomeScene::PaintStage(const HomeModel& model, int stageHover) {
+    for (int slot = kFirstStageSlot; slot <= kLastStageSlot; ++slot) {
+        const std::string& text = model.stageLines[static_cast<size_t>(slot + 1)];
+        if (slot == 0) {
+            PaintText(text, model.stageIsStatus ? stageStatusFormat_.Get() : stageFormat_.Get(), layout_.StageLine(0), model.stageIsStatus ? 0.55f : 1.0f);
+            continue;
+        }
+        const float opacity = slot == stageHover ? kStageHoverOpacity : kStageOpacity[slot + 1];
+        PaintText(text, stageSideFormat_.Get(), layout_.StageLine(slot), opacity);
+    }
+}
+
+// A speech bubble at the end of the title row; on the stage it sits in the corner on a white disc,
+// the way a switch that is on looks.
+void HomeScene::PaintLyricsButton(const HomeModel& model, HomeControl hovered, bool isPressed) {
+    if (!model.showsLyricsButton) return;
+    const HomeRect frame = layout_.LyricsButton(model.isOnStage);
+    const float radius = frame.width / 2;
+    const D2D1_POINT_2F center = D2D1::Point2F(frame.x + radius, frame.y + radius);
+    if (hovered == HomeControl::Lyrics) {
+        brush_->SetColor(White(isPressed ? 0.22f : 0.12f));
+        const float halo = radius + 3 * scale_;
+        context_->FillEllipse(D2D1::Ellipse(center, halo, halo), brush_.Get());
+    }
+    if (model.isOnStage) {
+        brush_->SetColor(White(1));
+        context_->FillEllipse(D2D1::Ellipse(center, radius, radius), brush_.Get());
+        brush_->SetColor(D2D1::ColorF(0, 0, 0, 1));
+    } else {
+        brush_->SetColor(White(0.75f));
+    }
+    context_->DrawText(kGlyphLyrics, 1, smallIconFormat_.Get(), ToD2D(frame), brush_.Get());
+}
+
+HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPressed, int stageHover) {
     if (!surface_) return S_OK;
     ComPtr<IDXGISurface> dxgiSurface;
     POINT offset{};
@@ -157,24 +230,16 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
     const D2D1_RECT_F whole = D2D1::RectF(0, 0, layout_.Width(), layout_.Height());
     context_->PushAxisAlignedClip(whole, D2D1_ANTIALIAS_MODE_ALIASED);
     context_->Clear(D2D1::ColorF(0, 0, 0, 0));
-
-    // A glow of the artwork's colour around it, so the page takes on the track's mood. It fades out
-    // before the top edge, where the pill meets the black flares, so the bends show no seam.
-    if (glow_ != 0xFFFFFFFF && artworkBrush_) {
-        const D2D1_COLOR_F tint = FromBgra(glow_);
-        const D2D1_GRADIENT_STOP stops[] = {
-            {0.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.55f)},
-            {0.45f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.2f)},
-            {1.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.0f)},
-        };
-        ComPtr<ID2D1GradientStopCollection> collection;
-        ComPtr<ID2D1RadialGradientBrush> wash;
-        const D2D1_POINT_2F center = D2D1::Point2F(layout_.GlowCenterX(), layout_.GlowCenterY());
-        if (SUCCEEDED(context_->CreateGradientStopCollection(stops, 3, &collection)) &&
-            SUCCEEDED(context_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(center, D2D1::Point2F(0, 0), layout_.GlowRadiusX(), layout_.GlowRadiusY()),
-                                                          collection.Get(), &wash))) {
-            context_->FillRectangle(whole, wash.Get());
-        }
+    PaintGlow(whole, model.isOnStage);
+    PaintLyricsButton(model, hovered, isPressed);
+    if (model.isOnStage) {
+        PaintStage(model, stageHover);
+        context_->PopAxisAlignedClip();
+        hr = context_->EndDraw();
+        context_->SetTarget(nullptr);
+        const HRESULT end = surface_->EndDraw();
+        if (FAILED(hr)) return hr;
+        return FAILED(end) ? end : compositor_->Commit();
     }
 
     // Hover plate, under the icon.

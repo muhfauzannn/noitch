@@ -63,9 +63,73 @@ struct HomeTests {
     }
 
     @Test func `the next tick is the next second, or an earlier lyric`() {
-        #expect(abs(HomeModel.nextTick(position: 10.25, rate: 1, nextLyric: nil) - 0.75) < 0.0001)
-        #expect(abs(HomeModel.nextTick(position: 10.25, rate: 1, nextLyric: 10.5) - 0.25) < 0.0001)
-        #expect(abs(HomeModel.nextTick(position: 10.5, rate: 2, nextLyric: nil) - 0.25) < 0.0001)
+        #expect(abs((HomeModel.nextTick(position: 10.25, rate: 1, nextLyric: nil) ?? 0) - 0.75) < 0.0001)
+        #expect(abs((HomeModel.nextTick(position: 10.25, rate: 1, nextLyric: 10.5) ?? 0) - 0.25) < 0.0001)
+        #expect(abs((HomeModel.nextTick(position: 10.5, rate: 2, nextLyric: nil) ?? 0) - 0.25) < 0.0001)
+    }
+
+    @Test func `the stage wakes only for the next line`() {
+        #expect(HomeModel.nextTick(position: 10.25, rate: 1, nextLyric: nil, wholeSeconds: false) == nil)
+        #expect(abs((HomeModel.nextTick(position: 10.25, rate: 1, nextLyric: 14.25, wholeSeconds: false) ?? 0) - 4) < 0.0001)
+    }
+
+    @Test(arguments: [CGFloat(24), 32, 38], [false, true])
+    func `the lyrics button sits clear of everything, in both places`(header: CGFloat, calendar: Bool) {
+        var layout = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: header)
+        layout.showsCalendar = calendar
+        let headerLayout = HeaderLayout(size: layout.size, headerHeight: header)
+        let pill = CGRect(origin: .zero, size: layout.size)
+        for onStage in [false, true] {
+            let button = layout.lyricsButton(onStage: onStage)
+            #expect(pill.contains(button))
+            #expect(!button.intersects(headerLayout.frame(of: .settings)))
+        }
+        // The stage hides while the button sits beside the calendar, so only its corner place counts.
+        for slot in HomeLayout.stageSlots { #expect(!layout.lyricsButton(onStage: true).intersects(layout.stageLine(slot)), "slot \(slot)") }
+        #expect(layout.title.maxX <= layout.lyricsButton(onStage: false).minX)
+        #expect(layout.lyricsButton(onStage: true).maxX == layout.size.width - HomeLayout.sidePadding)
+        if calendar { #expect(!layout.lyricsButton(onStage: false).intersects(layout.calendarPanel)) }
+    }
+
+    @Test(arguments: [CGFloat(24), 32, 38])
+    func `the stage's lines fit the body and its glow fades before the top`(header: CGFloat) {
+        let layout = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: header)
+        #expect(layout.stageLine(-1).minY >= header)
+        #expect(layout.stageLine(2).maxY <= layout.size.height - HomeLayout.bottomPadding)
+        for slot in HomeLayout.stageSlots.dropLast() { #expect(layout.stageLine(slot).maxY <= layout.stageLine(slot + 1).minY) }
+        #expect(layout.stageGlowRadii.height >= layout.stageGlowCenter.y)
+        #expect(layout.stageGlowCenter.x + layout.stageGlowRadii.width < layout.size.width)
+        let middle = CGPoint(x: layout.size.width / 2, y: layout.stageCenterY)
+        #expect(layout.stageSlot(at: middle) == 0)
+        #expect(layout.control(at: middle, onStage: true) == nil)
+        let button = layout.lyricsButton(onStage: true)
+        #expect(layout.control(at: CGPoint(x: button.midX, y: button.midY), onStage: true) == .lyrics)
+        // On the stage the transport is gone, so it doesn't answer.
+        let play = layout.frame(of: .playPause)
+        #expect(layout.control(at: CGPoint(x: play.midX, y: play.midY), onStage: true) == nil)
+    }
+
+    @Test func `the stage shows the line before, the one sung and the two after`() {
+        var nowPlaying = NowPlaying()
+        nowPlaying.title = "Song"
+        nowPlaying.duration = 100
+        let lyrics = Lyrics(synced: [.init(start: 1, text: "one"), .init(start: 2, text: ""), .init(start: 3, text: "three"), .init(start: 4, text: "four")])
+        let middle = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 2.5, settings: HomeSettings(), onStage: true)
+        #expect(middle.isOnStage && middle.stageLines == ["one", "♪", "three", "four"] && !middle.stageIsStatus)
+        let intro = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 0, settings: HomeSettings())
+        #expect(intro.stageLines == ["", "♪", "one", "♪"])
+        let end = HomeModel(nowPlaying: nowPlaying, lyrics: lyrics, isLoadingLyrics: false, position: 9, settings: HomeSettings())
+        #expect(end.stageLines == ["three", "four", "", ""])
+        let loading = HomeModel(nowPlaying: nowPlaying, lyrics: nil, isLoadingLyrics: true, position: 0, settings: HomeSettings(), onStage: true)
+        #expect(loading.stageIsStatus && loading.stageLines[1] == "Looking for lyrics…")
+        #expect(HomeModel(nowPlaying: NowPlaying(), lyrics: nil, isLoadingLyrics: false, position: 0, settings: HomeSettings()).stageLines[1] == "Nothing playing")
+    }
+
+    @Test func `turning lyrics off leaves the stage and hides its button`() {
+        var settings = HomeSettings()
+        settings.showLyrics = false
+        let model = HomeModel(nowPlaying: NowPlaying(), lyrics: nil, isLoadingLyrics: false, position: 0, settings: settings, onStage: true)
+        #expect(!model.isOnStage && !model.showsLyricsButton)
     }
 
     @Test func `nothing playing shows the placeholder`() {

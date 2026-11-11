@@ -46,6 +46,14 @@ struct HomeModel {
     // After next or previous, until the player reports the new track: the old one stays, dimmed,
     // so the press is answered at once even when the player is slow to say what comes next.
     bool isSkipping = false;
+    // The lyrics button shows only while lyrics are on.
+    bool showsLyricsButton = true;
+    // The whole page is the lyrics stage.
+    bool isOnStage = false;
+    // The stage's lines: the one before, the one being sung, and the two after. An empty line shows
+    // as a note, so every slot reads as part of the song.
+    std::array<std::string, 4> stageLines;
+    bool stageIsStatus = false;
 };
 
 inline std::string LyricStatus(const Lyrics* lyrics, bool isLoading) {
@@ -57,10 +65,16 @@ inline std::string LyricStatus(const Lyrics* lyrics, bool isLoading) {
 }
 
 inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyrics, bool isLoadingLyrics, double position,
-                               const HomeSettings& settings, bool isSkipping = false) {
+                               const HomeSettings& settings, bool isSkipping = false, bool onStage = false) {
     HomeModel model;
     model.showsShuffleAndRepeat = settings.showShuffleAndRepeat;
-    if (!nowPlaying.HasTrack()) return model;
+    model.showsLyricsButton = settings.showLyrics;
+    model.isOnStage = onStage && settings.showLyrics;
+    if (!nowPlaying.HasTrack()) {
+        model.stageLines[1] = model.title;
+        model.stageIsStatus = true;
+        return model;
+    }
 
     model.hasTrack = true;
     model.title = nowPlaying.title;
@@ -71,6 +85,8 @@ inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyric
     model.isSkipping = isSkipping;
     if (isSkipping) {
         model.remainingText.clear();
+        model.stageLines[1] = "\xE2\x99\xAA";
+        model.stageIsStatus = true;
         return model;
     }
     model.elapsedText = FormatTime(position);
@@ -86,20 +102,36 @@ inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyric
         model.lyric = current.empty() ? "\xE2\x99\xAA" : current;
         const int next = index + 1;
         if (settings.showNextLyric && next < static_cast<int>(lyrics->synced.size())) model.nextLyric = lyrics->synced[static_cast<size_t>(next)].text;
+        for (int step = -1; step <= 2; ++step) {
+            const int line = index + step;
+            std::string& slot = model.stageLines[static_cast<size_t>(step + 1)];
+            if (line < 0 || line >= static_cast<int>(lyrics->synced.size())) {
+                if (step == 0) slot = "\xE2\x99\xAA";
+                continue;
+            }
+            const std::string& text = lyrics->synced[static_cast<size_t>(line)].text;
+            slot = text.empty() ? "\xE2\x99\xAA" : text;
+        }
     } else {
         model.lyric = LyricStatus(lyrics, isLoadingLyrics);
         model.lyricIsStatus = true;
+        model.stageLines[1] = model.lyric;
+        model.stageIsStatus = true;
     }
     return model;
 }
 
 // How long until anything on screen changes: the next whole second or the next lyric. One one-shot
-// timer covers both, and it only exists while the island is open and playing.
-inline double NextHomeTick(double position, double rate, double nextLyric) {
+// timer covers both, and it only exists while the island is open and playing. The stage shows no
+// clock, so there only lyrics count, and -1 means nothing will change.
+inline double NextHomeTick(double position, double rate, double nextLyric, bool wholeSeconds = true) {
     const double speed = std::max(rate, 0.1);
-    double delay = (std::floor(position) + 1 - position) / speed;
-    if (nextLyric > position) delay = std::min(delay, (nextLyric - position) / speed);
-    return std::max(delay, 0.05);
+    double delay = wholeSeconds ? (std::floor(position) + 1 - position) / speed : -1;
+    if (nextLyric > position) {
+        const double untilLyric = (nextLyric - position) / speed;
+        delay = delay < 0 ? untilLyric : std::min(delay, untilLyric);
+    }
+    return delay < 0 ? -1 : std::max(delay, 0.05);
 }
 
 // The average of premultiplied BGRA pixels, lifted so a dark cover still gives a visible bar.

@@ -312,6 +312,59 @@ void TestNextTickIsTheNextSecondOrAnEarlierLyric() {
     assert(Near(NextHomeTick(10.5, 2, -1), 0.25, 1e-6));
 }
 
+void TestStageWakesOnlyForTheNextLine() {
+    assert(NextHomeTick(10.25, 1, -1, false) < 0);
+    assert(Near(NextHomeTick(10.25, 1, 14.25, false), 4, 1e-6));
+}
+
+void TestLyricsButtonAndStageFitThePage() {
+    for (float header : {24.0f, 32.0f, 38.0f}) {
+        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
+        const HeaderLayout headerLayout(IslandGeometry::ExpandedWidth(), header, 1);
+        const HomeRect button = layout.LyricsButton(true);
+        assert(!button.Intersects(headerLayout.Frame(HeaderControl::Settings)));
+        assert(layout.Title().Right() <= layout.LyricsButton(false).x);
+        for (int slot = kFirstStageSlot; slot <= kLastStageSlot; ++slot) {
+            assert(!button.Intersects(layout.StageLine(slot)));
+            if (slot < kLastStageSlot) assert(layout.StageLine(slot).Bottom() <= layout.StageLine(slot + 1).y);
+        }
+        assert(layout.StageLine(-1).y >= header);
+        assert(layout.StageLine(2).Bottom() <= layout.Height() - 12);
+        assert(layout.StageGlowRadiusY() >= layout.StageGlowCenterY());
+        assert(layout.StageGlowCenterX() + layout.StageGlowRadiusX() < layout.Width());
+        const float middleY = layout.StageLine(0).y + layout.StageLine(0).height / 2;
+        assert(layout.StageSlotAt(layout.Width() / 2, middleY) == 0);
+        assert(layout.ControlAt(layout.Width() / 2, middleY, true) == HomeControl::None);
+        assert(layout.ControlAt(button.x + 5, button.y + 5, true) == HomeControl::Lyrics);
+        const HomeRect play = layout.Frame(HomeControl::PlayPause);
+        assert(layout.ControlAt(play.x + 5, play.y + 5, true) == HomeControl::None);
+    }
+}
+
+void TestStageShowsTheLineBeforeAndTheTwoAfter() {
+    NowPlaying nowPlaying;
+    nowPlaying.title = "Song";
+    nowPlaying.duration = 100;
+    Lyrics lyrics;
+    lyrics.synced = {{1, "one"}, {2, ""}, {3, "three"}, {4, "four"}};
+    const HomeSettings settings;
+    const std::string note = "\xE2\x99\xAA";
+    const HomeModel middle = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, settings, false, true);
+    assert(middle.isOnStage && !middle.stageIsStatus);
+    assert(middle.stageLines[0] == "one" && middle.stageLines[1] == note && middle.stageLines[2] == "three" && middle.stageLines[3] == "four");
+    const HomeModel intro = MakeHomeModel(nowPlaying, &lyrics, false, 0, settings);
+    assert(intro.stageLines[0].empty() && intro.stageLines[1] == note && intro.stageLines[2] == "one" && intro.stageLines[3] == note);
+    const HomeModel end = MakeHomeModel(nowPlaying, &lyrics, false, 9, settings);
+    assert(end.stageLines[0] == "three" && end.stageLines[1] == "four" && end.stageLines[2].empty());
+    const HomeModel loading = MakeHomeModel(nowPlaying, nullptr, true, 0, settings, false, true);
+    assert(loading.stageIsStatus && loading.stageLines[1] == "Looking for lyrics\xE2\x80\xA6");
+    assert(MakeHomeModel({}, nullptr, false, 0, settings).stageLines[1] == "Nothing playing");
+    HomeSettings off;
+    off.showLyrics = false;
+    const HomeModel hidden = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, off, false, true);
+    assert(!hidden.isOnStage && !hidden.showsLyricsButton);
+}
+
 void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
     const HomeSettings settings;
     assert(!MakeHomeModel({}, nullptr, false, 0, settings).hasTrack);
@@ -737,6 +790,9 @@ int main() {
     TestFormatTime();
     TestNextTickIsTheNextSecondOrAnEarlierLyric();
     TestHomeModelShowsThePlaceholderAndFollowsLyrics();
+    TestStageWakesOnlyForTheNextLine();
+    TestLyricsButtonAndStageFitThePage();
+    TestStageShowsTheLineBeforeAndTheTwoAfter();
     TestArtworkTintIsAverageAndLifted();
     TestLyricsTimingShiftsWhichLineIsSung();
     TestPagesOpenWhereTheSettingsSay();

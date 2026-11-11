@@ -15,6 +15,13 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the lyrics stage (2026-11-11, same M5): 9.80, 10.08 and 10.05 MB, 1.42, 6.08 and 0.86 ms/min,
+0.10 to 0.13 wakeups/s, 4.71 to 5.61 ms per transition, all 23 hover checks passing on the run with
+Hover delay at None; the binary is 1130 KB, against 1090 KB last recorded with the calendar. One idle
+run read 15.11 MB because the cursor had been left on the notch, so the island was open while it
+measured; with the cursor moved away first it read 10.05 MB. Keep the cursor off the notch before
+measuring. Switching to the stage was not timed.
+
 With the calendar in Home at 580 pt (2026-11-11, same M5): 9.59 MB, 0.89 and 1.04 ms/min, 0.10
 wakeups/s, 5.03 and 5.22 ms per transition. The first hover run failed "stays expanded while the
 pointer remains over the notch" and the check after it; the repeat passed all 23. Treat it as flaky

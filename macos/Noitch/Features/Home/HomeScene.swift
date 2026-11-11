@@ -9,6 +9,11 @@ final class HomeScene {
     private static let idleOpacity: Float = 0.55
     private static let nextLyricOpacity: Float = 0.38
     private static let skippingOpacity: Float = 0.4
+    /// The stage's lines by slot: the one before, the one being sung, the two after.
+    private static let stageOpacity: [Int: Float] = [-1: 0.3, 0: 1, 1: 0.55, 2: 0.26]
+    private static let stageHoverOpacity: Float = 0.85
+    /// Home shrinks back a little as the stage takes over, so the lyrics seem to come forward.
+    private static let recededScale: CGFloat = 0.96
 
     /// Placed by the pager, which owns its fade and slide.
     let root = CALayer()
@@ -37,6 +42,23 @@ final class HomeScene {
     /// Artwork, text, slider, transport: revealed one after another, so the eye reads top-left to
     /// bottom instead of everything popping in at once.
     private var groups = (0..<4).map { _ in CALayer() }
+    /// Everything but the lyrics button and the stage, so the two modes cross over as wholes.
+    private let music = CALayer()
+    private let buttonGroup = CALayer()
+    private let lyricsButton = CALayer()
+    /// A white disc behind the icon while the stage shows, the way a pressed-in switch looks.
+    private let lyricsDisc = CALayer()
+    private let lyricsIcon = CAShapeLayer()
+    /// The stage sits in a group of its own: the reveal animates the group, the mode the stage.
+    private let stageGroup = CALayer()
+    private let stage = CALayer()
+    /// Five lines take turns: four in slots -1 to 2, and one about to rise in from below.
+    private let stageLayers = (0..<5).map { _ in HomeScene.makeText(size: 20, weight: .bold, opacity: 0) }
+    private var stageOrder = [0, 1, 2, 3]
+    private var stageSpare = 4
+    private var stageHover: Int?
+    private var stageIsStatus = false
+    private(set) var isOnStage = false
     private var shownModel: HomeModel?
     private var tint = NSColor.clear
 
@@ -47,20 +69,48 @@ final class HomeScene {
 
         backdrop.frame = root.bounds
         backdrop.type = .radial
-        let center = layout.glowCenter
-        let radii = layout.glowRadii
-        backdrop.startPoint = CGPoint(x: center.x / layout.size.width, y: center.y / layout.size.height)
-        backdrop.endPoint = CGPoint(x: (center.x + radii.width) / layout.size.width, y: (center.y + radii.height) / layout.size.height)
+        // Set once the stored properties are in place: `glowPoints` needs `self`.
         backdrop.locations = [0, 0.45, 1]
         backdrop.colors = Self.wash(.clear)
         root.addSublayer(backdrop)
         hoverPlate.backgroundColor = NSColor.white.withAlphaComponent(0.22).cgColor
         hoverPlate.isHidden = true
         root.addSublayer(hoverPlate)
+        music.frame = root.bounds
+        root.addSublayer(music)
         for group in groups {
             group.frame = root.bounds
-            root.addSublayer(group)
+            music.addSublayer(group)
         }
+        for layer in [buttonGroup, stageGroup] {
+            layer.frame = root.bounds
+            root.addSublayer(layer)
+        }
+
+        lyricsButton.frame = layout.lyricsButton(onStage: false)
+        buttonGroup.addSublayer(lyricsButton)
+        lyricsDisc.frame = lyricsButton.bounds
+        lyricsDisc.cornerRadius = lyricsButton.bounds.width / 2
+        lyricsDisc.backgroundColor = NSColor.white.cgColor
+        lyricsDisc.opacity = 0
+        lyricsButton.addSublayer(lyricsDisc)
+        lyricsIcon.frame = lyricsButton.bounds.insetBy(dx: 4, dy: 4)
+        Self.show(.lyrics, on: lyricsIcon)
+        lyricsIcon.opacity = 0.75
+        lyricsButton.addSublayer(lyricsIcon)
+
+        stage.frame = root.bounds
+        stage.opacity = 0
+        stageGroup.addSublayer(stage)
+        let line = layout.stageLine(0)
+        for layer in stageLayers {
+            layer.bounds = CGRect(x: 0, y: 0, width: line.width, height: HomeLayout.stageLineHeight)
+            layer.alignmentMode = .center
+            layer.contentsScale = scale
+            stage.addSublayer(layer)
+        }
+        for (slot, index) in zip(HomeLayout.stageSlots, stageOrder) { placeOnStage(stageLayers[index], slot: slot) }
+        placeOnStage(stageLayers[stageSpare], slot: 3)
 
         artwork.frame = layout.artwork
         artwork.cornerRadius = Self.artworkRadius
@@ -118,6 +168,9 @@ final class HomeScene {
             groups[3].addSublayer(icon)
             icons[control] = icon
         }
+        let glow = glowPoints(onStage: false)
+        backdrop.startPoint = glow.start
+        backdrop.endPoint = glow.end
         setIcon(.previous, for: .previous)
         setIcon(.next, for: .next)
         setIcon(.shuffle, for: .shuffle)
@@ -148,6 +201,9 @@ final class HomeScene {
         elapsed.string = model.elapsedText
         remaining.string = model.remainingText
         showLyrics(model, previous: previous, now: now)
+        buttonGroup.isHidden = !model.showsLyricsButton
+        showStage(model, previous: previous, now: now)
+        if model.isOnStage != isOnStage { setOnStage(model.isOnStage, animated: previous != nil, now: now) }
 
         setIcon(model.isPlaying ? .pause : .play, for: .playPause)
         setIcon(model.repeatMode == .one ? .repeatOne : .repeatAll, for: .repeatMode)
@@ -193,6 +249,137 @@ final class HomeScene {
         }
         // A status message is quieter than a sung line.
         lyricLayers[bright].opacity = model.lyricIsStatus ? 0.5 : 1
+    }
+
+    // MARK: Stage
+
+    /// When the song moves on one line, every line rises a slot: the one being sung grows into the
+    /// middle, the one before drifts up and away, and the next rises in from below. Only position,
+    /// scale and opacity move. Anything else, such as a seek, crossfades.
+    private func showStage(_ model: HomeModel, previous: HomeModel?, now: CFTimeInterval) {
+        let shown = stageOrder.map { stageLayers[$0].string as? String ?? "" }
+        guard shown != model.stageLines || stageIsStatus != model.stageIsStatus else { return }
+        stageIsStatus = model.stageIsStatus
+        let steppedForward = isOnStage && !Motion.reduceMotion && previous != nil && !model.stageIsStatus
+            && model.lyricIndex != nil && (previous?.lyricIndex ?? -1) + 1 == model.lyricIndex && shown[2] == model.stageLines[1]
+        if steppedForward {
+            let order = stageOrder
+            let incoming = stageLayers[stageSpare]
+            incoming.string = model.stageLines[3]
+            placeOnStage(incoming, slot: 3)
+            moveOnStage(stageLayers[order[0]], to: -2, begin: now, duration: 0.4)
+            moveOnStage(stageLayers[order[1]], to: -1, begin: now, duration: 0.5)
+            moveOnStage(stageLayers[order[2]], to: 0, begin: now, duration: 0.55)
+            moveOnStage(stageLayers[order[3]], to: 1, begin: now + 0.04, duration: 0.55)
+            moveOnStage(incoming, to: 2, begin: now + 0.1, duration: 0.55)
+            stageOrder = [order[1], order[2], order[3], stageSpare]
+            stageSpare = order[0]
+        } else {
+            for (offset, index) in stageOrder.enumerated() {
+                let layer = stageLayers[index]
+                placeOnStage(layer, slot: offset - 1)
+                if isOnStage { Self.addFade(to: layer, duration: 0.3) }
+                layer.string = model.stageLines[offset]
+            }
+            placeOnStage(stageLayers[stageSpare], slot: 3)
+        }
+    }
+
+    private func stageTarget(_ slot: Int) -> (position: CGPoint, scale: CGFloat, opacity: Float) {
+        let line = layout.stageLine(slot)
+        let position = CGPoint(x: line.midX, y: line.midY)
+        if slot == 0 { return stageIsStatus ? (position, 0.8, 0.55) : (position, 1, 1) }
+        var opacity = Self.stageOpacity[slot] ?? 0
+        if slot == stageHover, opacity > 0 { opacity = Self.stageHoverOpacity }
+        return (position, HomeLayout.stageScale, opacity)
+    }
+
+    private func placeOnStage(_ layer: CALayer, slot: Int) {
+        let target = stageTarget(slot)
+        layer.removeAllAnimations()
+        layer.position = target.position
+        layer.transform = CATransform3DMakeScale(target.scale, target.scale, 1)
+        layer.opacity = target.opacity
+    }
+
+    private func moveOnStage(_ layer: CALayer, to slot: Int, begin: CFTimeInterval, duration: CFTimeInterval) {
+        let target = stageTarget(slot)
+        let shown = layer.presentation() ?? layer
+        Motion.ease(layer, "position", from: NSValue(point: shown.position), to: NSValue(point: target.position), duration: duration, begin: begin)
+        Motion.ease(layer, "transform.scale", from: shown.value(forKeyPath: "transform.scale") ?? 1, to: target.scale, duration: duration, begin: begin)
+        Motion.ease(layer, "opacity", from: shown.opacity, to: target.opacity, duration: duration, begin: begin)
+        layer.position = target.position
+        layer.transform = CATransform3DMakeScale(target.scale, target.scale, 1)
+        layer.opacity = target.opacity
+    }
+
+    /// Brightens a line the pointer is over, a hint that clicking it jumps there.
+    func setStageHover(_ slot: Int?) {
+        guard slot != stageHover else { return }
+        let changed = [stageHover, slot].compactMap { $0 }
+        stageHover = slot
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let now = CACurrentMediaTime()
+        for slot in changed where slot != 0 {
+            let layer = stageLayers[stageOrder[slot + 1]]
+            let opacity = stageTarget(slot).opacity
+            Motion.ease(layer, "opacity", from: layer.presentation()?.opacity ?? layer.opacity, to: opacity, duration: 0.18, begin: now)
+            layer.opacity = opacity
+        }
+        CATransaction.commit()
+    }
+
+    /// Home recedes and fades as the stage rises in, the glow gathers under the sung line, and the
+    /// lyrics button glides to the corner and lights up. Each starts from what is on screen, so a
+    /// quick second click reverses smoothly.
+    private func setOnStage(_ onStage: Bool, animated: Bool, now: CFTimeInterval) {
+        isOnStage = onStage
+        stageHover = nil
+        let musicScale: CGFloat = onStage ? Self.recededScale : 1
+        let button = layout.lyricsButton(onStage: onStage)
+        let buttonPosition = CGPoint(x: button.midX, y: button.midY)
+        let glow = glowPoints(onStage: onStage)
+        let iconColor = (onStage ? NSColor.black : NSColor.white).cgColor
+        if animated && !Motion.reduceMotion {
+            let shownMusic = music.presentation() ?? music
+            let shownStage = stage.presentation() ?? stage
+            let shownButton = lyricsButton.presentation() ?? lyricsButton
+            let shownDisc = lyricsDisc.presentation() ?? lyricsDisc
+            let shownBackdrop = backdrop.presentation() ?? backdrop
+            Motion.ease(music, "opacity", from: shownMusic.opacity, to: onStage ? 0 : 1, duration: onStage ? 0.25 : 0.35, begin: onStage ? now : now + 0.08)
+            Motion.ease(music, "transform.scale", from: shownMusic.value(forKeyPath: "transform.scale") ?? 1, to: musicScale, duration: 0.5, begin: now)
+            Motion.ease(stage, "opacity", from: shownStage.opacity, to: onStage ? 1 : 0, duration: onStage ? 0.35 : 0.2, begin: onStage ? now + 0.08 : now)
+            if onStage { Motion.ease(stage, "transform.translation.y", from: 12, to: 0, duration: 0.55, begin: now + 0.08) }
+            Motion.ease(lyricsButton, "position", from: NSValue(point: shownButton.position), to: NSValue(point: buttonPosition), duration: 0.5, begin: now)
+            Motion.ease(lyricsDisc, "opacity", from: shownDisc.opacity, to: onStage ? 1 : 0, duration: 0.25, begin: now)
+            let shownColor: CGColor = lyricsIcon.presentation()?.fillColor ?? lyricsIcon.fillColor ?? iconColor
+            Motion.ease(lyricsIcon, "fillColor", from: shownColor, to: iconColor, duration: 0.25, begin: now)
+            Motion.ease(backdrop, "startPoint", from: NSValue(point: shownBackdrop.startPoint), to: NSValue(point: glow.start), duration: 0.6, begin: now)
+            Motion.ease(backdrop, "endPoint", from: NSValue(point: shownBackdrop.endPoint), to: NSValue(point: glow.end), duration: 0.6, begin: now)
+        }
+        music.opacity = onStage ? 0 : 1
+        music.transform = CATransform3DMakeScale(musicScale, musicScale, 1)
+        stage.opacity = onStage ? 1 : 0
+        lyricsButton.position = buttonPosition
+        lyricsDisc.opacity = onStage ? 1 : 0
+        lyricsIcon.fillColor = iconColor
+        lyricsIcon.opacity = onStage ? 1 : 0.75
+        backdrop.startPoint = glow.start
+        backdrop.endPoint = glow.end
+        // Lines left lit by a hover go back to their own opacity.
+        for (slot, index) in zip(HomeLayout.stageSlots, stageOrder) where slot != 0 {
+            stageLayers[index].opacity = stageTarget(slot).opacity
+        }
+    }
+
+    /// The gradient's centre and the point at its edge, as fractions of the page.
+    private func glowPoints(onStage: Bool) -> (start: CGPoint, end: CGPoint) {
+        let center = onStage ? layout.stageGlowCenter : layout.glowCenter
+        let radii = onStage ? layout.stageGlowRadii : layout.glowRadii
+        let size = layout.size
+        return (CGPoint(x: center.x / size.width, y: center.y / size.height),
+                CGPoint(x: (center.x + radii.width) / size.width, y: (center.y + radii.height) / size.height))
     }
 
     /// Slot -1 is above the bright line, 0 the bright line, 1 the dim line, 2 below it.
@@ -270,9 +457,11 @@ final class HomeScene {
     func setHover(_ control: HomeControl?, isPressed: Bool) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let plateControls: Set<HomeControl> = [.shuffle, .previous, .playPause, .next, .repeatMode]
-        if let control, plateControls.contains(control), icons[control]?.isHidden == false {
-            let frame = layout.frame(of: control)
+        let plateControls: Set<HomeControl> = [.shuffle, .previous, .playPause, .next, .repeatMode, .lyrics]
+        let pressable: CALayer? = control == .lyrics ? (buttonGroup.isHidden ? nil : lyricsButton) : control.flatMap { icons[$0] }
+        if let control, plateControls.contains(control), let pressable, !pressable.isHidden {
+            // The lyrics button's plate is a halo a little wider than its disc.
+            let frame = control == .lyrics ? layout.lyricsButton(onStage: isOnStage).insetBy(dx: -3, dy: -3) : layout.frame(of: control)
             let appearing = hoverPlate.isHidden
             hoverPlate.frame = frame
             hoverPlate.cornerRadius = frame.width / 2
@@ -280,29 +469,28 @@ final class HomeScene {
             hoverPlate.isHidden = false
             if appearing { Self.addFade(to: hoverPlate, duration: 0.15) }
             // A press sinks the icon a little; letting go springs it back.
-            if let icon = icons[control] {
-                let scale: CGFloat = isPressed ? 0.88 : 1
-                Motion.ease(icon, "transform.scale", from: icon.presentation()?.value(forKeyPath: "transform.scale") ?? 1, to: scale, duration: 0.2, begin: CACurrentMediaTime())
-                icon.transform = CATransform3DMakeScale(scale, scale, 1)
-            }
+            let scale: CGFloat = isPressed ? 0.88 : 1
+            Motion.ease(pressable, "transform.scale", from: pressable.presentation()?.value(forKeyPath: "transform.scale") ?? 1, to: scale, duration: 0.2, begin: CACurrentMediaTime())
+            pressable.transform = CATransform3DMakeScale(scale, scale, 1)
         } else {
             hoverPlate.isHidden = true
-            for icon in icons.values where icon.transform.m11 != 1 { icon.transform = CATransform3DIdentity }
+            for icon in Array(icons.values) + [lyricsButton] where icon.transform.m11 != 1 { icon.transform = CATransform3DIdentity }
         }
         CATransaction.commit()
     }
 
-    /// Staggers the groups in from `begin`. The pager owns the whole page's fade and slide.
     /// Adds a panel, such as the calendar, that reveals after Home's own groups.
     func addGroup(_ layer: CALayer) {
-        root.addSublayer(layer)
+        music.addSublayer(layer)
         groups.append(layer)
     }
 
+    /// Staggers the groups in from `begin`. The pager owns the whole page's fade and slide. On the
+    /// stage only the lyrics and the button show, so they come in first.
     func reveal(begin: CFTimeInterval) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        Motion.reveal(groups, begin: begin)
+        Motion.reveal(isOnStage ? [stageGroup, buttonGroup] : [groups[0], buttonGroup] + groups.dropFirst() + [stageGroup], begin: begin)
         CATransaction.commit()
     }
 

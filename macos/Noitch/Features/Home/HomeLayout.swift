@@ -9,6 +9,8 @@ enum HomeControl: CaseIterable {
     case playPause
     case next
     case repeatMode
+    /// Turns Home into the lyrics stage and back.
+    case lyrics
 }
 
 /// Where everything in Home sits, measured from the pill's top-left corner with y growing downward.
@@ -28,6 +30,19 @@ struct HomeLayout: Equatable {
     /// The dim line is drawn at the bright line's size and scaled down, so a line can grow into
     /// place by transform alone, without redrawing its text.
     static let nextLyricScale: CGFloat = 0.84
+    static let lyricsButton: CGFloat = 22
+    static let lyricsButtonGap: CGFloat = 6
+
+    // MARK: Lyrics stage
+
+    /// The line being sung is drawn at this height and the others are scaled down from it, so a line
+    /// grows into the middle by transform alone.
+    static let stageLineHeight: CGFloat = 26
+    static let stageScale: CGFloat = 0.7
+    /// Each side, so centred lines stay clear of the lyrics button in the corner.
+    static let stageMargin: CGFloat = 30
+    /// Slots run from -2 (gone above) through 0 (being sung) to 3 (about to rise in below).
+    static let stageSlots = -1...2
 
     let size: CGSize
     /// Height of the band the notch occupies. Nothing but header buttons goes there.
@@ -77,8 +92,36 @@ struct HomeLayout: Equatable {
     /// pill meets the black flares, and well before the right side.
     var glowCenter: CGPoint { CGPoint(x: artwork.midX, y: artwork.midY) }
     var glowRadii: CGSize { CGSize(width: size.width * 0.62, height: artwork.midY + 4) }
-    var title: CGRect { CGRect(x: columnX, y: bodyTop - 2, width: columnWidth, height: 20) }
-    var artist: CGRect { CGRect(x: columnX, y: bodyTop + 17, width: columnWidth, height: 17) }
+    /// Title and artist end before the lyrics button.
+    private var headingWidth: CGFloat { columnWidth - Self.lyricsButton - Self.lyricsButtonGap }
+    var title: CGRect { CGRect(x: columnX, y: bodyTop - 2, width: headingWidth, height: 20) }
+    var artist: CGRect { CGRect(x: columnX, y: bodyTop + 17, width: headingWidth, height: 17) }
+
+    /// At the end of the title row; on the stage it glides to the page's top-right corner, which is
+    /// the same place unless the calendar is there.
+    func lyricsButton(onStage: Bool) -> CGRect {
+        let right = onStage ? size.width - Self.sidePadding : columnX + columnWidth
+        return CGRect(x: right - Self.lyricsButton, y: bodyTop - 2, width: Self.lyricsButton, height: Self.lyricsButton)
+    }
+
+    /// Where the line being sung sits on the stage: a little above the middle, so two lines fit below.
+    var stageCenterY: CGFloat { bodyTop + bodyHeight * 0.42 }
+
+    /// A stage slot's line, full size for the one being sung and scaled for the rest.
+    func stageLine(_ slot: Int) -> CGRect {
+        let offset: CGFloat = slot == 0 ? 0 : CGFloat(slot.signum()) * (27 + CGFloat(abs(slot) - 1) * 23)
+        let height = Self.stageLineHeight * (slot == 0 ? 1 : Self.stageScale)
+        let x = Self.sidePadding + Self.stageMargin
+        return CGRect(x: x, y: stageCenterY + offset - height / 2, width: size.width - x * 2, height: height)
+    }
+
+    func stageSlot(at point: CGPoint) -> Int? {
+        Self.stageSlots.first { stageLine($0).insetBy(dx: 0, dy: -2).contains(point) }
+    }
+
+    /// On the stage the glow gathers under the line being sung, still gone by the top edge.
+    var stageGlowCenter: CGPoint { CGPoint(x: size.width / 2, y: stageCenterY) }
+    var stageGlowRadii: CGSize { CGSize(width: size.width * 0.46, height: stageCenterY + 4) }
     /// The bright line. The dim one is `lyricStep` below it.
     var lyric: CGRect { CGRect(x: columnX, y: bodyTop + 38, width: columnWidth, height: 19) }
     var nextLyric: CGRect { lyric.offsetBy(dx: 0, dy: Self.lyricStep) }
@@ -106,11 +149,14 @@ struct HomeLayout: Equatable {
         case .playPause: transportButton(slot: 2)
         case .next: transportButton(slot: 3)
         case .repeatMode: transportButton(slot: 4)
+        case .lyrics: lyricsButton(onStage: false)
         }
     }
 
-    func control(at point: CGPoint) -> HomeControl? {
-        HomeControl.allCases.first { frame(of: $0).contains(point) }
+    /// On the stage only the lyrics button answers; the lines are found with `stageSlot`.
+    func control(at point: CGPoint, onStage: Bool = false) -> HomeControl? {
+        if onStage { return lyricsButton(onStage: true).contains(point) ? .lyrics : nil }
+        return HomeControl.allCases.first { frame(of: $0).contains(point) }
     }
 
     /// Where a point falls along the slider, from 0 to 1.

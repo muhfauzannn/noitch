@@ -143,9 +143,9 @@ of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
 
 ## Home
 
-Home is the first page: large artwork on the left, and beside it the title and artist, the lyric line
-being sung (bright) with the next one below it (dim and smaller), a progress slider and transport
-buttons. Behind it, a glow of the artwork's average colour spreads from the artwork in an ellipse that has
+Home is the first page: large artwork on the left, and beside it the title and artist with the lyrics
+button at the end of their row, the lyric line being sung (bright) with the next one below it (dim and
+smaller), a progress slider and transport buttons. Behind it, a glow of the artwork's average colour spreads from the artwork in an ellipse that has
 faded out by the top edge, so the bends where the pill meets the black flares show no seam (numbers
 in `HomeLayout.glowRadii` and `home_layout.h`). "Glow behind the page" and "Tint the progress bar"
 turn the glow and the bar's colour on or off.
@@ -155,6 +155,8 @@ turn the glow and the bar's colour on or off.
   position, scale and opacity move, so no text is redrawn during the motion. Any other change,
   such as a seek or a new track, crossfades. Before the first line and on empty lines, "♪" holds the
   place. On Windows the surface is redrawn in place, without the slide.
+- **Lyrics stage.** The lyrics button turns the whole page into lyrics, and back. See
+  [Lyrics stage](#lyrics-stage).
 - **A new track** rises a few points into place as its title and artist crossfade.
 - **Next and previous** answer at once. Until the player reports a different title, the old title,
   artist and artwork stay at 40% and the clock reads 0:00; after 4 s without a new title it ends
@@ -183,8 +185,9 @@ Opening reveals the current page after a 0.06 s head start for the pill: it fade
 8 pt out of the notch over 0.42 s, on an ease-out curve. Closing fades it out in 0.14 s. Reopening
 mid-fade continues from what is on screen.
 
-- macOS reveals the header first, then the page's groups 0.045 s apart (Home: artwork and lyrics
-  button, text, slider, transport; Usage: one per column), and scales the whole of it from 0.94
+- macOS reveals the header first, then the page's groups 0.045 s apart (Home: artwork, lyrics
+  button, text, slider, transport, calendar; on the lyrics stage, the lyrics then the button; Usage:
+  one per column), and scales the whole of it from 0.94
   with the opening spring. Reduce Motion drops the slide.
 - Windows draws each layer into one surface, so the content fades and slides as a whole: no
   stagger and no scale. The
@@ -193,6 +196,33 @@ mid-fade continues from what is on screen.
 
 Home has no data while the island is closed, so there is no now playing indicator on the collapsed
 pill. Adding one would mean keeping the source running at rest, which needs measuring first.
+
+### Lyrics stage
+
+A 22 pt button with a speech bubble sits at the end of the title row. Clicking it gives the whole of
+Home to the lyrics; clicking it again brings Home back. Numbers are in `HomeLayout` (macOS) and
+`home_layout.h` (Windows).
+
+- **Lines.** Four lines, centred across the page with 30 pt clear at each side: the one before (30%),
+  the one being sung (20 pt bold, a little above the middle), and the two after (55% and 26%). Lines
+  other than the sung one are drawn at 70% of its size. Empty lines and the intro show "♪". Without
+  synced lyrics the middle shows the same status as Home, smaller and dimmer.
+- **Motion (macOS).** When the song moves on one line, every line rises one slot: the sung line grows
+  into the middle, the one before drifts up and away, and the next rises in from below. Five text
+  layers take turns, and only position, scale and opacity move. A seek or new track crossfades.
+  Windows redraws the surface in place, without the slide.
+- **Switching (macOS).** Home's own layers fade out and shrink to 96% as the lyrics fade in and rise
+  12 pt; the glow moves from the artwork to beneath the sung line; the button glides to the page's
+  top-right corner (the same place unless the calendar is showing) and turns into a white disc
+  with a black bubble. Every part starts from what is on screen, so a quick second click reverses.
+  Windows redraws in one step.
+- **Jumping.** Clicking a line seeks to its start, shifted by the timing setting. Hovering one
+  brightens it to 85%. On the stage the only other control is the button.
+- **Rest.** The stage shows no clock, so its one-shot timer fires only at the next line, not every
+  second. With no line left, nothing is scheduled.
+- **Memory.** The choice lasts until the app quits, through closing and the release after it, so the
+  island reopens on the stage if it was left there. It isn't saved. Turning "Show lyrics" off hides the
+  button and leaves the stage.
 
 ### Now playing on macOS
 
@@ -401,6 +431,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Secondary click | Menu with Settings and Quit |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
+| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek. See [Lyrics stage](#lyrics-stage) |
 | Release after closing | 10 s |
 
 The Windows spring is computed from the same parameters. For the collapse spring its stiffness

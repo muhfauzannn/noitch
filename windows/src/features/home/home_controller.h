@@ -58,6 +58,9 @@ private:
     void Refresh();
     void ScheduleTick();
     void Activate(HomeControl control);
+    int StageLineIndex(float x, float y) const;
+    void JumpToLine(int line);
+    bool IsOnStage() const { return prefersStage_ && settings_.showLyrics; }
     void FinishScrub(double fraction);
     void ReceiveMedia();
     void ShowArtwork();
@@ -92,6 +95,11 @@ private:
     HomeControl pressed_ = HomeControl::None;
     // While set, the slider shows this instead of the playback clock.
     std::optional<double> scrubFraction_;
+    // The lyrics stage was chosen. Kept through closing, so the island reopens the way it was left.
+    bool prefersStage_ = false;
+    int stageHover_ = kNoStageSlot;
+    // A stage line pressed, answered with a jump to it when released over the same line.
+    int pressedStageSlot_ = kNoStageSlot;
 };
 
 }  // namespace noitch
