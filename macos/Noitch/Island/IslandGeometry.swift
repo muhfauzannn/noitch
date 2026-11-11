@@ -40,10 +40,13 @@ struct IslandGeometry: Equatable {
     let display: Display
     /// Music is playing and the closed pill has wings for it, see `LiveLayout`.
     var isLive = false
+    /// The live pill also shows the line being sung, under the notch.
+    var showsLiveLyric = false
 
-    init(display: Display, isLive: Bool = false) {
+    init(display: Display, isLive: Bool = false, showsLiveLyric: Bool = false) {
         self.display = display
         self.isLive = isLive
+        self.showsLiveLyric = showsLiveLyric
     }
 
     var expandedSize: CGSize { Self.expandedSize }
@@ -60,7 +63,7 @@ struct IslandGeometry: Equatable {
 
     func pillSize(for state: IslandState) -> CGSize {
         if state == .expanded { return expandedSize }
-        return isLive ? LiveLayout(collapsed: collapsedSize).size : collapsedSize
+        return isLive ? LiveLayout(collapsed: collapsedSize).size(withLyric: showsLiveLyric) : collapsedSize
     }
 
     func cornerRadius(for state: IslandState) -> CGFloat {

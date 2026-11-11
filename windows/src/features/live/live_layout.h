@@ -7,9 +7,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "features/home/home_layout.h"
+#include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
 
 namespace noitch {
@@ -30,6 +32,9 @@ public:
     // How far each bar's colour is mixed toward white: the artwork's colour at the edges, nearly
     // white in the middle, so the group reads as one glow rather than six sticks.
     static constexpr float kBarWhiteness[kBarCount] = {0, 0.4f, 0.7f, 0.7f, 0.4f, 0};
+    // The band under the notch that holds the line being sung, when that is on.
+    static constexpr float kLyricStrip = 20;
+    static constexpr float kLyricFontSize = 12;
 
     // Logical sizes of the pill without wings.
     LiveLayout(float collapsedWidth, float collapsedHeight) : width_(collapsedWidth), height_(collapsedHeight) {}
@@ -38,6 +43,14 @@ public:
     float Wing() const { return ArtSide() + kOuterPadding + kInnerGap; }
     float Width() const { return width_ + Wing() * 2; }
     float Height() const { return height_; }
+    // The pill grows down by the lyric strip; the wings stay level with the notch.
+    float Height(bool withLyric) const { return height_ + (withLyric ? kLyricStrip : 0); }
+
+    // Under the notch, centred, clear of the pill's rounded bottom corners. Logical units.
+    HomeRect Lyric() const {
+        const float inset = kOuterPadding + 3;
+        return {inset, height_ + 1, Width() - inset * 2, kLyricStrip - 5};
+    }
 
     HomeRect Artwork() const { return {kOuterPadding, (height_ - ArtSide()) / 2, ArtSide(), ArtSide()}; }
 
@@ -71,6 +84,16 @@ struct LiveRule {
         if (!enabled || !nowPlaying.HasTrack()) return false;
         if (nowPlaying.isPlaying) return true;
         return pausedSince >= 0 && now - pausedSince < kPauseGrace;
+    }
+
+    // The line to show under the notch: the one being sung, a note before the first and in gaps.
+    // False when the track has no synced lyrics, so the pill doesn't grow for nothing.
+    static bool LyricLine(const Lyrics* lyrics, double position, double offset, std::string* line) {
+        if (!lyrics || lyrics->synced.empty()) return false;
+        const int index = lyrics->LineIndex(position + offset);
+        const std::string text = index >= 0 ? lyrics->synced[static_cast<size_t>(index)].text : "";
+        *line = text.empty() ? "\xE2\x99\xAA" : text;
+        return true;
     }
 };
 

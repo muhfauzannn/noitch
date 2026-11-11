@@ -81,11 +81,6 @@ public:
         return kNoStageSlot;
     }
 
-    // On the stage the glow gathers under the line being sung, still gone by the top edge. In pixels.
-    float StageGlowCenterX() const { return width_ / 2 * scale_; }
-    float StageGlowCenterY() const { return StageCenterY() * scale_; }
-    float StageGlowRadiusX() const { return width_ * 0.46f * scale_; }
-    float StageGlowRadiusY() const { return (StageCenterY() + 4) * scale_; }
     // The bright line; the dim one is kLyricStep below it, drawn smaller.
     HomeRect Lyric() const { return Px({ColumnX(), BodyTop() + 38, ColumnWidth(), 19}); }
     HomeRect NextLyric() const { return Px({ColumnX(), BodyTop() + 38 + kLyricStep, ColumnWidth(), 19}); }

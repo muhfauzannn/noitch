@@ -119,9 +119,6 @@ struct HomeLayout: Equatable {
         Self.stageSlots.first { stageLine($0).insetBy(dx: 0, dy: -2).contains(point) }
     }
 
-    /// On the stage the glow gathers under the line being sung, still gone by the top edge.
-    var stageGlowCenter: CGPoint { CGPoint(x: size.width / 2, y: stageCenterY) }
-    var stageGlowRadii: CGSize { CGSize(width: size.width * 0.46, height: stageCenterY + 4) }
     /// The bright line. The dim one is `lyricStep` below it.
     var lyric: CGRect { CGRect(x: columnX, y: bodyTop + 38, width: columnWidth, height: 19) }
     var nextLyric: CGRect { lyric.offsetBy(dx: 0, dy: Self.lyricStep) }

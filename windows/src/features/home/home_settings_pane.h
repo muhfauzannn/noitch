@@ -14,8 +14,14 @@ inline SettingsPane HomeSettingsPane() {
             {
                 {L"Closed island",
                  L"",
-                 {ToggleRow(L"Show what's playing", L"Artwork and level bars beside the notch.",
-                            [](const AppSettings& s) { return s.home.showLive; }, [](AppSettings& s, bool on) { s.home.showLive = on; })}},
+                 {
+                     ToggleRow(L"Show what's playing", L"Artwork and level bars beside the notch.",
+                               [](const AppSettings& s) { return s.home.showLive; }, [](AppSettings& s, bool on) { s.home.showLive = on; }),
+                     ToggleRow(L"Show the lyric line", L"The line being sung, small, under the notch. Needs Show lyrics.",
+                               [](const AppSettings& s) { return s.home.showLiveLyrics; },
+                               [](AppSettings& s, bool on) { s.home.showLiveLyrics = on; },
+                               [](const AppSettings& s) { return s.home.showLive; }),
+                 }},
                 {L"Lyrics",
                  L"Lyrics come from lrclib.net, which receives the track, artist and album names.",
                  {

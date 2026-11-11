@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
@@ -150,6 +151,32 @@ inline uint32_t ArtworkTint(const uint32_t* pixels, size_t count) {
     const double lift = std::max(191.0 / brightest, 1.0);
     const auto channel = [lift](double value) { return static_cast<uint32_t>(std::min(value * lift, 255.0)); };
     return 0xFF000000u | channel(r) << 16 | channel(g) << 8 | channel(b);
+}
+
+// The stage's background: a square premultiplied BGRA cover averaged down to `columns` x `rows`
+// opaque pixels, which the scene stretches across the page with a smooth filter so the colours melt
+// into each other. Made once per track, never blurred live.
+inline std::vector<uint32_t> ArtworkMosaic(const uint32_t* pixels, int size, int columns, int rows) {
+    std::vector<uint32_t> out(static_cast<size_t>(columns) * static_cast<size_t>(rows), 0xFF000000u);
+    if (size <= 0) return out;
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
+            const int x0 = column * size / columns, x1 = std::max((column + 1) * size / columns, x0 + 1);
+            const int y0 = row * size / rows, y1 = std::max((row + 1) * size / rows, y0 + 1);
+            uint64_t sum[3] = {0, 0, 0};
+            for (int y = y0; y < y1 && y < size; ++y) {
+                for (int x = x0; x < x1 && x < size; ++x) {
+                    const uint32_t pixel = pixels[static_cast<size_t>(y) * static_cast<size_t>(size) + static_cast<size_t>(x)];
+                    for (int c = 0; c < 3; ++c) sum[c] += pixel >> (c * 8) & 0xFF;
+                }
+            }
+            const uint64_t count = static_cast<uint64_t>(std::min(x1, size) - x0) * static_cast<uint64_t>(std::min(y1, size) - y0);
+            uint32_t color = 0xFF000000u;
+            for (int c = 0; c < 3; ++c) color |= static_cast<uint32_t>(sum[c] / std::max<uint64_t>(count, 1)) << (c * 8);
+            out[static_cast<size_t>(row * columns + column)] = color;
+        }
+    }
+    return out;
 }
 
 }  // namespace noitch

@@ -92,13 +92,11 @@ struct HomeTests {
     }
 
     @Test(arguments: [CGFloat(24), 32, 38])
-    func `the stage's lines fit the body and its glow fades before the top`(header: CGFloat) {
+    func `the stage's lines fit the body`(header: CGFloat) {
         let layout = HomeLayout(size: IslandGeometry.expandedSize, headerHeight: header)
         #expect(layout.stageLine(-1).minY >= header)
         #expect(layout.stageLine(2).maxY <= layout.size.height - HomeLayout.bottomPadding)
         for slot in HomeLayout.stageSlots.dropLast() { #expect(layout.stageLine(slot).maxY <= layout.stageLine(slot + 1).minY) }
-        #expect(layout.stageGlowRadii.height >= layout.stageGlowCenter.y)
-        #expect(layout.stageGlowCenter.x + layout.stageGlowRadii.width < layout.size.width)
         let middle = CGPoint(x: layout.size.width / 2, y: layout.stageCenterY)
         #expect(layout.stageSlot(at: middle) == 0)
         #expect(layout.control(at: middle, onStage: true) == nil)
@@ -190,6 +188,7 @@ struct HomeTests {
         settings.pages.openOn = .home
         settings.home.tintWithArtwork = false
         settings.home.lyricsOffset = -0.5
+        settings.home.showLiveLyrics = false
         settings.usage.showCodex = false
         settings.usage.refreshMinutes = 5
         settings.save(to: defaults)

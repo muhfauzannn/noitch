@@ -20,6 +20,9 @@ constexpr float kNextLyricOpacity = 0.38f;
 // The stage's lines by slot, from -1: the one before, the one being sung, the two after.
 constexpr float kStageOpacity[] = {0.3f, 1.0f, 0.55f, 0.26f};
 constexpr float kStageHoverOpacity = 0.85f;
+// The stage's background is the cover averaged to this many pixels.
+constexpr int kAmbientColumns = 6;
+constexpr int kAmbientRows = 3;
 
 // Segoe MDL2 Assets ships with Windows 10 and 11, so icons need no image files.
 constexpr wchar_t kGlyphPlay[] = L"\xE768";
@@ -102,6 +105,7 @@ void HomeScene::Release() {
     if (compositor_ && surface_) compositor_->RemoveLayer(PageLayer(IslandPage::Home));
     surface_.Reset();
     artworkBrush_.Reset();
+    ambient_.Reset();
     titleFormat_.Reset();
     artistFormat_.Reset();
     lyricFormat_.Reset();
@@ -125,7 +129,13 @@ void HomeScene::SetArtwork(const std::shared_ptr<const Artwork>& artwork, uint32
     tint_ = barTint;
     glow_ = glow;
     artworkBrush_.Reset();
+    ambient_.Reset();
     if (!artwork || artwork->size <= 0 || !context_) return;
+    if (glow != 0xFFFFFFFF) {
+        const std::vector<uint32_t> mosaic = ArtworkMosaic(artwork->pixels.data(), artwork->size, kAmbientColumns, kAmbientRows);
+        const D2D1_BITMAP_PROPERTIES opaque = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE));
+        context_->CreateBitmap(D2D1::SizeU(kAmbientColumns, kAmbientRows), mosaic.data(), kAmbientColumns * 4, &opaque, &ambient_);
+    }
     const auto size = static_cast<UINT32>(artwork->size);
     const D2D1_BITMAP_PROPERTIES properties = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
     ComPtr<ID2D1Bitmap> bitmap;
@@ -148,11 +158,31 @@ void HomeScene::PaintIcon(const wchar_t* glyph, HomeControl control, float opaci
     context_->DrawText(glyph, 1, isLarge ? largeIconFormat_.Get() : iconFormat_.Get(), ToD2D(layout_.Frame(control)), brush_.Get());
 }
 
-// A glow of the artwork's colour, so the page takes on the track's mood: around the artwork, or on
-// the stage under the line being sung. It fades out before the top edge, where the pill meets the
-// black flares, so the bends show no seam.
+// A glow of the artwork's colour, so the page takes on the track's mood. It fades out before the top
+// edge, where the pill meets the black flares, so the bends show no seam. On the stage the cover's
+// colours fill the page instead, under shades that keep the edges black.
 void HomeScene::PaintGlow(const D2D1_RECT_F& whole, bool onStage) {
     if (glow_ == 0xFFFFFFFF || !artworkBrush_) return;
+    if (onStage) {
+        if (!ambient_) return;
+        context_->DrawBitmap(ambient_.Get(), whole, 1.0f, D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC, nullptr, nullptr);
+        const auto shade = [&](D2D1_POINT_2F start, D2D1_POINT_2F end, const D2D1_GRADIENT_STOP* stops) {
+            ComPtr<ID2D1GradientStopCollection> collection;
+            ComPtr<ID2D1LinearGradientBrush> brush;
+            if (SUCCEEDED(context_->CreateGradientStopCollection(stops, 4, &collection)) &&
+                SUCCEEDED(context_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(start, end), collection.Get(), &brush))) {
+                context_->FillRectangle(whole, brush.Get());
+            }
+        };
+        // Black at the top edge, where the pill meets the flares, and darker toward the bottom.
+        const D2D1_GRADIENT_STOP vertical[] = {{0, D2D1::ColorF(0, 0, 0, 1)}, {0.32f, D2D1::ColorF(0, 0, 0, 0.5f)},
+                                               {0.68f, D2D1::ColorF(0, 0, 0, 0.32f)}, {1, D2D1::ColorF(0, 0, 0, 0.75f)}};
+        const D2D1_GRADIENT_STOP sides[] = {{0, D2D1::ColorF(0, 0, 0, 0.7f)}, {0.22f, D2D1::ColorF(0, 0, 0, 0)},
+                                            {0.78f, D2D1::ColorF(0, 0, 0, 0)}, {1, D2D1::ColorF(0, 0, 0, 0.7f)}};
+        shade(D2D1::Point2F(0, whole.top), D2D1::Point2F(0, whole.bottom), vertical);
+        shade(D2D1::Point2F(whole.left, 0), D2D1::Point2F(whole.right, 0), sides);
+        return;
+    }
     const D2D1_COLOR_F tint = FromBgra(glow_);
     const D2D1_GRADIENT_STOP stops[] = {
         {0.0f, D2D1::ColorF(tint.r, tint.g, tint.b, 0.55f)},
@@ -161,10 +191,9 @@ void HomeScene::PaintGlow(const D2D1_RECT_F& whole, bool onStage) {
     };
     ComPtr<ID2D1GradientStopCollection> collection;
     ComPtr<ID2D1RadialGradientBrush> wash;
-    const D2D1_POINT_2F center = onStage ? D2D1::Point2F(layout_.StageGlowCenterX(), layout_.StageGlowCenterY())
-                                         : D2D1::Point2F(layout_.GlowCenterX(), layout_.GlowCenterY());
-    const float radiusX = onStage ? layout_.StageGlowRadiusX() : layout_.GlowRadiusX();
-    const float radiusY = onStage ? layout_.StageGlowRadiusY() : layout_.GlowRadiusY();
+    const D2D1_POINT_2F center = D2D1::Point2F(layout_.GlowCenterX(), layout_.GlowCenterY());
+    const float radiusX = layout_.GlowRadiusX();
+    const float radiusY = layout_.GlowRadiusY();
     if (SUCCEEDED(context_->CreateGradientStopCollection(stops, 3, &collection)) &&
         SUCCEEDED(context_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(center, D2D1::Point2F(0, 0), radiusX, radiusY),
                                                       collection.Get(), &wash))) {

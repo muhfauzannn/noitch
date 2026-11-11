@@ -17,6 +17,8 @@ struct HomeSettings {
     bool artworkGlow = true;
     // While something plays, the closed island widens to show its artwork and level bars.
     bool showLive = true;
+    // The closed island's pill also shows the lyric line being sung, under the notch.
+    bool showLiveLyrics = true;
 
     bool operator==(const HomeSettings&) const = default;
 };

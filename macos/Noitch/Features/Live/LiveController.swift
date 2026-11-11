@@ -4,11 +4,13 @@ import AppKit
 /// asks it for `isActive` to size the closed pill and is told when that changes. Everything here is
 /// driven by now playing updates and one one-shot timer for the end of a pause.
 final class LiveController {
-    /// Set by the island, which owns the panel and resizes the pill.
-    var onActiveChange: ((Bool) -> Void)?
+    /// Set by the island, which owns the panel and resizes the pill to `isActive` and `showsLyric`.
+    var onShapeChange: (() -> Void)?
     var onSceneCreated: ((CALayer) -> Void)?
 
     private(set) var isActive = false
+    /// The pill also shows the line being sung, under the notch.
+    private(set) var showsLyric = false
     private let monitor: NowPlayingMonitor
     private var enabled: Bool
     private var tintBars: Bool
@@ -22,10 +24,22 @@ final class LiveController {
     private var releaseTimer: Timer?
     private var isIslandOpen = false
 
+    /// The lyric line has its own lookup; LRCLIB results are cached on disk, so Home's lookup for
+    /// the same track reads the file instead of the network.
+    private lazy var lyricsSource = LyricsSource()
+    private var lyrics: Lyrics?
+    private var lyricsKey: String?
+    private var lyricsEnabled: Bool
+    private var lyricsOffset: Double
+    /// One shot at the next line, only while closed, playing and showing a line.
+    private var lyricTimer: Timer?
+
     init(monitor: NowPlayingMonitor, settings: HomeSettings) {
         self.monitor = monitor
         enabled = settings.showLive
         tintBars = settings.tintWithArtwork
+        lyricsEnabled = settings.showLiveLyrics && settings.showLyrics
+        lyricsOffset = settings.lyricsOffset
         monitor.onLiveUpdate = { [unowned self] update in receive(update) }
         monitor.setNeeded(enabled, by: .live)
     }
@@ -38,6 +52,13 @@ final class LiveController {
             monitor.setNeeded(enabled, by: .live)
         }
         if tintChanged { updateArtwork(force: true) }
+        lyricsOffset = settings.lyricsOffset
+        let lyricsWanted = settings.showLiveLyrics && settings.showLyrics
+        if lyricsWanted != lyricsEnabled {
+            lyricsEnabled = lyricsWanted
+            if !lyricsWanted { dropLyrics() }
+        }
+        requestLyricsIfNeeded()
         evaluate()
     }
 
@@ -61,12 +82,15 @@ final class LiveController {
     func islandWillOpen() {
         isIslandOpen = true
         scene?.show(false)
+        lyricTimer?.invalidate()
+        lyricTimer = nil
     }
 
     func islandWillClose() {
         isIslandOpen = false
         // After the pill has narrowed most of the way back to the wings.
         if isActive { scene?.show(true, delay: 0.22) }
+        updateLyric(animated: false)
     }
 
     private func receive(_ update: NowPlaying) {
@@ -86,7 +110,57 @@ final class LiveController {
         }
         updateArtwork(force: false)
         scene?.setPlaying(playing)
+        requestLyricsIfNeeded()
         evaluate()
+    }
+
+    // MARK: Lyric line
+
+    private func requestLyricsIfNeeded() {
+        // Without an artist this is usually a browser tab, whose title is neither a song nor ours to send.
+        guard enabled, lyricsEnabled, nowPlaying.hasTrack, !nowPlaying.artist.isEmpty else { return }
+        #if DEBUG
+        if monitor.isDemo {
+            if lyrics == nil { lyrics = Lyrics(synced: (0..<60).map { LyricLine(start: Double($0) * 4, text: "Sample lyric line number \($0)") }) }
+            return
+        }
+        #endif
+        let key = "\(nowPlaying.artist)\n\(nowPlaying.title)"
+        guard key != lyricsKey else { return }
+        lyricsKey = key
+        lyrics = nil
+        lyricsSource.lookUp(nowPlaying) { [weak self] found in
+            guard let self, lyricsKey == key else { return }
+            lyrics = found
+            evaluate()
+        }
+    }
+
+    private func dropLyrics() {
+        lyricsSource.cancel()
+        lyrics = nil
+        lyricsKey = nil
+    }
+
+    private var currentLyric: String? {
+        LiveRule.lyricLine(lyrics, position: nowPlaying.position(at: Date()), offset: lyricsOffset)
+    }
+
+    /// Shows the current line and waits, in one one-shot timer, for the next.
+    private func updateLyric(animated: Bool) {
+        lyricTimer?.invalidate()
+        lyricTimer = nil
+        scene?.setLyric(showsLyric ? currentLyric : nil, animated: animated)
+        guard showsLyric, !isIslandOpen, nowPlaying.isPlaying, let lyrics else { return }
+        let position = nowPlaying.position(at: Date())
+        guard let next = lyrics.nextChange(after: position + lyricsOffset) else { return }
+        let delay = max((next - lyricsOffset - position) / max(nowPlaying.rate, 0.1), 0.05)
+        let timer = Timer(timeInterval: delay, repeats: false) { [unowned self] _ in
+            MainActor.assumeIsolated { updateLyric(animated: true) }
+        }
+        timer.tolerance = 0.03
+        RunLoop.main.add(timer, forMode: .common)
+        lyricTimer = timer
     }
 
     @objc private func pauseEnded() {
@@ -96,8 +170,16 @@ final class LiveController {
 
     private func evaluate() {
         let active = LiveRule.shows(nowPlaying, enabled: enabled, pausedSince: pausedSince, now: Date().timeIntervalSince1970) && layout != nil
-        guard active != isActive else { return }
+        let lyric = active && lyricsEnabled && currentLyric != nil
+        defer { updateLyric(animated: true) }
+        guard active != isActive || lyric != showsLyric else { return }
+        let shapeOnly = active == isActive
         isActive = active
+        showsLyric = lyric
+        guard !shapeOnly else {
+            onShapeChange?()
+            return
+        }
         if active {
             releaseTimer?.invalidate()
             releaseTimer = nil
@@ -111,7 +193,7 @@ final class LiveController {
             RunLoop.main.add(timer, forMode: .common)
             releaseTimer = timer
         }
-        onActiveChange?(active)
+        onShapeChange?()
     }
 
     private func buildScene() {
@@ -131,6 +213,7 @@ final class LiveController {
         scene?.root.removeFromSuperlayer()
         scene = nil
         shownArtwork = nil
+        dropLyrics()
     }
 
     private func updateArtwork(force: Bool) {

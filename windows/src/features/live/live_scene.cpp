@@ -66,6 +66,11 @@ void LiveScene::Release() {
     for (auto& bar : bars_) bar.Reset();
     for (auto& transform : barScales_) transform.Reset();
     for (auto& surface : barSurfaces_) surface.Reset();
+    lyricSurface_.Reset();
+    lyric_.Reset();
+    lyricFormat_.Reset();
+    painter_.Release();
+    shownLyric_.clear();
     artSurface_.Reset();
     art_.Reset();
     effect_.Reset();
@@ -140,6 +145,31 @@ HRESULT LiveScene::SetPlaying(bool playing) {
         if (FAILED(hr = animation->AddRepeat(period * 2, period * 2))) return hr;
         if (FAILED(hr = barScales_[i]->SetScaleY(animation.Get()))) return hr;
     }
+    return compositor_->Commit();
+}
+
+HRESULT LiveScene::SetLyric(const std::string& text) {
+    if (!root_ || text == shownLyric_) return S_OK;
+    shownLyric_ = text;
+    HRESULT hr;
+    const HomeRect area = layout_.Lyric();
+    const float width = static_cast<float>(Px(area.width, scale_));
+    const float height = static_cast<float>(Px(area.height, scale_));
+    if (!lyric_) {
+        if (text.empty()) return S_OK;
+        IDCompositionDevice* device = compositor_->Device();
+        if (!painter_.Exists() && FAILED(hr = painter_.Create(compositor_->DxgiDevice()))) return hr;
+        if (FAILED(hr = painter_.MakeFormat(L"Segoe UI", LiveLayout::kLyricFontSize * scale_, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_TEXT_ALIGNMENT_CENTER, &lyricFormat_))) return hr;
+        if (FAILED(hr = device->CreateSurface(static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED, &lyricSurface_))) return hr;
+        if (FAILED(hr = device->CreateVisual(&lyric_))) return hr;
+        if (FAILED(hr = lyric_->SetContent(lyricSurface_.Get()))) return hr;
+        if (FAILED(hr = lyric_->SetOffsetX(static_cast<float>(Px(area.x, scale_))))) return hr;
+        if (FAILED(hr = lyric_->SetOffsetY(static_cast<float>(Px(area.y, scale_))))) return hr;
+        if (FAILED(hr = root_->AddVisual(lyric_.Get(), TRUE, nullptr))) return hr;
+    }
+    if (FAILED(hr = painter_.Begin(lyricSurface_.Get(), width, height))) return hr;
+    painter_.Text(text, lyricFormat_.Get(), {0, 0, width, height}, D2D1::ColorF(1, 1, 1, 1));
+    if (FAILED(hr = painter_.End(lyricSurface_.Get()))) return hr;
     return compositor_->Commit();
 }
 

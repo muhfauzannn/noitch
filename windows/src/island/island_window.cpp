@@ -189,6 +189,7 @@ void IslandWindow::ApplyLayout() {
 
     geometry_ = IslandGeometry(static_cast<float>(dpiX) / USER_DEFAULT_SCREEN_DPI);
     geometry_.SetLive(live_.IsActive());
+    geometry_.SetLiveLyric(live_.ShowsLyric());
     const WindowSize size = geometry_.Window();
     const RECT& screen = info.rcMonitor;
     const int x = screen.left + (screen.right - screen.left - size.width) / 2;
@@ -203,14 +204,24 @@ void IslandWindow::ApplyLayout() {
     live_.SetGeometry(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight(), size.width, geometry_.Scale());
 }
 
-// The closed pill widens into its wings when music starts and narrows when it ends. Like opening, the
-// hit region grows before widening and shrinks after narrowing (in FinishTransition), never per frame.
+// The closed pill widens into its wings when music starts and narrows when it ends; it grows down for
+// the lyric line and back. Like opening, the hit region grows before the pill does and shrinks after
+// (in FinishTransition), never per frame.
 void IslandWindow::LiveChanged(bool active) {
+    const Pill before = geometry_.PillFor(IslandState::Collapsed);
     geometry_.SetLive(active);
+    geometry_.SetLiveLyric(live_.ShowsLyric());
+    const Pill after = geometry_.PillFor(IslandState::Collapsed);
     if (state_ != IslandState::Collapsed) return;
     const double now = NowSeconds();
-    motion_.Retarget(geometry_.PillFor(IslandState::Collapsed), now, kLiveSpring);
-    if (active) UpdateHitRegion();
+    motion_.Retarget(after, now, kLiveSpring);
+    if (after.right - after.left > before.right - before.left || after.bottom > before.bottom) {
+        // Covers both shapes until the pill settles.
+        const int flare = geometry_.FlareRadius();
+        SetWindowRgn(hwnd_, CreateRectRgn(static_cast<int>(std::min(before.left, after.left)) - flare, 0,
+                                          static_cast<int>(std::max(before.right, after.right)) + flare,
+                                          static_cast<int>(std::max(before.bottom, after.bottom))), FALSE);
+    }
     compositor_.AnimatePill(motion_);
     KillTimer(hwnd_, kSettleTimer);
     SetTimer(hwnd_, kSettleTimer, static_cast<UINT>(motion_.Duration() * 1000) + 1, nullptr);

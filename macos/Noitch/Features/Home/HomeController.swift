@@ -188,7 +188,8 @@ final class HomeController {
         let size = (layout?.artwork.width ?? 0) * scale
         let image = nowPlaying.artwork.flatMap { ArtworkImage.decode($0, maxPixelSize: size) }
         let tint = settings.tintWithArtwork || settings.artworkGlow ? image.flatMap(ArtworkImage.averageColor) : nil
-        scene.setArtwork(image, barTint: settings.tintWithArtwork ? tint : nil, glow: settings.artworkGlow ? tint : nil)
+        let ambient = settings.artworkGlow ? image.flatMap { ArtworkImage.ambient(of: $0) } : nil
+        scene.setArtwork(image, barTint: settings.tintWithArtwork ? tint : nil, glow: settings.artworkGlow ? tint : nil, ambient: ambient)
     }
 
     // MARK: Showing it

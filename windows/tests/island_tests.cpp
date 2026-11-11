@@ -330,8 +330,6 @@ void TestLyricsButtonAndStageFitThePage() {
         }
         assert(layout.StageLine(-1).y >= header);
         assert(layout.StageLine(2).Bottom() <= layout.Height() - 12);
-        assert(layout.StageGlowRadiusY() >= layout.StageGlowCenterY());
-        assert(layout.StageGlowCenterX() + layout.StageGlowRadiusX() < layout.Width());
         const float middleY = layout.StageLine(0).y + layout.StageLine(0).height / 2;
         assert(layout.StageSlotAt(layout.Width() / 2, middleY) == 0);
         assert(layout.ControlAt(layout.Width() / 2, middleY, true) == HomeControl::None);
@@ -363,6 +361,49 @@ void TestStageShowsTheLineBeforeAndTheTwoAfter() {
     off.showLyrics = false;
     const HomeModel hidden = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, off, false, true);
     assert(!hidden.isOnStage && !hidden.showsLyricsButton);
+}
+
+void TestLyricStripGrowsTheLivePillDown() {
+    const LiveLayout layout(180, 32);
+    assert(Near(layout.Height(false), 32, 1e-6) && Near(layout.Height(true), 32 + LiveLayout::kLyricStrip, 1e-6));
+    const HomeRect lyric = layout.Lyric();
+    assert(lyric.y >= 32 && lyric.Bottom() <= layout.Height(true));
+    assert(lyric.x >= LiveLayout::kOuterPadding && lyric.Right() <= layout.Width() - LiveLayout::kOuterPadding);
+    IslandGeometry geometry(1.5f);
+    geometry.SetLive(true);
+    const Pill wings = geometry.PillFor(IslandState::Collapsed);
+    geometry.SetLiveLyric(true);
+    const Pill tall = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(tall.bottom, wings.bottom + LiveLayout::kLyricStrip * 1.5f, 1e-4) && Near(tall.left, wings.left, 1e-4));
+    assert(Near(geometry.PillFor(IslandState::Expanded).bottom, IslandGeometry::ExpandedHeight() * 1.5f, 1e-4));
+    geometry.SetLive(false);
+    assert(Near(geometry.PillFor(IslandState::Collapsed).bottom, IslandGeometry::CollapsedHeight() * 1.5f, 1e-4));
+}
+
+void TestLiveLyricLineIsTheOneBeingSung() {
+    Lyrics lyrics;
+    lyrics.synced = {{2, "one"}, {4, ""}, {6, "three"}};
+    std::string line;
+    assert(LiveRule::LyricLine(&lyrics, 0, 0, &line) && line == "\xE2\x99\xAA");
+    assert(LiveRule::LyricLine(&lyrics, 2.5, 0, &line) && line == "one");
+    assert(LiveRule::LyricLine(&lyrics, 4.5, 0, &line) && line == "\xE2\x99\xAA");
+    assert(LiveRule::LyricLine(&lyrics, 5.5, 0.5, &line) && line == "three");
+    Lyrics plain;
+    plain.plain = {"plain"};
+    assert(!LiveRule::LyricLine(&plain, 3, 0, &line));
+    assert(!LiveRule::LyricLine(nullptr, 3, 0, &line));
+}
+
+void TestArtworkMosaicAveragesRegions() {
+    // A 4x4 cover: left half red, right half blue.
+    std::vector<uint32_t> cover(16);
+    for (int y = 0; y < 4; ++y)
+        for (int x = 0; x < 4; ++x) cover[static_cast<size_t>(y * 4 + x)] = x < 2 ? 0xFFFF0000u : 0xFF0000FFu;
+    const auto mosaic = ArtworkMosaic(cover.data(), 4, 2, 1);
+    assert(mosaic.size() == 2 && mosaic[0] == 0xFFFF0000u && mosaic[1] == 0xFF0000FFu);
+    const auto blend = ArtworkMosaic(cover.data(), 4, 1, 1);
+    assert(blend[0] == 0xFF7F007Fu);
+    assert(ArtworkMosaic(cover.data(), 4, 6, 3).size() == 18);
 }
 
 void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
@@ -790,6 +831,9 @@ int main() {
     TestFormatTime();
     TestNextTickIsTheNextSecondOrAnEarlierLyric();
     TestHomeModelShowsThePlaceholderAndFollowsLyrics();
+    TestLyricStripGrowsTheLivePillDown();
+    TestLiveLyricLineIsTheOneBeingSung();
+    TestArtworkMosaicAveragesRegions();
     TestStageWakesOnlyForTheNextLine();
     TestLyricsButtonAndStageFitThePage();
     TestStageShowsTheLineBeforeAndTheTwoAfter();

@@ -13,10 +13,15 @@ final class LiveScene {
     private let placeholder = CAShapeLayer()
     private let bars: [CALayer]
     private var isPlaying = false
+    /// Two layers take turns, so a new line rises in from below while the old one rises away.
+    private let lyricLayers: [CATextLayer]
+    private var lyricIndex = 0
+    private var shownLyric: String?
 
     init(layout: LiveLayout, scale: CGFloat) {
         self.layout = layout
-        root.bounds = CGRect(origin: .zero, size: layout.size)
+        // Tall enough for the lyric strip; the pill's clip shows it only while the pill has grown.
+        root.bounds = CGRect(origin: .zero, size: layout.size(withLyric: true))
         root.isGeometryFlipped = true
         root.opacity = 0
 
@@ -44,6 +49,54 @@ final class LiveScene {
             return bar
         }
         bars.forEach(root.addSublayer)
+
+        lyricLayers = (0..<2).map { _ in
+            let text = CATextLayer()
+            text.frame = layout.lyric
+            text.font = NSFont.systemFont(ofSize: LiveLayout.lyricFontSize, weight: .semibold)
+            text.fontSize = LiveLayout.lyricFontSize
+            text.foregroundColor = NSColor.white.cgColor
+            text.alignmentMode = .center
+            text.truncationMode = .end
+            text.contentsScale = scale
+            text.opacity = 0
+            return text
+        }
+        lyricLayers.forEach(root.addSublayer)
+    }
+
+    /// The line being sung, or nil for none. A new line rises in from below as the old one rises
+    /// away; both move only position and opacity.
+    func setLyric(_ text: String?, animated: Bool) {
+        guard text != shownLyric else { return }
+        let hadLine = shownLyric != nil
+        shownLyric = text
+        let now = CACurrentMediaTime()
+        let move = animated && !Motion.reduceMotion
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let old = lyricLayers[lyricIndex]
+        if let text {
+            lyricIndex = 1 - lyricIndex
+            let new = lyricLayers[lyricIndex]
+            new.removeAllAnimations()
+            new.string = text
+            new.opacity = 1
+            if move {
+                // A first line waits for the pill to grow down to it.
+                let begin = now + (hadLine ? 0.06 : 0.18)
+                Motion.ease(new, "opacity", from: 0, to: 1, duration: 0.3, begin: begin)
+                Motion.ease(new, "transform.translation.y", from: 7, to: 0, duration: 0.4, begin: begin)
+            }
+        }
+        if hadLine {
+            if move {
+                Motion.ease(old, "opacity", from: old.presentation()?.opacity ?? old.opacity, to: 0, duration: 0.2, begin: now)
+                Motion.ease(old, "transform.translation.y", from: 0, to: -6, duration: 0.3, begin: now)
+            }
+            old.opacity = 0
+        }
+        CATransaction.commit()
     }
 
     /// `tint` colours the bars, the outer ones fully and the middle ones mixed toward white; nil

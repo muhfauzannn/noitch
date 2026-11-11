@@ -22,7 +22,7 @@ final class IslandController: NSObject {
         super.init()
         panel.contentView = view
         live.onSceneCreated = { [unowned self] layer in view.setLive(layer) }
-        live.onActiveChange = { [unowned self] active in liveChanged(active) }
+        live.onShapeChange = { [unowned self] in liveChanged() }
         live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
         pages.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: geometry.expandedSize) }
         pages.onOpenSettings = { [unowned self] in openSettings() }
@@ -135,14 +135,23 @@ final class IslandController: NSObject {
         }
     }
 
-    /// The closed pill widens into its wings when music starts, and narrows when it ends. Like
-    /// opening, the window grows before widening and shrinks after narrowing, never per frame.
-    private func liveChanged(_ active: Bool) {
-        geometry.isLive = active
-        guard state == .collapsed else { return }
+    /// The closed pill widens into its wings when music starts, and narrows when it ends; it grows
+    /// down for the lyric line and back. Like opening, the window grows before the pill does and
+    /// shrinks after, never per frame.
+    private func liveChanged() {
+        let before = geometry.pillSize(for: .collapsed)
+        geometry.isLive = live.isActive
+        geometry.showsLiveLyric = live.showsLyric
+        let after = geometry.pillSize(for: .collapsed)
+        guard state == .collapsed, after != before else { return }
         latestTransition += 1
         let transition = latestTransition
-        if active { resizePanel(for: .collapsed) }
+        // Grows first in any direction it grows in; the completion trims it to the final size.
+        if after.width > before.width || after.height > before.height {
+            panel.setFrame(geometry.panelFrame(for: .collapsed).union(panel.frame), display: false)
+            view.pinPill()
+            view.refreshHoverTrackingArea()
+        }
         view.animatePill(
             to: geometry.pillSize(for: .collapsed),
             cornerRadius: geometry.cornerRadius(for: .collapsed),
@@ -164,7 +173,7 @@ final class IslandController: NSObject {
     }
 
     @objc private func screenParametersChanged() {
-        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive)
+        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive, showsLiveLyric: live.showsLyric)
         guard updated != geometry else { return }
         geometry = updated
         live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)

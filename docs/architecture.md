@@ -153,7 +153,8 @@ turn the glow and the bar's colour on or off.
 - **Lyrics.** When the song moves on one line, the bright line rises and fades, the dim line grows
   into its place and the following line rises in below: three text layers take turns, and only
   position, scale and opacity move, so no text is redrawn during the motion. Any other change,
-  such as a seek or a new track, crossfades. Before the first line and on empty lines, "♪" holds the
+  such as a seek or a new track, fades in as it rises 6 pt into place. Lyrics always enter from
+  below, never from the notch. Before the first line and on empty lines, "♪" holds the
   place. On Windows the surface is redrawn in place, without the slide.
 - **Lyrics stage.** The lyrics button turns the whole page into lyrics, and back. See
   [Lyrics stage](#lyrics-stage).
@@ -186,8 +187,8 @@ Opening reveals the current page after a 0.06 s head start for the pill: it fade
 mid-fade continues from what is on screen.
 
 - macOS reveals the header first, then the page's groups 0.045 s apart (Home: artwork, lyrics
-  button, text, slider, transport, calendar; on the lyrics stage, the lyrics then the button; Usage:
-  one per column), and scales the whole of it from 0.94
+  button, title, lyric lines, slider, transport, calendar; on the lyrics stage, the lyrics then the
+  button; Usage: one per column). Lyric groups rise 8 pt from below; the rest drop 8 pt, and scales the whole of it from 0.94
   with the opening spring. Reduce Motion drops the slide.
 - Windows draws each layer into one surface, so the content fades and slides as a whole: no
   stagger and no scale. The
@@ -207,12 +208,20 @@ Home to the lyrics; clicking it again brings Home back. Numbers are in `HomeLayo
   the one being sung (20 pt bold, a little above the middle), and the two after (55% and 26%). Lines
   other than the sung one are drawn at 70% of its size. Empty lines and the intro show "♪". Without
   synced lyrics the middle shows the same status as Home, smaller and dimmer.
+- **Background.** With "Glow behind the page" on, the cover's colours fill the page: the artwork
+  averaged to 6 × 3 pixels, smoothed to 48 × 24 on macOS, and stretched across the page, so the
+  colours melt into each other. Two shades keep it readable: a vertical one, black at the top edge
+  (where the pill meets the flares), 50% and 32% through the middle and 75% at the bottom, and one
+  that darkens each side to 70%. Made once per track; nothing is blurred live. Windows averages
+  the same 6 × 3 pixels (`ArtworkMosaic`) and stretches them with a cubic filter. With the setting
+  off the stage is black. It replaced a radial glow under the sung line, which looked like a blob.
 - **Motion (macOS).** When the song moves on one line, every line rises one slot: the sung line grows
   into the middle, the one before drifts up and away, and the next rises in from below. Five text
-  layers take turns, and only position, scale and opacity move. A seek or new track crossfades.
+  layers take turns, and only position, scale and opacity move. A seek or new track fades the lines
+  in as they rise 8 pt, one after another.
   Windows redraws the surface in place, without the slide.
 - **Switching (macOS).** Home's own layers fade out and shrink to 96% as the lyrics fade in and rise
-  12 pt; the glow moves from the artwork to beneath the sung line; the button glides to the page's
+  12 pt; the artwork glow fades into the stage's background; the button glides to the page's
   top-right corner (the same place unless the calendar is showing) and turns into a white disc
   with a black bubble. Every part starts from what is on screen, so a quick second click reverses.
   Windows redraws in one step.
@@ -293,6 +302,21 @@ does.
 - **Lifetime.** The layers are made when the wings first show and released 2 s after they go.
 - **Windows.** The media session subscription now runs from launch while the setting is on, so WinRT
   loads at start instead of on first opening. It needs no other process.
+- **Lyric line.** With "Show the lyric line" on (and "Show lyrics"), a track with synced lyrics
+  also grows the pill down by a 20 pt strip under the notch, holding the line being sung in 12 pt
+  semibold, centred and cut short with "…" when long. The wings stay level with the notch. On macOS
+  a new line rises 7 pt in from below as the old one rises away and fades; Windows redraws it in
+  place. Before the first line and in gaps it shows "♪". A track without synced lyrics never grows
+  the strip. The window or hit region grows before the strip appears and shrinks after it goes.
+- **Lyric timing.** One one-shot timer at the next line, only while the island is closed, playing
+  and showing a line. Opening the island stops it; closing restarts it from the current position.
+- **Lyric lookup.** The closed island looks the track up itself, as soon as it plays, so lyrics
+  reach LRCLIB without the island being opened. A cached track reads the disk instead. Home's lookup
+  for the same track then reads the file. On Windows the two share `LyricsSource::kMessage`; the
+  closed island's requests carry the top bit of the generation.
+- **Cost.** While a line shows, the app wakes once per line and draws its text, and the lookup's
+  networking stays loaded: about 12.5 MB and 24 ms/min with a track playing, over the at-rest
+  budgets. Accepted by the owner on 2026-11-11, on by default. See [performance.md](performance.md).
 
 ### Usage
 
@@ -398,6 +422,7 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | Home | Glow behind the page | On | The wash of that color behind the page |
 | Home | Show calendar | On | macOS only: this week and the chosen day's events beside the music, which narrows for it. See [Calendar in Home](#calendar-in-home-macos) |
 | Home | Show what's playing | On | The closed island's wings with artwork and level bars. On macOS this keeps the now playing helper running while a player app is open |
+| Home | Show the lyric line | On | The line being sung under the notch while the wings show. Needs Show lyrics. Looks lyrics up when a track plays, not only when Home opens |
 | AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
 | AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
 | AI Usage | Check Claude every | Minute | Or 5 or 15 minutes. Never more often than the approved once a minute; logs are still read every minute |
@@ -425,13 +450,13 @@ The spec both apps follow. Change it here and in both apps together.
 | Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
-| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause. See [Closed island while music plays](#closed-island-while-music-plays) |
+| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause; a 20 pt lyric strip under the notch, 12 pt text. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
-| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek. See [Lyrics stage](#lyrics-stage) |
+| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; background from 6 × 3 cover pixels under black shades. See [Lyrics stage](#lyrics-stage) |
 | Release after closing | 10 s |
 
 The Windows spring is computed from the same parameters. For the collapse spring its stiffness

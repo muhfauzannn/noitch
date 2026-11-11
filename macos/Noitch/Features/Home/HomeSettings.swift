@@ -14,6 +14,8 @@ struct HomeSettings: Equatable {
     var artworkGlow = true
     /// While something plays, the closed island widens to show its artwork and level bars.
     var showLive = true
+    /// The closed island's pill also shows the lyric line being sung, under the notch.
+    var showLiveLyrics = true
     /// A week and the chosen day's events beside the music, which narrows for it. macOS only.
     var showCalendar = true
 
@@ -28,6 +30,7 @@ struct HomeSettings: Equatable {
         store.read("tintWithArtwork", into: &settings.tintWithArtwork)
         store.read("artworkGlow", into: &settings.artworkGlow)
         store.read("showLive", into: &settings.showLive)
+        store.read("showLiveLyrics", into: &settings.showLiveLyrics)
         store.read("showCalendar", into: &settings.showCalendar)
         settings.lyricsOffset = min(max(settings.lyricsOffset, -5), 5)
         return settings
@@ -41,6 +44,7 @@ struct HomeSettings: Equatable {
         store.write("tintWithArtwork", tintWithArtwork)
         store.write("artworkGlow", artworkGlow)
         store.write("showLive", showLive)
+        store.write("showLiveLyrics", showLiveLyrics)
         store.write("showCalendar", showCalendar)
     }
 }

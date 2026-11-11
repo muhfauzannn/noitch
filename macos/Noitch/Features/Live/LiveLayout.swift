@@ -12,6 +12,9 @@ struct LiveLayout: Equatable {
     static let barGap: CGFloat = 1.5
     /// Each bar's resting height as a share of the tallest it reaches.
     static let restingScale: CGFloat = 0.3
+    /// The band under the notch that holds the line being sung, when that is on.
+    static let lyricStrip: CGFloat = 20
+    static let lyricFontSize: CGFloat = 12
 
     /// The pill without wings: the notch, or the virtual one.
     let collapsed: CGSize
@@ -19,6 +22,17 @@ struct LiveLayout: Equatable {
     var artSide: CGFloat { max(collapsed.height - 14, 14) }
     var wing: CGFloat { artSide + Self.outerPadding + Self.innerGap }
     var size: CGSize { CGSize(width: collapsed.width + wing * 2, height: collapsed.height) }
+
+    /// The pill grows down by the lyric strip; the wings stay level with the notch.
+    func size(withLyric: Bool) -> CGSize {
+        CGSize(width: size.width, height: collapsed.height + (withLyric ? Self.lyricStrip : 0))
+    }
+
+    /// Under the notch, centred, clear of the pill's rounded bottom corners.
+    var lyric: CGRect {
+        let inset = Self.outerPadding + 3
+        return CGRect(x: inset, y: collapsed.height + 1, width: size.width - inset * 2, height: Self.lyricStrip - 5)
+    }
 
     var artwork: CGRect {
         CGRect(x: Self.outerPadding, y: (collapsed.height - artSide) / 2, width: artSide, height: artSide)
@@ -59,5 +73,13 @@ enum LiveRule {
         if nowPlaying.isPlaying { return true }
         guard let pausedSince else { return false }
         return now - pausedSince < pauseGrace
+    }
+
+    /// The line to show under the notch: the one being sung, a note before the first and in gaps,
+    /// or nil when the track has no synced lyrics, so the pill doesn't grow for nothing.
+    static func lyricLine(_ lyrics: Lyrics?, position: Double, offset: Double) -> String? {
+        guard let lyrics, !lyrics.synced.isEmpty else { return nil }
+        let text = lyrics.lineIndex(at: position + offset).map { lyrics.synced[$0].text } ?? ""
+        return text.isEmpty ? "♪" : text
     }
 }

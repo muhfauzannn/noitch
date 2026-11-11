@@ -15,6 +15,17 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the closed island's lyric line, rising lyrics and the stage's new background (2026-11-11, same
+M5), measured while Spotify or Music played a track with synced lyrics, so the wings and the line
+were up: with "Show the lyric line" off, 10.52 MB, 9.12 ms/min and 0.20 wakeups/s; with it on,
+11.53, 12.09 and 12.52 MB, 38.22, 44.05 and 23.82 ms/min (the last over a 60 s window) and 0.43,
+1.80 and 0.47 wakeups/s. **Over the memory and CPU budgets while a line shows. Accepted by the
+owner on 2026-11-11, with the setting on by default; the budgets still hold with nothing playing.** The cost is one text render and one wakeup per lyric line, plus the networking frameworks the
+lookup loads while closed. With nothing playing nothing of this runs. The binary is 1136 KB. The
+hover check, run on its own against the Release app with the line showing and Hover delay at None,
+failed its first two checks on one run (the island opened late) and passed all 23 on the repeat,
+5.77 ms per transition; treat it as flaky until it recurs.
+
 With the lyrics stage (2026-11-11, same M5): 9.80, 10.08 and 10.05 MB, 1.42, 6.08 and 0.86 ms/min,
 0.10 to 0.13 wakeups/s, 4.71 to 5.61 ms per transition, all 23 hover checks passing on the run with
 Hover delay at None; the binary is 1130 KB, against 1090 KB last recorded with the calendar. One idle

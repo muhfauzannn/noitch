@@ -11,6 +11,8 @@ void LiveController::Initialize(HWND window, Compositor* compositor, NowPlayingM
     now_ = now;
     enabled_ = settings.showLive;
     tintBars_ = settings.tintWithArtwork;
+    lyricsEnabled_ = settings.showLiveLyrics && settings.showLyrics;
+    lyricsOffset_ = settings.lyricsOffset;
     monitor->onLive = [](void* context) { static_cast<LiveController*>(context)->Receive(); };
     monitor->liveContext = this;
     monitor->SetNeeded(NowPlayingMonitor::kLive, enabled_);
@@ -28,6 +30,13 @@ void LiveController::Apply(const HomeSettings& settings) {
         shownArtwork_.reset();
         ShowArtwork();
     }
+    lyricsOffset_ = settings.lyricsOffset;
+    const bool lyricsWanted = settings.showLiveLyrics && settings.showLyrics;
+    if (lyricsWanted != lyricsEnabled_) {
+        lyricsEnabled_ = lyricsWanted;
+        if (!lyricsWanted) DropLyrics();
+    }
+    RequestLyricsIfNeeded();
     Evaluate();
 }
 
@@ -50,12 +59,14 @@ void LiveController::SetGeometry(float collapsedWidth, float collapsedHeight, in
 void LiveController::IslandWillOpen() {
     islandOpen_ = true;
     scene_.Show(false, 0, now_());
+    KillTimer(window_, kLyricTimer);
 }
 
 void LiveController::IslandWillClose() {
     islandOpen_ = false;
     // After the pill has narrowed most of the way back to the wings.
     if (active_) scene_.Show(true, 0.22, now_());
+    UpdateLyric();
 }
 
 void LiveController::DeviceLost() {
@@ -83,13 +94,61 @@ void LiveController::Receive() {
     }
     ShowArtwork();
     scene_.SetPlaying(playing);
+    RequestLyricsIfNeeded();
     Evaluate();
+}
+
+void LiveController::RequestLyricsIfNeeded() {
+    // Without an artist this is usually a browser tab, whose title is neither a song nor ours to send.
+    if (!enabled_ || !lyricsEnabled_ || !nowPlaying_.HasTrack() || nowPlaying_.artist.empty()) return;
+    const std::string key = nowPlaying_.artist + "\n" + nowPlaying_.title;
+    if (key == lyricsKey_) return;
+    lyricsKey_ = key;
+    lyrics_.reset();
+    LyricsSource::LookUp(window_, ++lyricsGeneration_ | kLyricsTag, nowPlaying_.title, nowPlaying_.artist, nowPlaying_.album, nowPlaying_.duration);
+}
+
+void LiveController::DropLyrics() {
+    // A lookup still out is ignored when it arrives.
+    ++lyricsGeneration_;
+    lyrics_.reset();
+    lyricsKey_.clear();
+}
+
+bool LiveController::CurrentLyric(std::string* line) const {
+    return LiveRule::LyricLine(lyrics_.get(), nowPlaying_.Position(now_()), lyricsOffset_, line);
+}
+
+void LiveController::UpdateLyric() {
+    KillTimer(window_, kLyricTimer);
+    std::string line;
+    if (!showsLyric_ || !CurrentLyric(&line)) line.clear();
+    scene_.SetLyric(line);
+    if (!showsLyric_ || islandOpen_ || !nowPlaying_.isPlaying || !lyrics_) return;
+    const double position = nowPlaying_.Position(now_());
+    const double next = lyrics_->NextChange(position + lyricsOffset_);
+    if (next < 0) return;
+    const double delay = std::max((next - lyricsOffset_ - position) / std::max(nowPlaying_.rate, 0.1), 0.05);
+    // One-shot: it fires once, at the next line.
+    SetTimer(window_, kLyricTimer, static_cast<UINT>(delay * 1000) + 1, nullptr);
 }
 
 void LiveController::Evaluate() {
     const bool active = hasLayout_ && LiveRule::Shows(nowPlaying_, enabled_, pausedSince_, now_());
-    if (active == active_) return;
+    std::string line;
+    const bool lyric = active && lyricsEnabled_ && CurrentLyric(&line);
+    if (active == active_ && lyric == showsLyric_) {
+        UpdateLyric();
+        return;
+    }
+    const bool shapeOnly = active == active_;
     active_ = active;
+    showsLyric_ = lyric;
+    if (shapeOnly) {
+        UpdateLyric();
+        if (onActiveChange) onActiveChange(context, active);
+        return;
+    }
     if (active) {
         KillTimer(window_, kReleaseTimer);
         if (!scene_.Exists()) BuildScene();
@@ -100,6 +159,7 @@ void LiveController::Evaluate() {
         // One-shot: the visuals go once the fade is over.
         SetTimer(window_, kReleaseTimer, 2000, nullptr);
     }
+    UpdateLyric();
     if (onActiveChange) onActiveChange(context, active);
 }
 
@@ -118,8 +178,10 @@ void LiveController::BuildScene() {
 // Nothing holding an image outlives the wings.
 void LiveController::ReleaseScene() {
     KillTimer(window_, kReleaseTimer);
+    KillTimer(window_, kLyricTimer);
     scene_.Release();
     shownArtwork_.reset();
+    DropLyrics();
 }
 
 void LiveController::ShowArtwork() {
@@ -131,8 +193,22 @@ void LiveController::ShowArtwork() {
     scene_.SetArtwork(artwork, tint);
 }
 
-bool LiveController::HandleMessage(UINT message, WPARAM wparam, LPARAM) {
+bool LiveController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (message == LyricsSource::kMessage) {
+        // Home's lookups carry no tag; leave those to it.
+        if ((wparam & kLyricsTag) == 0) return false;
+        std::unique_ptr<Lyrics> found(reinterpret_cast<Lyrics*>(lparam));
+        if (wparam != (lyricsGeneration_ | kLyricsTag)) return true;
+        lyrics_ = std::move(found);
+        Evaluate();
+        return true;
+    }
     if (message != WM_TIMER) return false;
+    if (wparam == kLyricTimer) {
+        KillTimer(window_, kLyricTimer);
+        UpdateLyric();
+        return true;
+    }
     if (wparam == kPauseTimer) {
         KillTimer(window_, kPauseTimer);
         Evaluate();

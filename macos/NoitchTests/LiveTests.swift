@@ -31,6 +31,30 @@ struct LiveTests {
         #expect(geometry.pillSize(for: .expanded) == IslandGeometry.expandedSize)
     }
 
+    @Test func `the lyric strip grows the pill down, under the notch, without moving the wings`() {
+        let layout = LiveLayout(collapsed: notch)
+        #expect(layout.size(withLyric: false) == layout.size)
+        #expect(layout.size(withLyric: true) == CGSize(width: layout.size.width, height: notch.height + LiveLayout.lyricStrip))
+        #expect(layout.lyric.minY >= notch.height && layout.lyric.maxY <= layout.size(withLyric: true).height)
+        #expect(layout.lyric.minX >= LiveLayout.outerPadding && layout.lyric.maxX <= layout.size.width - LiveLayout.outerPadding)
+        var geometry = IslandGeometry(display: .init(frame: CGRect(x: 0, y: 0, width: 1512, height: 982), notchHeight: 32, notchWidth: 185, menuBarHeight: 37), isLive: true)
+        let wings = geometry.panelFrame(for: .collapsed)
+        geometry.showsLiveLyric = true
+        let tall = geometry.panelFrame(for: .collapsed)
+        #expect(tall.height == wings.height + LiveLayout.lyricStrip && tall.maxY == wings.maxY && tall.width == wings.width)
+        #expect(geometry.pillSize(for: .expanded) == IslandGeometry.expandedSize)
+    }
+
+    @Test func `the lyric line is the one being sung, or none without synced lyrics`() {
+        let lyrics = Lyrics(synced: [.init(start: 2, text: "one"), .init(start: 4, text: ""), .init(start: 6, text: "three")])
+        #expect(LiveRule.lyricLine(lyrics, position: 0, offset: 0) == "♪")
+        #expect(LiveRule.lyricLine(lyrics, position: 2.5, offset: 0) == "one")
+        #expect(LiveRule.lyricLine(lyrics, position: 4.5, offset: 0) == "♪")
+        #expect(LiveRule.lyricLine(lyrics, position: 5.5, offset: 0.5) == "three")
+        #expect(LiveRule.lyricLine(Lyrics(plain: ["plain"]), position: 3, offset: 0) == nil)
+        #expect(LiveRule.lyricLine(nil, position: 3, offset: 0) == nil)
+    }
+
     @Test func `music shows while playing and briefly after a pause`() {
         var playing = NowPlaying()
         playing.title = "Song"

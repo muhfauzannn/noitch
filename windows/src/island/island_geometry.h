@@ -38,6 +38,8 @@ public:
     // Music is playing and the closed pill has wings for it, see LiveLayout.
     void SetLive(bool live) { live_ = live; }
     bool IsLive() const { return live_; }
+    // The live pill also shows the line being sung, under the notch.
+    void SetLiveLyric(bool lyric) { liveLyric_ = lyric; }
     static constexpr float CollapsedWidth() { return kCollapsedWidth; }
 
     // Logical sizes for laying out what sits on the expanded pill.
@@ -47,13 +49,15 @@ public:
 
     Pill PillFor(IslandState state) const {
         const bool expanded = state == IslandState::Expanded;
-        const float collapsed = live_ ? LiveLayout(kCollapsedWidth, kCollapsedHeight).Width() : kCollapsedWidth;
+        const LiveLayout live(kCollapsedWidth, kCollapsedHeight);
+        const float collapsed = live_ ? live.Width() : kCollapsedWidth;
+        const float collapsedHeight = live_ ? live.Height(liveLyric_) : kCollapsedHeight;
         const float halfWidth = (expanded ? kExpandedWidth : collapsed) * scale_ / 2;
         const float center = Window().width / 2.0f;
         return {
             center - halfWidth,
             center + halfWidth,
-            (expanded ? kExpandedHeight : kCollapsedHeight) * scale_,
+            (expanded ? kExpandedHeight : collapsedHeight) * scale_,
             (expanded ? kExpandedRadius : kCollapsedRadius) * scale_,
         };
     }
@@ -73,6 +77,7 @@ private:
 
     float scale_;
     bool live_ = false;
+    bool liveLyric_ = false;
 };
 
 }  // namespace noitch
