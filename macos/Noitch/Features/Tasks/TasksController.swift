@@ -15,6 +15,8 @@ final class TasksController {
     private var scene: TasksScene?
     private var isShown = false
     private var offset = 0
+    /// Overdue work shows only after the button asks for it, and hides again on the next showing.
+    private var showOverdue = false
     private var scrolled: CGFloat = 0
     /// Highlighted for this showing; the watch forgets them as soon as the page appears.
     private var newOnShow: Set<Int> = []
@@ -27,6 +29,7 @@ final class TasksController {
         case row(Int)
         case open
         case message
+        case overdue
     }
 
     init(watch: TaskWatch) {
@@ -38,6 +41,7 @@ final class TasksController {
         releaseTimer = nil
         isShown = true
         offset = 0
+        showOverdue = false
         newOnShow = watch.unviewed
         if layout != self.layout || scale != self.scale || scene == nil {
             scene?.root.removeFromSuperlayer()
@@ -87,7 +91,8 @@ final class TasksController {
         let date = Date()
         let now = date.timeIntervalSince1970
         let model = TasksPageModel.make(tasks: watch.tasks, unviewed: newOnShow, signedIn: watch.settings.isSignedIn, checking: watch.isChecking,
-                                        problem: watch.problem, asOf: watch.record?.asOf, now: now, offset: offset, calendar: .current)
+                                        problem: watch.problem, asOf: watch.record?.asOf, now: now, offset: offset, calendar: .current,
+                                        showOverdue: showOverdue)
         self.model = model
         scene.apply(model)
         scheduleTick(after: now)
@@ -109,13 +114,12 @@ final class TasksController {
 
     /// `delta` is vertical scroll in points; a row's height moves the list one row.
     func scrolledVertically(by delta: CGFloat) {
-        guard isShown, case let .list(_, _, _, more) = model?.content, !more.isEmpty else { return }
+        guard isShown, let model, case let .list(_, _, _, more) = model.content, !more.isEmpty else { return }
         scrolled += delta
         let step = Int(scrolled / TasksLayout.rowHeight)
         guard step != 0 else { return }
         scrolled -= CGFloat(step) * TasksLayout.rowHeight
-        let count = watch.tasks.count
-        let next = min(max(offset - step, 0), max(count - TaskRule.visibleRows, 0))
+        let next = min(max(offset - step, 0), max(model.listCount - TaskRule.visibleRows, 0))
         guard next != offset else { return }
         offset = next
         render()
@@ -141,11 +145,20 @@ final class TasksController {
             open(rows[index].url)
         case let (.open, .list(hero, _, _, _)):
             open(hero.url)
-        case (.message, .message(_, _, .some, _)):
+        case (.message, .message(_, _, .some, _)) where model.buttonAction == .openSettings:
             onOpenSettings?()
+        case (.message, .message(_, _, .some, _)), (.overdue, .list):
+            toggleOverdue()
         default:
             break
         }
+    }
+
+    private func toggleOverdue() {
+        showOverdue.toggle()
+        // Overdue work sorts first, so the list starts over from the top.
+        offset = 0
+        render()
     }
 
     private func target(at point: CGPoint) -> Target? {
@@ -153,6 +166,7 @@ final class TasksController {
         switch model.content {
         case let .list(_, _, rows, _):
             if layout.openButton.insetBy(dx: -4, dy: -4).contains(point) { return .open }
+            if !model.overdueToggle.isEmpty, layout.overdueToggle.insetBy(dx: -4, dy: -6).contains(point) { return .overdue }
             return rows.indices.first { layout.row($0).contains(point) }.map(Target.row)
         case let .message(_, _, button, _):
             return button != nil && layout.messageButton.insetBy(dx: -4, dy: -4).contains(point) ? .message : nil

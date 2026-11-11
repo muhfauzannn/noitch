@@ -257,4 +257,33 @@ struct TasksTests {
         #expect(scrolledMore == "3–5 of 5")
         #expect(staleHero.label == "Next due · as of 20:50")
     }
+
+    @Test func `overdue work stays hidden until asked for`() {
+        let tasks = [Self.task(1, due: Self.now - 2 * 86400), Self.task(2, due: Self.now - 3600), Self.task(3, due: Self.now + 86400 * 2)]
+        let hidden = TasksPageModel.make(tasks: tasks, unviewed: [], signedIn: true, checking: false, problem: nil, asOf: Self.now,
+                                         now: Self.now, offset: 0, calendar: Self.calendar)
+        guard case let .list(hero, _, rows, _) = hidden.content else {
+            Issue.record("expected a list")
+            return
+        }
+        #expect(rows.map(\.id) == [3])
+        #expect(hero.label == "Next due")
+        #expect(hidden.overdueToggle == "Show 2 overdue")
+        #expect(hidden.listCount == 1)
+        let shown = TasksPageModel.make(tasks: tasks, unviewed: [], signedIn: true, checking: false, problem: nil, asOf: Self.now,
+                                        now: Self.now, offset: 0, calendar: Self.calendar, showOverdue: true)
+        guard case let .list(overdueHero, _, allRows, _) = shown.content else { return }
+        #expect(allRows.map(\.id) == [1, 2, 3])
+        #expect(overdueHero.label == "Overdue")
+        #expect(shown.overdueToggle == "Hide overdue")
+        // Only overdue work left: all clear, with the button to see it.
+        let onlyOverdue = TasksPageModel.make(tasks: Array(tasks.prefix(2)), unviewed: [], signedIn: true, checking: false, problem: nil,
+                                              asOf: Self.now, now: Self.now, offset: 0, calendar: Self.calendar)
+        #expect(onlyOverdue.content == .message(title: "All clear", detail: "Nothing else due · checked 21:00", button: "Show 2 overdue", allClear: true))
+        #expect(onlyOverdue.buttonAction == .showOverdue)
+        // Nothing overdue: no toggle.
+        let none = TasksPageModel.make(tasks: [tasks[2]], unviewed: [], signedIn: true, checking: false, problem: nil, asOf: Self.now,
+                                       now: Self.now, offset: 0, calendar: Self.calendar)
+        #expect(none.overdueToggle.isEmpty)
+    }
 }

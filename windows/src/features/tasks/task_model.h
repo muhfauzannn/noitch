@@ -587,12 +587,18 @@ struct TasksPageModel {
         bool operator==(const Dot&) const = default;
     };
 
-    // A short message in the middle, with a button that opens settings when `button` is set.
+    // A short message in the middle, with a button when `button` is set: it opens settings, or shows
+    // overdue work when `buttonShowsOverdue`.
     bool isMessage = true;
     std::string title;
     std::string detail;
     std::string button;
+    bool buttonShowsOverdue = false;
     bool allClear = false;
+    // "Show 2 overdue" or "Hide overdue" beside the list, or empty when nothing is overdue.
+    std::string overdueToggle;
+    // How many tasks the list scrolls through.
+    int listCount = 0;
 
     // The list.
     std::string heroLabel;
@@ -610,6 +616,7 @@ struct TasksPageModel {
 
     bool operator==(const TasksPageModel& o) const {
         if (isMessage != o.isMessage || title != o.title || detail != o.detail || button != o.button || allClear != o.allClear) return false;
+        if (buttonShowsOverdue != o.buttonShowsOverdue || overdueToggle != o.overdueToggle || listCount != o.listCount) return false;
         if (heroLabel != o.heroLabel || heroTitle != o.heroTitle || heroCourse != o.heroCourse || heroDue != o.heroDue) return false;
         if (heroSeverity != o.heroSeverity || heroUrl != o.heroUrl || dots != o.dots || rows != o.rows || more != o.more || days != o.days) return false;
         if (countdown.size() != o.countdown.size()) return false;
@@ -619,8 +626,9 @@ struct TasksPageModel {
         return true;
     }
 
-    static TasksPageModel Make(const std::vector<MoodleTask>& tasks, const std::set<int64_t>& unviewed, bool signedIn, bool checking,
-                               MoodleProblem problem, std::optional<double> asOf, double now, int offset, double utcOffset) {
+    // Overdue work is hidden until `showOverdue`: the page is about what can still be done.
+    static TasksPageModel Make(const std::vector<MoodleTask>& allTasks, const std::set<int64_t>& unviewed, bool signedIn, bool checking,
+                               MoodleProblem problem, std::optional<double> asOf, double now, int offset, double utcOffset, bool showOverdue = false) {
         TasksPageModel model;
         const auto clock = [utcOffset](double time) {
             const TaskRule::LocalTime local = TaskRule::Local(time, utcOffset);
@@ -648,12 +656,24 @@ struct TasksPageModel {
         }
         const int weekday = TaskRule::Local(now, utcOffset).weekday;
         for (int day = 0; day < TaskRule::kRunwayDays; ++day) model.days.emplace_back(1, TaskRule::kWeekdays[(weekday + day) % 7][0]);
+        std::vector<MoodleTask> tasks;
+        int overdue = 0;
+        for (const MoodleTask& task : allTasks) {
+            if (task.due < now) ++overdue;
+            if (showOverdue || task.due >= now) tasks.push_back(task);
+        }
+        const std::string reveal = "Show " + std::to_string(overdue) + " overdue";
         if (tasks.empty()) {
             model.title = "All clear";
-            model.detail = "Nothing to do" + std::string(problem == MoodleProblem::None ? "" : " as of " + clock(*asOf)) + " \xC2\xB7 checked " + clock(*asOf);
+            model.detail = std::string(overdue > 0 ? "Nothing else due" : "Nothing to do") + (problem == MoodleProblem::None ? "" : " as of " + clock(*asOf)) +
+                           " \xC2\xB7 checked " + clock(*asOf);
             model.allClear = true;
+            if (overdue > 0) model.button = reveal;
+            model.buttonShowsOverdue = true;
             return model;
         }
+        model.overdueToggle = overdue == 0 ? "" : showOverdue ? "Hide overdue" : reveal;
+        model.listCount = static_cast<int>(tasks.size());
         model.isMessage = false;
         const MoodleTask& first = tasks.front();
         model.heroLabel = std::string(first.due < now ? "Overdue" : "Next due") + (problem != MoodleProblem::None ? " \xC2\xB7 as of " + clock(*asOf) : "");

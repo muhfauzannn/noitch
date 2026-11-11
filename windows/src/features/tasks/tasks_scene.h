@@ -40,6 +40,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> dayFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> rowFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> dueFormat_;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> toggleFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> iconFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> messageFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> detailFormat_;

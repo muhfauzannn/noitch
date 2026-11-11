@@ -31,6 +31,7 @@ final class TasksScene {
     private let hoverPlate = CALayer()
     private let rows: [(icon: CALayer, glyph: CAShapeLayer, title: CATextLayer, due: CATextLayer)]
     private let more = TasksScene.text(size: 10, weight: .regular, opacity: 0.4)
+    private let overdueToggle = TasksScene.text(size: 10, weight: .semibold, alignment: .right)
 
     private let message = CALayer()
     private let check = CAShapeLayer()
@@ -105,6 +106,7 @@ final class TasksScene {
             place(row.due, layout.rowDue(index), in: list)
         }
         place(more, layout.more, in: list)
+        place(overdueToggle, layout.overdueToggle, in: list)
 
         check.frame = layout.check
         let circle = CGMutablePath()
@@ -182,6 +184,10 @@ final class TasksScene {
                 row.due.foregroundColor = (data.severity == .calm ? NSColor.white.withAlphaComponent(0.6) : Self.color(data.severity)).cgColor
             }
             more.string = moreText
+            overdueToggle.string = model.overdueToggle
+            // Red while there is overdue work to reveal; quiet once it shows.
+            let revealing = model.overdueToggle.hasPrefix("Show")
+            overdueToggle.foregroundColor = (revealing ? Self.critical : NSColor.white.withAlphaComponent(0.5)).cgColor
         }
         CATransaction.commit()
     }

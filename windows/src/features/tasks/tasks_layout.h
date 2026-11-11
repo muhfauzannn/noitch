@@ -65,9 +65,15 @@ public:
         const HomeRect row = RowLogical(index);
         return Px({row.Right() - 104, row.y + row.height / 2 - 7, 98, 14});
     }
+    static constexpr float kOverdueWidth = 104;
     HomeRect More() const {
         const HomeRect last = RowLogical(TaskRule::kVisibleRows - 1);
-        return Px({ColumnX() + 6, last.Bottom() + 2, ColumnWidth() - 12, 12});
+        return Px({ColumnX() + 6, last.Bottom() + 2, ColumnWidth() - 12 - kOverdueWidth, 12});
+    }
+    // "Show 2 overdue", at the right end of the line under the list.
+    HomeRect OverdueToggle() const {
+        const HomeRect last = RowLogical(TaskRule::kVisibleRows - 1);
+        return Px({ColumnX() + ColumnWidth() - 6 - kOverdueWidth, last.Bottom() + 2, kOverdueWidth, 12});
     }
 
     HomeRect Message() const { return Px({kSidePadding, BodyTop() + 30, width_ - kSidePadding * 2, 20}); }

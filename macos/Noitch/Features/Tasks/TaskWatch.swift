@@ -244,7 +244,8 @@ final class TaskWatch {
             MoodleTask(id: 4, title: "Tugas Individu 2", course: "MPPI", module: .assignment, due: now + 6 * 86400, url: "https://scele.cs.ui.ac.id"),
             MoodleTask(id: 5, title: "Lab 7: Concurrency", course: "SisOp", module: .assignment, due: now + 9.1 * 86400, url: "https://scele.cs.ui.ac.id"),
             MoodleTask(id: 6, title: "Kuis 5", course: "SDA", module: .quiz, due: now + 9.3 * 86400, url: "https://scele.cs.ui.ac.id"),
-        ], seen: [1, 2, 3, 4, 5, 6], unviewed: [3])
+            MoodleTask(id: 8, title: "Tugas 2: Wireframe", course: "PBP", module: .assignment, due: now - 2 * 86400, url: "https://scele.cs.ui.ac.id"),
+        ], seen: [1, 2, 3, 4, 5, 6, 8], unviewed: [3])
         // Far in the future, so opening never asks the network: there is no key.
         lastCheck = now + 1e9
         onChange?()

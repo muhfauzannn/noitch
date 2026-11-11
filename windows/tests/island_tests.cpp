@@ -926,6 +926,20 @@ void TestTasksPageSaysWhatToDo() {
     assert(model.rows[0].id == 3 && model.more == "3\xE2\x80\x93" "5 of 5" && model.heroLabel == "Next due \xC2\xB7 as of 20:50");
 }
 
+void TestOverdueWorkStaysHiddenUntilAskedFor() {
+    const std::vector<MoodleTask> tasks = {SampleTask(1, kTaskNow - 2 * 86400), SampleTask(2, kTaskNow - 3600), SampleTask(3, kTaskNow + 2 * 86400)};
+    TasksPageModel model = TasksPageModel::Make(tasks, {}, true, false, MoodleProblem::None, kTaskNow, kTaskNow, 0, kJakarta);
+    assert(model.rows.size() == 1 && model.rows[0].id == 3 && model.heroLabel == "Next due");
+    assert(model.overdueToggle == "Show 2 overdue" && model.listCount == 1);
+    model = TasksPageModel::Make(tasks, {}, true, false, MoodleProblem::None, kTaskNow, kTaskNow, 0, kJakarta, true);
+    assert(model.rows.size() == 3 && model.rows[0].id == 1 && model.heroLabel == "Overdue" && model.overdueToggle == "Hide overdue");
+    model = TasksPageModel::Make({tasks[0], tasks[1]}, {}, true, false, MoodleProblem::None, kTaskNow, kTaskNow, 0, kJakarta);
+    assert(model.isMessage && model.allClear && model.button == "Show 2 overdue" && model.buttonShowsOverdue);
+    assert(model.detail == "Nothing else due \xC2\xB7 checked 21:00");
+    model = TasksPageModel::Make({tasks[2]}, {}, true, false, MoodleProblem::None, kTaskNow, kTaskNow, 0, kJakarta);
+    assert(model.overdueToggle.empty());
+}
+
 void TestTaskAlertShapesThePill() {
     const LiveLayout live(180, 32);
     float width = 0, height = 0;
@@ -1022,6 +1036,7 @@ int main() {
     TestRemindersFallOnceEach();
     TestTaskCacheRoundTrips();
     TestTasksPageSaysWhatToDo();
+    TestOverdueWorkStaysHiddenUntilAskedFor();
     TestTaskAlertShapesThePill();
     TestTasksPageFitsAndSitesNormalize();
     std::puts("island_tests: all passed");

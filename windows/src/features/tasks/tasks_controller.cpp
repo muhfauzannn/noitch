@@ -18,6 +18,7 @@ void TasksController::PageWillShow(Painter& painter, const TasksLayout& layout, 
     KillTimer(window_, kReleaseTimer);
     isShown_ = true;
     offset_ = 0;
+    showOverdue_ = false;
     scrolled_ = 0;
     hoveredRow_ = -1;
     newOnShow_ = watch_->Unviewed();
@@ -47,7 +48,7 @@ void TasksController::Render() {
     if (!isShown_ || !scene_.Exists()) return;
     const double now = TaskNow();
     model_ = TasksPageModel::Make(watch_->Tasks(), newOnShow_, watch_->Settings().IsSignedIn(), watch_->IsChecking(), watch_->Problem(), watch_->AsOf(), now,
-                                  offset_, LocalUtcOffset());
+                                  offset_, LocalUtcOffset(), showOverdue_);
     scene_.Paint(model_, hoveredRow_);
     // One shot at the next minute while shown: the countdown and due times are in minutes.
     const double delay = 60 - std::fmod(now, 60) + 0.2;
@@ -59,6 +60,7 @@ TasksController::Target TasksController::TargetAt(float x, float y) const {
     const TasksLayout& layout = scene_.Layout();
     if (model_.isMessage) return !model_.button.empty() && layout.MessageButton().Contains(x, y) ? Target::Message : Target::None;
     if (layout.OpenButton().Contains(x, y)) return Target::Open;
+    if (!model_.overdueToggle.empty() && layout.OverdueToggle().Contains(x, y)) return Target::Overdue;
     for (int i = 0; i < static_cast<int>(model_.rows.size()); ++i) {
         if (layout.Row(i).Contains(x, y)) return static_cast<Target>(static_cast<int>(Target::Row0) + i);
     }
@@ -79,7 +81,9 @@ void TasksController::PointerUp(float x, float y) {
     const Target pressed = pressed_;
     pressed_ = Target::None;
     if (pressed == Target::None || TargetAt(x, y) != pressed) return;
-    if (pressed == Target::Message) {
+    if (pressed == Target::Overdue || (pressed == Target::Message && model_.buttonShowsOverdue)) {
+        ToggleOverdue();
+    } else if (pressed == Target::Message) {
         if (onOpenSettings) onOpenSettings(onOpenSettingsContext);
     } else if (pressed == Target::Open) {
         Open(model_.heroUrl);
@@ -95,10 +99,16 @@ void TasksController::ScrolledVertically(double delta) {
     const int step = static_cast<int>(scrolled_ / TasksLayout::kRowHeight);
     if (step == 0) return;
     scrolled_ -= step * TasksLayout::kRowHeight;
-    const int count = static_cast<int>(watch_->Tasks().size());
-    const int next = std::clamp(offset_ - step, 0, std::max(count - TaskRule::kVisibleRows, 0));
+    const int next = std::clamp(offset_ - step, 0, std::max(model_.listCount - TaskRule::kVisibleRows, 0));
     if (next == offset_) return;
     offset_ = next;
+    Render();
+}
+
+void TasksController::ToggleOverdue() {
+    showOverdue_ = !showOverdue_;
+    // Overdue work sorts first, so the list starts over from the top.
+    offset_ = 0;
     Render();
 }
 

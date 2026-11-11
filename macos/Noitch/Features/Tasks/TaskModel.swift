@@ -265,17 +265,29 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
     }
 
     enum Content: Equatable, Sendable {
-        /// A short message in the middle, with a button that opens settings when `button` is set.
+        /// A short message in the middle, with a button when `button` is set; `buttonAction` says what
+        /// it does.
         case message(title: String, detail: String, button: String?, allClear: Bool)
         case list(hero: Hero, dots: [Dot], rows: [Row], more: String)
+    }
+
+    enum ButtonAction: Equatable, Sendable {
+        case openSettings
+        case showOverdue
     }
 
     var content: Content
     /// The runway's day letters, from today.
     var days: [String] = []
+    var buttonAction = ButtonAction.openSettings
+    /// "Show 2 overdue" or "Hide overdue" beside the list, or empty when nothing is overdue.
+    var overdueToggle = ""
+    /// How many tasks the list scrolls through.
+    var listCount = 0
 
-    static func make(tasks: [MoodleTask], unviewed: Set<Int>, signedIn: Bool, checking: Bool, problem: MoodleProblem?,
-                     asOf: Double?, now: Double, offset: Int, calendar: Calendar) -> TasksPageModel {
+    /// Overdue work is hidden until `showOverdue`: the page is about what can still be done.
+    static func make(tasks allTasks: [MoodleTask], unviewed: Set<Int>, signedIn: Bool, checking: Bool, problem: MoodleProblem?,
+                     asOf: Double?, now: Double, offset: Int, calendar: Calendar, showOverdue: Bool = false) -> TasksPageModel {
         func clock(_ time: Double) -> String {
             let parts = calendar.dateComponents([.hour, .minute], from: Date(timeIntervalSince1970: time))
             return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
@@ -292,9 +304,15 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
         }
         let weekday = calendar.component(.weekday, from: Date(timeIntervalSince1970: now))
         let days = (0..<TaskRule.runwayDays).map { String(TaskRule.weekdays[(weekday - 1 + $0) % 7].prefix(1)) }
+        let overdue = allTasks.filter { $0.due < now }.count
+        let tasks = showOverdue ? allTasks : allTasks.filter { $0.due >= now }
+        let reveal = "Show \(overdue) overdue"
         guard let first = tasks.first else {
-            let ahead = "Nothing to do" + (problem == nil ? "" : " as of \(clock(asOf))")
-            return TasksPageModel(content: .message(title: "All clear", detail: "\(ahead) · checked \(clock(asOf))", button: nil, allClear: true), days: days)
+            let ahead = (overdue > 0 ? "Nothing else due" : "Nothing to do") + (problem == nil ? "" : " as of \(clock(asOf))")
+            var model = TasksPageModel(content: .message(title: "All clear", detail: "\(ahead) · checked \(clock(asOf))",
+                                                         button: overdue > 0 ? reveal : nil, allClear: true), days: days)
+            model.buttonAction = .showOverdue
+            return model
         }
         let stale = problem != nil ? " · as of \(clock(asOf))" : ""
         let hero = Hero(
@@ -325,6 +343,9 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
         } else {
             more = "\(start + 1)–\(start + rows.count) of \(tasks.count)"
         }
-        return TasksPageModel(content: .list(hero: hero, dots: dots, rows: Array(rows), more: more), days: days)
+        var model = TasksPageModel(content: .list(hero: hero, dots: dots, rows: Array(rows), more: more), days: days)
+        model.overdueToggle = overdue == 0 ? "" : showOverdue ? "Hide overdue" : reveal
+        model.listCount = tasks.count
+        return model
     }
 }

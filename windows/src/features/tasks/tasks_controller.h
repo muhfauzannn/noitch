@@ -45,9 +45,10 @@ public:
     void* onOpenSettingsContext = nullptr;
 
 private:
-    enum class Target { None, Row0, Row1, Row2, Open, Message };
+    enum class Target { None, Row0, Row1, Row2, Open, Message, Overdue };
 
     void Render();
+    void ToggleOverdue();
     Target TargetAt(float x, float y) const;
     void Open(const std::string& url) const;
 
@@ -58,6 +59,8 @@ private:
     TasksPageModel model_;
     bool isShown_ = false;
     int offset_ = 0;
+    // Overdue work shows only after the button asks for it, and hides again on the next showing.
+    bool showOverdue_ = false;
     double scrolled_ = 0;
     int hoveredRow_ = -1;
     Target pressed_ = Target::None;

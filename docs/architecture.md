@@ -395,7 +395,12 @@ The third page tracks what is still due on a Moodle site: by default Scele, the 
   busy day, ringed in blue while new), and under it three rows: icon, title and course, and when it is
   due ("Tomorrow 23:55", "Fri 10:00", "Overdue 2d"). Scroll up and down to move through the rest.
   Hovering a row lights its dot; clicking a row or the button opens the task in the browser, only for
-  links on the signed-in site. Signed out, the page offers "Sign in…", which opens settings. With
+  links on the signed-in site.
+- **Overdue.** Work past its deadline (kept up to a week) is hidden by default: the page is about
+  what can still be done. "Show 2 overdue", in red at the right end of the line under the list, adds
+  it to the top of the list and the countdown ("Overdue 2d"); "Hide overdue" takes it away again, and
+  every new showing of the page starts hidden. With only overdue work left, the page says "All clear ·
+  Nothing else due" with the same button. Signed out, the page offers "Sign in…", which opens settings. With
   nothing due it says "All clear", and on macOS the tick draws itself.
 - **Closed island.** When a check finds a task that wasn't there before, the pill takes the music's
   wing and strip shape (the live spring) for 8 s: the module's icon in the left wing, "+1" in the right
@@ -516,7 +521,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
 | Tasks layout | Numbers in `TasksLayout` and `TaskAlertLayout` (macOS) and `tasks_layout.h` (Windows), which must match; 14-day runway, three rows |
-| Task rules | `TaskRule` (macOS) and `task_model.h` (Windows): amber within 3 days, red within 1; overdue kept a week; slip 8 s; reminders 1 day and 1 hour before; checks every 30 min at most |
+| Task rules | `TaskRule` (macOS) and `task_model.h` (Windows): amber within 3 days, red within 1; overdue kept a week and hidden until asked for; slip 8 s; reminders 1 day and 1 hour before; checks every 30 min at most |
 | Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause; a 20 pt lyric strip under the notch, 12 pt text. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |

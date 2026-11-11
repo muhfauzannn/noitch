@@ -70,7 +70,14 @@ struct TasksLayout: Equatable {
 
     var more: CGRect {
         let last = row(Self.visibleRows - 1)
-        return CGRect(x: columnX + 6, y: last.maxY + 2, width: columnWidth - 12, height: 12)
+        return CGRect(x: columnX + 6, y: last.maxY + 2, width: columnWidth - 12 - Self.overdueWidth, height: 12)
+    }
+
+    static let overdueWidth: CGFloat = 104
+    /// "Show 2 overdue", at the right end of the line under the list.
+    var overdueToggle: CGRect {
+        let last = row(Self.visibleRows - 1)
+        return CGRect(x: columnX + columnWidth - 6 - Self.overdueWidth, y: last.maxY + 2, width: Self.overdueWidth, height: 12)
     }
 
     /// The signed-out, empty and failed states use the whole body, centred.

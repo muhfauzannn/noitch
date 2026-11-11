@@ -32,6 +32,7 @@ HRESULT TasksScene::Create(Compositor& compositor, Painter& painter, const Tasks
     if (FAILED(hr = painter.MakeFormat(L"Segoe UI", 8.5f * scale, DWRITE_FONT_WEIGHT_MEDIUM, center, &dayFormat_))) return hr;
     if (FAILED(hr = painter.MakeFormat(L"Segoe UI", 11.5f * scale, DWRITE_FONT_WEIGHT_MEDIUM, leading, &rowFormat_))) return hr;
     if (FAILED(hr = painter.MakeFormat(L"Segoe UI", 10.5f * scale, DWRITE_FONT_WEIGHT_NORMAL, trailing, &dueFormat_))) return hr;
+    if (FAILED(hr = painter.MakeFormat(L"Segoe UI", 10 * scale, DWRITE_FONT_WEIGHT_SEMI_BOLD, trailing, &toggleFormat_))) return hr;
     if (FAILED(hr = painter.MakeFormat(L"Segoe MDL2 Assets", 10 * scale, DWRITE_FONT_WEIGHT_NORMAL, center, &iconFormat_))) return hr;
     if (FAILED(hr = painter.MakeFormat(L"Segoe UI", 17 * scale, DWRITE_FONT_WEIGHT_SEMI_BOLD, center, &messageFormat_))) return hr;
     if (FAILED(hr = painter.MakeFormat(L"Segoe UI", 11.5f * scale, DWRITE_FONT_WEIGHT_NORMAL, center, &detailFormat_))) return hr;
@@ -43,7 +44,7 @@ void TasksScene::Release() {
     if (compositor_ && surface_) compositor_->RemoveLayer(PageLayer(IslandPage::Tasks));
     surface_.Reset();
     for (auto* format : {&labelFormat_, &countdownFormat_, &titleFormat_, &chipFormat_, &smallFormat_, &buttonFormat_, &dayFormat_, &rowFormat_,
-                         &dueFormat_, &iconFormat_, &messageFormat_, &detailFormat_, &checkFormat_}) {
+                         &dueFormat_, &toggleFormat_, &iconFormat_, &messageFormat_, &detailFormat_, &checkFormat_}) {
         format->Reset();
     }
     hasShown_ = false;
@@ -135,6 +136,9 @@ HRESULT TasksScene::Paint(const TasksPageModel& model, int hoveredRow) {
             painter_->Text(row.due, dueFormat_.Get(), layout_.RowDue(index), row.severity == Severity::Calm ? White(0.6f) : task_colors::For(row.severity));
         }
         painter_->Text(model.more, smallFormat_.Get(), layout_.More(), White(0.4f));
+        // Red while there is overdue work to reveal; quiet once it shows.
+        const bool revealing = model.overdueToggle.rfind("Show", 0) == 0;
+        painter_->Text(model.overdueToggle, toggleFormat_.Get(), layout_.OverdueToggle(), revealing ? task_colors::kCritical : White(0.5f));
     }
     if (FAILED(hr = painter_->End(surface_.Get()))) return hr;
     return compositor_->Commit();
