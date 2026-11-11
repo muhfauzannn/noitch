@@ -123,13 +123,21 @@ final class IslandView: NSView {
 
     /// Shows the closed island's music layers, hung from the top center of the pill below any page.
     func setLive(_ layer: CALayer) {
-        let full = contentSize == .zero ? IslandGeometry.expandedSize : contentSize
+        live = layer
         withoutImplicitAnimations {
             layer.anchorPoint = CGPoint(x: 0.5, y: 1)
-            layer.position = CGPoint(x: full.width / 2, y: full.height)
             layer.zPosition = -1
             clip.addSublayer(layer)
+            placeLive()
         }
+    }
+
+    private weak var live: CALayer?
+
+    /// Top center of the content area, which moves when the open width changes.
+    private func placeLive() {
+        let full = contentSize == .zero ? IslandGeometry.expandedSize : contentSize
+        live?.position = CGPoint(x: full.width / 2, y: full.height)
     }
 
     /// Shows a feature's layers on the pill. `size` is the area they cover when expanded.
@@ -140,6 +148,7 @@ final class IslandView: NSView {
         layer.anchorPoint = CGPoint(x: 0.5, y: 1)
         layer.position = CGPoint(x: size.width / 2, y: size.height)
         clip.addSublayer(layer)
+        withoutImplicitAnimations { placeLive() }
         pinPill()
     }
 

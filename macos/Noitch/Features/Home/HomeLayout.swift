@@ -36,7 +36,41 @@ struct HomeLayout: Equatable {
     private var bodyTop: CGFloat { headerHeight + Self.headerGap }
     private var bodyHeight: CGFloat { size.height - bodyTop - Self.bottomPadding }
     private var columnX: CGFloat { Self.sidePadding + bodyHeight + Self.columnGap }
-    private var columnWidth: CGFloat { size.width - columnX - Self.sidePadding }
+    /// The music column ends before the calendar when there is one.
+    private var columnWidth: CGFloat {
+        (showsCalendar ? calendarPanel.minX - Self.calendarGap * 2 : size.width - Self.sidePadding) - columnX
+    }
+
+    // MARK: Calendar
+
+    static let calendarWidth: CGFloat = 176
+    /// Each side of the divider between music and calendar.
+    static let calendarGap: CGFloat = 14
+    static let calendarRowHeight: CGFloat = 18
+
+    /// Only the wide island has room for it.
+    var showsCalendar: Bool { size.width >= IslandGeometry.wideExpandedSize.width }
+
+    var calendarPanel: CGRect {
+        CGRect(x: size.width - Self.sidePadding - Self.calendarWidth, y: bodyTop - 2, width: Self.calendarWidth, height: size.height - bodyTop + 2 - Self.bottomPadding)
+    }
+    var calendarDivider: CGRect { CGRect(x: calendarPanel.minX - Self.calendarGap, y: bodyTop, width: 1, height: calendarPanel.height - 2) }
+
+    /// A weekday letter over its date, one of seven across the panel.
+    func calendarDay(_ index: Int) -> CGRect {
+        let width = Self.calendarWidth / 7
+        return CGRect(x: calendarPanel.minX + CGFloat(index) * width, y: calendarPanel.minY, width: width, height: 34)
+    }
+    func calendarDayIndex(at point: CGPoint) -> Int? {
+        (0..<7).first { calendarDay($0).contains(point) }
+    }
+    var calendarHeading: CGRect { CGRect(x: calendarPanel.minX, y: calendarPanel.minY + 38, width: Self.calendarWidth, height: 14) }
+    func calendarRow(_ index: Int) -> CGRect {
+        CGRect(x: calendarPanel.minX, y: calendarHeading.maxY + 3 + CGFloat(index) * Self.calendarRowHeight, width: Self.calendarWidth, height: Self.calendarRowHeight)
+    }
+    /// "+2 more", right-aligned on the heading's line.
+    var calendarMore: CGRect { calendarHeading }
+    var calendarMessage: CGRect { calendarRow(0) }
 
     var artwork: CGRect { CGRect(x: Self.sidePadding, y: bodyTop, width: bodyHeight, height: bodyHeight) }
 

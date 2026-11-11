@@ -36,7 +36,7 @@ final class HomeScene {
     private var icons: [HomeControl: CAShapeLayer] = [:]
     /// Artwork, text, slider, transport: revealed one after another, so the eye reads top-left to
     /// bottom instead of everything popping in at once.
-    private let groups = (0..<4).map { _ in CALayer() }
+    private var groups = (0..<4).map { _ in CALayer() }
     private var shownModel: HomeModel?
     private var tint = NSColor.clear
 
@@ -293,6 +293,12 @@ final class HomeScene {
     }
 
     /// Staggers the groups in from `begin`. The pager owns the whole page's fade and slide.
+    /// Adds a panel, such as the calendar, that reveals after Home's own groups.
+    func addGroup(_ layer: CALayer) {
+        root.addSublayer(layer)
+        groups.append(layer)
+    }
+
     func reveal(begin: CFTimeInterval) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)

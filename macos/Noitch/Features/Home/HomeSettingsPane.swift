@@ -6,6 +6,9 @@ enum HomeSettingsPane {
         form.section("Closed island", footer: "Needs the now playing helper to run while a music app or browser is open.") {
             form.toggle("Show what's playing", caption: "Artwork and level bars beside the notch.", \.home.showLive)
         }
+        form.section("Calendar", footer: "Read from the Calendar app on this Mac, only while Home is on screen. Nothing leaves your Mac.") {
+            form.toggle("Show calendar", caption: "This week and the day's events beside the music. Widens the island.", \.home.showCalendar)
+        }
         form.section("Lyrics", footer: "Lyrics come from lrclib.net, which receives the track, artist and album names.") {
             form.toggle("Show lyrics", \.home.showLyrics)
             form.toggle("Show the next line", caption: "A dimmer line under the one being sung.", \.home.showNextLyric, enabledBy: \.home.showLyrics)

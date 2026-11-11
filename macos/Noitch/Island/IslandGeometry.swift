@@ -13,7 +13,10 @@ struct IslandGeometry: Equatable {
         var menuBarHeight: CGFloat
     }
 
+    /// The open island. With Home's calendar on it is wider, on every page, so switching pages never
+    /// resizes the window.
     static let expandedSize = CGSize(width: 580, height: 180)
+    static let wideExpandedSize = CGSize(width: 720, height: 180)
     static let collapsedCornerRadius: CGFloat = 10
     static let expandedCornerRadius: CGFloat = 24
     /// The concave curve on each side, where the island meets the top of the screen.
@@ -40,11 +43,16 @@ struct IslandGeometry: Equatable {
     let display: Display
     /// Music is playing and the closed pill has wings for it, see `LiveLayout`.
     var isLive = false
+    /// Home shows its calendar, so the open island is wide.
+    var isWide = false
 
-    init(display: Display, isLive: Bool = false) {
+    init(display: Display, isLive: Bool = false, isWide: Bool = false) {
         self.display = display
         self.isLive = isLive
+        self.isWide = isWide
     }
+
+    var expandedSize: CGSize { isWide ? Self.wideExpandedSize : Self.expandedSize }
 
     /// The notch, or the virtual one: the closed pill without wings.
     var collapsedSize: CGSize {
@@ -57,7 +65,7 @@ struct IslandGeometry: Equatable {
     static let liveSpring = Spring(response: 0.42, bounce: 0.16)
 
     func pillSize(for state: IslandState) -> CGSize {
-        if state == .expanded { return Self.expandedSize }
+        if state == .expanded { return expandedSize }
         return isLive ? LiveLayout(collapsed: collapsedSize).size : collapsedSize
     }
 

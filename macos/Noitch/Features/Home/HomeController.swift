@@ -17,6 +17,8 @@ final class HomeController {
     private let monitor: NowPlayingMonitor
     private var source: NowPlayingSource { monitor.source }
     private lazy var lyricsSource = LyricsSource()
+    /// Made the first time Home is wide enough for it.
+    private var calendar: CalendarController?
 
     private var nowPlaying = NowPlaying()
     private var lyrics: Lyrics?
@@ -33,6 +35,8 @@ final class HomeController {
 
     private var hovered: HomeControl?
     private var pressed: HomeControl?
+    /// A press that began on the calendar, answered when it is released.
+    private var pendingCalendarClick = false
     /// While set, the slider shows this instead of the playback clock.
     private var scrubFraction: Double?
 
@@ -68,7 +72,16 @@ final class HomeController {
             self.scale = scale
             onSceneCreated?(scene.root)
             updateArtwork(force: true)
+            if layout.showsCalendar {
+                let panel = CalendarScene(layout: layout, scale: scale)
+                scene.addGroup(panel.root)
+                if calendar == nil { calendar = CalendarController() }
+                calendar?.attach(panel, layout: layout)
+            } else {
+                calendar?.release()
+            }
         }
+        if layout.showsCalendar { calendar?.pageWillShow() }
         isHolding = true
         monitor.setNeeded(true, by: .home)
         if isDemo { loadDemo() }
@@ -82,6 +95,7 @@ final class HomeController {
 
     func islandWillClose() {
         isOpen = false
+        calendar?.pageWillHide()
         tickTimer?.invalidate()
         tickTimer = nil
         hovered = nil
@@ -104,6 +118,7 @@ final class HomeController {
         skippingFrom = nil
         isHolding = false
         monitor.setNeeded(false, by: .home)
+        calendar?.release()
         lyricsSource.cancel()
         scene?.root.removeFromSuperlayer()
         scene = nil
@@ -221,6 +236,7 @@ final class HomeController {
 
     func pointerMoved(to point: CGPoint) {
         guard let layout, pressed == nil else { return }
+        calendar?.pointerMoved(to: point)
         let control = layout.control(at: point)
         guard control != hovered else { return }
         hovered = control
@@ -228,7 +244,11 @@ final class HomeController {
     }
 
     func pointerDown(at point: CGPoint) {
-        guard let layout, let control = layout.control(at: point) else { return }
+        guard let layout else { return }
+        guard let control = layout.control(at: point) else {
+            pendingCalendarClick = layout.showsCalendar && layout.calendarPanel.contains(point)
+            return
+        }
         pressed = control
         scene?.setHover(control, isPressed: true)
         if control == .slider, nowPlaying.hasTrack, skippingFrom == nil {
@@ -244,6 +264,11 @@ final class HomeController {
     }
 
     func pointerUp(at point: CGPoint) {
+        if pendingCalendarClick {
+            pendingCalendarClick = false
+            _ = calendar?.click(at: point)
+            return
+        }
         guard let layout, let control = pressed else { return }
         pressed = nil
         if control == .slider, let scrubFraction {

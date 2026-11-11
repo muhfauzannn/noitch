@@ -15,6 +15,12 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the calendar in Home and the 720 pt island (2026-11-11, same M5): 9.77 MB, 2.88 ms/min, 0.10
+wakeups/s, 5.10 ms per transition, all 23 hover checks passing; the binary grew from 981 KB to 1090
+KB. A first run failed the first two checks because the opening also built and read the calendar;
+the calendar's first read now waits 0.2 s, and the checks passed. Runs with the owner's hover delay
+of 0.3 s fail most opening checks by design; the hover check needs Hover delay set to None.
+
 With six thin graded bars replacing the wave (2026-11-11, same M5): 9.74 MB, 1.74 ms/min, 0.17
 wakeups/s; the binary is 981 KB.
 
