@@ -24,13 +24,13 @@ final class LyricsSource {
         task = Task {
             let key = Self.cacheKey(title: title, artist: artist)
             if let cached = Self.readCache(key) {
-                completion(cached.lyrics)
+                completion(LyricRomanizer.prepare(cached.lyrics))
                 return
             }
             let record = await Self.fetch(title: title, artist: artist, album: album, duration: duration)
             guard !Task.isCancelled else { return }
             if let record { Self.writeCache(record, key: key) }
-            completion(record?.lyrics ?? Lyrics())
+            completion(LyricRomanizer.prepare(record?.lyrics ?? Lyrics()))
         }
     }
 

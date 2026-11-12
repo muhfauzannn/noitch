@@ -139,6 +139,19 @@ The earlier foundation-only baseline was 8.7–9.0 MB, 0.9–1.8 ms/min, 0.10–
 The Windows memory budget is provisional, set to match Nusa's claimed 30 MB. Direct3D loads GPU driver
 code, so the real number is unknown. Tighten it after the first run.
 
+## Romanization verification (2026-11-12)
+
+Local Release measurements before this change: 13.02 MB footprint, 44.47 ms/min idle CPU,
+0.40 wakeups/s. After: 14.74 MB / 104.47 ms/min / 1.70 wakeups/s; repeats were
+13.58 MB / 70.55 ms/min / 1.43 wakeups/s and 13.78 MB / 53.38 ms/min / 1.33 wakeups/s.
+The memory and CPU budgets already failed before the change; these runs do **not** establish
+that the change meets the budgets, and no budget has been raised. They measure launch idle,
+not retained memory after using the new tokenizer. That latter measurement remains outstanding.
+The standalone hover check with the required zero hover delay passes all interaction checks,
+with 6.57 ms CPU per transition (budget 10 ms). The user's 0.3 s hover delay was restored.
+Windows measurements remain unavailable. The Latin readings use native OS services, with no
+bundled MeCab or ICU package and no additional idle timer.
+
 ## Measuring
 
 ```sh

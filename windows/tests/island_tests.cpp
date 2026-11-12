@@ -348,7 +348,8 @@ void TestStageShowsTheLineBeforeAndTheTwoAfter() {
     nowPlaying.title = "Song";
     nowPlaying.duration = 100;
     Lyrics lyrics;
-    lyrics.synced = {{1, "one"}, {2, ""}, {3, "three"}, {4, "four"}};
+    lyrics.synced = {{1, "one", "reading"}, {2, ""}, {3, "three"}, {4, "four"}};
+    assert(MakeHomeModel(nowPlaying, &lyrics, false, 1.5, HomeSettings(), false, true).stageRomanization == "reading");
     const HomeSettings settings;
     const std::string note = "\xE2\x99\xAA";
     const HomeModel middle = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, settings, false, true);

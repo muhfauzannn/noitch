@@ -3,6 +3,7 @@ import Foundation
 struct LyricLine: Equatable {
     var start: TimeInterval
     var text: String
+    var romanization: String = ""
 }
 
 /// Lyrics for one track. Pure values: parsing, matching and timing are all tested without a network.

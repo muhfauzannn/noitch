@@ -57,6 +57,7 @@ final class HomeScene {
     /// The stage sits in a group of its own: the reveal animates the group, the mode the stage.
     private let stageGroup = CALayer()
     private let stage = CALayer()
+    private let romanization = HomeScene.makeText(size: 12, weight: .medium, opacity: 0.7)
     /// Five lines take turns: four in slots -1 to 2, and one about to rise in from below.
     private let stageLayers = (0..<5).map { _ in HomeScene.makeText(size: 20, weight: .bold, opacity: 0) }
     private var stageOrder = [0, 1, 2, 3]
@@ -121,6 +122,10 @@ final class HomeScene {
         stage.frame = root.bounds
         stage.opacity = 0
         stageGroup.addSublayer(stage)
+        romanization.alignmentMode = .center
+        romanization.contentsScale = scale
+        romanization.frame = CGRect(x: layout.stageLine(0).minX, y: layout.stageLine(0).maxY - 6, width: layout.stageLine(0).width, height: 18)
+        stage.addSublayer(romanization)
         let line = layout.stageLine(0)
         for layer in stageLayers {
             layer.bounds = CGRect(x: 0, y: 0, width: line.width, height: HomeLayout.stageLineHeight)
@@ -276,8 +281,10 @@ final class HomeScene {
     /// middle, the one before drifts up and away, and the next rises in from below. Only position,
     /// scale and opacity move. Anything else, such as a seek, crossfades.
     private func showStage(_ model: HomeModel, previous: HomeModel?, now: CFTimeInterval) {
+        let readingChanged = (romanization.string as? String ?? "") != model.stageRomanization
+        romanization.string = model.stageRomanization
         let shown = stageOrder.map { stageLayers[$0].string as? String ?? "" }
-        guard shown != model.stageLines || stageIsStatus != model.stageIsStatus else { return }
+        guard shown != model.stageLines || stageIsStatus != model.stageIsStatus || readingChanged else { return }
         stageIsStatus = model.stageIsStatus
         let steppedForward = isOnStage && !Motion.reduceMotion && previous != nil && !model.stageIsStatus
             && model.lyricIndex != nil && (previous?.lyricIndex ?? -1) + 1 == model.lyricIndex && shown[2] == model.stageLines[1]
@@ -306,7 +313,7 @@ final class HomeScene {
 
     private func stageTarget(_ slot: Int) -> (position: CGPoint, scale: CGFloat, opacity: Float) {
         let line = layout.stageLine(slot)
-        let position = CGPoint(x: line.midX, y: line.midY)
+        let position = CGPoint(x: line.midX, y: line.midY - (slot == 0 && !(romanization.string as? String ?? "").isEmpty ? 7 : 0))
         if slot == 0 { return stageIsStatus ? (position, 0.8, 0.55) : (position, 1, 1) }
         var opacity = Self.stageOpacity[slot] ?? 0
         if slot == stageHover, opacity > 0 { opacity = Self.stageHoverOpacity }

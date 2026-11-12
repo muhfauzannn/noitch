@@ -27,6 +27,7 @@ struct HomeModel: Equatable {
     /// The stage's lines: the one before, the one being sung, and the two after. An empty line shows
     /// as a note, so every slot reads as part of the song.
     var stageLines = ["", "", "", ""]
+    var stageRomanization = ""
     var stageIsStatus = false
 
     init() {}
@@ -60,6 +61,7 @@ struct HomeModel: Equatable {
         if let lyrics, !lyrics.synced.isEmpty {
             let index = lyrics.lineIndex(at: position + settings.lyricsOffset)
             lyricIndex = index
+            stageRomanization = index.map { lyrics.synced[$0].romanization } ?? ""
             // Before the first line, and in the gaps a line leaves empty, a note holds the place.
             let current = index.map { lyrics.synced[$0].text } ?? ""
             lyric = current.isEmpty ? "♪" : current

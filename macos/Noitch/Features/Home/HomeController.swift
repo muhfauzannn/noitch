@@ -414,6 +414,13 @@ final class HomeController {
     private func loadDemo() {
         guard lyrics == nil else { return }
         lyrics = Lyrics(synced: (0..<60).map { LyricLine(start: Double($0) * 4, text: "Sample lyric line number \($0)") })
+        if ProcessInfo.processInfo.arguments.contains("--demo-romanization") {
+            let lines = ["君の名前を教えて", "世界", "また会える日まで", "Hello 世界"]
+            lyrics = LyricRomanizer.prepare(Lyrics(synced: (0..<60).map {
+                LyricLine(start: Double($0) * 4, text: lines[$0 % lines.count])
+            }))
+            prefersStage = true
+        }
     }
     #else
     private func loadDemo() {}

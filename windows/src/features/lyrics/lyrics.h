@@ -17,6 +17,7 @@ namespace noitch {
 struct LyricLine {
     double start = 0;
     std::string text;
+    std::string romanization;
 };
 
 struct Lyrics {

@@ -32,6 +32,7 @@ add_executable(Noitch WIN32
     src/features/usage/usage_scene.cpp
     src/features/usage/usage_source.cpp
     src/features/lyrics/lyrics_source.cpp
+    src/features/lyrics/lyric_romanizer.cpp
     src/features/now_playing/media_session_source.cpp
     src/features/settings/settings_store.cpp
     src/features/settings/settings_window.cpp
@@ -44,7 +45,7 @@ add_executable(Noitch WIN32
 target_include_directories(Noitch PRIVATE src)
 target_compile_definitions(Noitch PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00 _HAS_EXCEPTIONS=0)
 target_link_libraries(Noitch PRIVATE
-    d3d11 dcomp shcore user32 gdi32 uuid advapi32 ole32 shell32
+    oleaut32 d3d11 dcomp shcore user32 gdi32 uuid advapi32 ole32 shell32
     d2d1 dwrite windowscodecs winhttp runtimeobject delayimp comctl32
 )
 

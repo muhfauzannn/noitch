@@ -213,6 +213,15 @@ Home to the lyrics; clicking it again brings Home back. Numbers are in `HomeLayo
   the one being sung (20 pt bold, a little above the middle), and the two after (55% and 26%). Lines
   other than the sung one are drawn at 70% of its size. Empty lines and the intro show "♪". Without
   synced lyrics the middle shows the same status as Home, smaller and dimmer.
+- **Romanization.** A non-Latin sung line has a smaller Latin reading below its original. The
+  following slots sit 10 pt lower to leave room. Readings are prepared once per lyric lookup,
+  reused for repeated lines, and released with the lyrics. Japanese is detected from kana anywhere
+  in the synced track, including for kanji-only lines; entirely kanji tracks cannot be reliably
+  distinguished from Chinese. macOS uses the public Core Foundation tokenizer and Foundation
+  transforms. Windows uses system ICU and the in-process Japanese IME; Japanese kanji readings
+  are omitted if that optional IME is absent or cannot supply a reading. No network service, bundled
+  dictionary, helper, new thread or third-party package is added. Automatic readings can differ
+  from an artist's pronunciation.
 - **Background.** With "Glow behind the page" on, one soft wash of the artwork's average colour
   rises from the bottom edge: none at the top (where the pill meets the flares), 10% at 40% of the
   height, 32% at the bottom. A single gradient, on both platforms. With the setting off the stage is
@@ -574,7 +583,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Pin | A pin in the header left of settings, and the pin shortcut. Pinned, the island stays open when the pointer leaves; pinning a closed island opens it. Letting go closes it unless the pointer is over it. The pin shows as a white disc. Not kept across launches. See [Pinning](#pinning) |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
-| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; a wash of the artwork's colour rising from the bottom. See [Lyrics stage](#lyrics-stage) |
+| Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines with a smaller Latin reading beneath the sung non-Latin line, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; a wash of the artwork's colour rising from the bottom. See [Lyrics stage](#lyrics-stage) |
 | Release after closing | 10 s |
 
 The Windows spring is computed from the same parameters. For the collapse spring its stiffness

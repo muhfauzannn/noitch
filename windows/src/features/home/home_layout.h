@@ -68,7 +68,7 @@ public:
         const float offset = slot == 0 ? 0 : (slot > 0 ? 1.0f : -1.0f) * (27 + static_cast<float>(std::abs(slot) - 1) * 23);
         const float height = kStageLineHeight * (slot == 0 ? 1 : kStageScale);
         const float x = kSidePadding + kStageMargin;
-        return Px({x, StageCenterY() + offset - height / 2, width_ - x * 2, height});
+        return Px({x, StageCenterY() + offset + (slot > 0 ? 10 : 0) - height / 2, width_ - x * 2, height});
     }
 
     int StageSlotAt(float x, float y) const {

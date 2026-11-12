@@ -53,6 +53,7 @@ struct HomeModel {
     // The stage's lines: the one before, the one being sung, and the two after. An empty line shows
     // as a note, so every slot reads as part of the song.
     std::array<std::string, 4> stageLines;
+    std::string stageRomanization;
     bool stageIsStatus = false;
 };
 
@@ -97,6 +98,7 @@ inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyric
     if (lyrics && !lyrics->synced.empty()) {
         const int index = lyrics->LineIndex(position + settings.lyricsOffset);
         model.lyricIndex = index;
+        if (index >= 0) model.stageRomanization = lyrics->synced[static_cast<size_t>(index)].romanization;
         // Before the first line, and in the gaps a line leaves empty, a note holds the place.
         const std::string current = index >= 0 ? lyrics->synced[static_cast<size_t>(index)].text : "";
         model.lyric = current.empty() ? "\xE2\x99\xAA" : current;

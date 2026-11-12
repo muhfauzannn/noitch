@@ -33,6 +33,8 @@ window. `--demo-tasks` fills the tasks page with sample tasks, with no account o
 announces a new one four seconds after launch, to see the alert; add `-openOn tasks` to open on it.
 With `--demo-all-clear` only an overdue sample is left, for the empty state. With `--demo-media` as
 well nothing is unseen, so the island opens on Home and the calendar shows the samples' deadlines.
+Add `--demo-romanization` to `--demo-media --open` to show a Japanese sample directly on the
+lyrics stage, including a kanji-only line and mixed Latin text, without any network lookup.
 The demo track has a coloured cover, so the artwork tint shows, and the calendar shows sample events
 without asking for access.
 
@@ -102,7 +104,7 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 64 unit tests | Passing |
+| Builds; 109 unit tests | Passing locally, including romanization tests |
 | Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
 | Calendar in Home: three-day strip with arrows, deadline rings, rows, narrower music column | Checked by a window screenshot with `--demo-tasks --demo-media --open` (sample events and tasks, no EventKit); the arrows by click, a deadline row, the access prompt, real calendars, change notifications and the timers **not checked on screen** |
 | Pin in the header, General's shortcut field, Usage's marks, calendar dates (type with an underline) | Checked by window screenshots (`--demo-media --open --settings`); pinning by click or shortcut, recording a shortcut, the days' push, the underline's spring and the lyric fix during opening **not checked on screen** |
@@ -114,7 +116,7 @@ Keep this honest and up to date.
 | Usage page ring design | Checked by an offscreen render with sample numbers |
 | Claude limits from the usage endpoint and Keychain | **Not run**: needs the Keychain prompt answered in the real app |
 | Tab switch, swipe, page animation, usage page layout | **Not checked on screen** |
-| Budgets at rest | Passing |
+| Budgets at rest | Latest romanization runs exceed budgets, including the pre-change baseline; see performance.md |
 | Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Passing on a notched MacBook, on the clean Release build |
 | Pill and flare shape, collapsed and expanded | Checked by screenshot |
 | Home layout before the redesign, header buttons, opening Settings by click | Checked with `--demo-media` and real clicks |
@@ -122,6 +124,7 @@ Keep this honest and up to date.
 | Content clipped to the pill while opening | **Not checked on screen** |
 | Adapter stream, play/pause and seek by real clicks | Passing with a browser player on macOS 26.6 |
 | Adapter stops after closing, and on quit | Passing |
+| Lyrics stage romanization | Japanese sample checked with a window-only screenshot; standalone hover checks pass with 6.57 ms/transition; kanji reading, kanji-only lines with track context, Latin passthrough, Chinese, Korean and Cyrillic covered by tests. Real playback and retained memory after tokenizer use remain unverified |
 | Lyrics lookup from LRCLIB | Passing for one known track, outside a real playback session |
 | Artwork, next, previous, shuffle, repeat on a real player | **Not tested**; the player used sent no artwork |
 | Spotify and Music | **Not tested** |
@@ -148,6 +151,7 @@ Keep this honest and up to date.
 | `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |
 | **Built with MSVC** | **Never**; `windows.yml` will do this on its first run |
+| Lyrics stage romanization using system ICU and Japanese IME | Pure model test passes on macOS; Windows source has **not been compiled or run** |
 | **Run on Windows** | **Never** |
 | Rendering, hover, click-through, DPI, Home, Settings | **Unverified** |
 

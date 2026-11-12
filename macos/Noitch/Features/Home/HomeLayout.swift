@@ -123,7 +123,7 @@ struct HomeLayout: Equatable {
 
     /// A stage slot's line, full size for the one being sung and scaled for the rest.
     func stageLine(_ slot: Int) -> CGRect {
-        let offset: CGFloat = slot == 0 ? 0 : CGFloat(slot.signum()) * (27 + CGFloat(abs(slot) - 1) * 23)
+        let offset: CGFloat = slot == 0 ? 0 : CGFloat(slot.signum()) * (27 + CGFloat(abs(slot) - 1) * 23) + (slot > 0 ? 10 : 0)
         let height = Self.stageLineHeight * (slot == 0 ? 1 : Self.stageScale)
         let x = Self.sidePadding + Self.stageMargin
         return CGRect(x: x, y: stageCenterY + offset - height / 2, width: size.width - x * 2, height: height)

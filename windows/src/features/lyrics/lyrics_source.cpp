@@ -1,4 +1,5 @@
 #include "lyrics_source.h"
+#include "lyric_romanizer.h"
 
 #include <shlobj.h>
 #include <winhttp.h>
@@ -120,6 +121,7 @@ Lyrics Find(const Request& request) {
 void CALLBACK Run(PTP_CALLBACK_INSTANCE, void* context) {
     const std::unique_ptr<Request> request(static_cast<Request*>(context));
     auto* lyrics = new Lyrics(Find(*request));
+    RomanizeLyrics(*lyrics);
     if (!PostMessageW(request->notify, LyricsSource::kMessage, request->generation, reinterpret_cast<LPARAM>(lyrics))) delete lyrics;
 }
 
