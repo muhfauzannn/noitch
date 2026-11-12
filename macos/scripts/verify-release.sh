@@ -31,7 +31,7 @@ test -s "$app/Contents/Resources/MediaRemoteAdapter-LICENSE.txt"
 test -s "$app/Contents/Resources/mediaremote-adapter.pl"
 verify_signature "$app/Contents/Frameworks/MediaRemoteAdapter.framework"
 verify_signature "$app"
-lipo -verify_arch arm64 "$app/Contents/Frameworks/MediaRemoteAdapter.framework/MediaRemoteAdapter"
+lipo "$app/Contents/Frameworks/MediaRemoteAdapter.framework/MediaRemoteAdapter" -verify_arch arm64
 if [[ $RELEASE_MODE == signed ]]; then
     xcrun stapler validate "$app"
     spctl --assess --type execute --verbose=2 "$app"

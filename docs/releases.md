@@ -196,3 +196,11 @@ publication have not been exercised here. See [development.md](development.md) a
 Official references: [GitHub secure use](https://docs.github.com/en/actions/reference/security/secure-use),
 [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow),
 [Microsoft SignTool](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool).
+
+## First tag run: toolchain compatibility
+
+The `v0.1.0` run built the macOS package and passed 117 tests, but its verification failed on
+Xcode 26.6: `lipo -verify_arch arm64 <file>` treated the trailing file as another architecture.
+Verification now passes the input first (`lipo <file> -verify_arch arm64`), which works with both
+toolchains. The failed tag remains unchanged; the corrected workflow uses a new patch tag.
+This changes packaging verification only, with no application/runtime or performance-setting change.
