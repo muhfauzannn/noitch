@@ -194,13 +194,13 @@ void HomeScene::PaintStage(const HomeModel& model, int stageHover) {
         const std::string& text = model.stageLines[static_cast<size_t>(slot + 1)];
         if (slot == 0) {
             auto frame = layout_.StageLine(0);
-            if (!model.stageRomanization.empty()) frame.y -= 7 * scale_;
+            if (!model.stageRomanizations[1].empty()) frame.y -= 7 * scale_;
             PaintText(text, model.stageIsStatus ? stageStatusFormat_.Get() : stageFormat_.Get(), frame, model.stageIsStatus ? 0.55f : 1.0f);
-            if (!model.stageRomanization.empty()) {
+            if (!model.stageRomanizations[1].empty()) {
                 auto reading = layout_.StageLine(0);
                 reading.y += 20 * scale_;
                 reading.height = 18 * scale_;
-                PaintText(model.stageRomanization, stageSideFormat_.Get(), reading, 0.7f);
+                PaintText(model.stageRomanizations[1], stageSideFormat_.Get(), reading, 0.7f);
             }
             continue;
         }

@@ -57,9 +57,9 @@ final class HomeScene {
     /// The stage sits in a group of its own: the reveal animates the group, the mode the stage.
     private let stageGroup = CALayer()
     private let stage = CALayer()
-    private let romanization = HomeScene.makeText(size: 12, weight: .medium, opacity: 0.7)
     /// Five lines take turns: four in slots -1 to 2, and one about to rise in from below.
     private let stageLayers = (0..<5).map { _ in HomeScene.makeText(size: 20, weight: .bold, opacity: 0) }
+    private let stageReadings = (0..<5).map { _ in HomeScene.makeText(size: 12, weight: .medium, opacity: 0) }
     private var stageOrder = [0, 1, 2, 3]
     private var stageSpare = 4
     private var stageHover: Int?
@@ -122,19 +122,19 @@ final class HomeScene {
         stage.frame = root.bounds
         stage.opacity = 0
         stageGroup.addSublayer(stage)
-        romanization.alignmentMode = .center
-        romanization.contentsScale = scale
-        romanization.frame = CGRect(x: layout.stageLine(0).minX, y: layout.stageLine(0).maxY - 6, width: layout.stageLine(0).width, height: 18)
-        stage.addSublayer(romanization)
         let line = layout.stageLine(0)
-        for layer in stageLayers {
+        for (layer, reading) in zip(stageLayers, stageReadings) {
             layer.bounds = CGRect(x: 0, y: 0, width: line.width, height: HomeLayout.stageLineHeight)
             layer.alignmentMode = .center
             layer.contentsScale = scale
+            reading.alignmentMode = .center
+            reading.contentsScale = scale
+            reading.frame = CGRect(x: 0, y: HomeLayout.stageLineHeight, width: line.width, height: 18)
+            layer.addSublayer(reading)
             stage.addSublayer(layer)
         }
-        for (slot, index) in zip(HomeLayout.stageSlots, stageOrder) { placeOnStage(stageLayers[index], slot: slot) }
-        placeOnStage(stageLayers[stageSpare], slot: 3)
+        for (slot, index) in zip(HomeLayout.stageSlots, stageOrder) { placeOnStage(index, slot: slot) }
+        placeOnStage(stageSpare, slot: 3)
 
         artwork.frame = layout.artwork
         artwork.cornerRadius = Self.artworkRadius
@@ -281,55 +281,66 @@ final class HomeScene {
     /// middle, the one before drifts up and away, and the next rises in from below. Only position,
     /// scale and opacity move. Anything else, such as a seek, crossfades.
     private func showStage(_ model: HomeModel, previous: HomeModel?, now: CFTimeInterval) {
-        let readingChanged = (romanization.string as? String ?? "") != model.stageRomanization
-        romanization.string = model.stageRomanization
         let shown = stageOrder.map { stageLayers[$0].string as? String ?? "" }
-        guard shown != model.stageLines || stageIsStatus != model.stageIsStatus || readingChanged else { return }
+        let readings = stageOrder.map { stageReadings[$0].string as? String ?? "" }
+        guard shown != model.stageLines || readings != model.stageRomanizations || stageIsStatus != model.stageIsStatus else { return }
         stageIsStatus = model.stageIsStatus
         let steppedForward = isOnStage && !Motion.reduceMotion && previous != nil && !model.stageIsStatus
             && model.lyricIndex != nil && (previous?.lyricIndex ?? -1) + 1 == model.lyricIndex && shown[2] == model.stageLines[1]
         if steppedForward {
             let order = stageOrder
-            let incoming = stageLayers[stageSpare]
-            incoming.string = model.stageLines[3]
-            placeOnStage(incoming, slot: 3)
-            moveOnStage(stageLayers[order[0]], to: -2, begin: now, duration: 0.4)
-            moveOnStage(stageLayers[order[1]], to: -1, begin: now, duration: 0.5)
-            moveOnStage(stageLayers[order[2]], to: 0, begin: now, duration: 0.55)
-            moveOnStage(stageLayers[order[3]], to: 1, begin: now + 0.04, duration: 0.55)
-            moveOnStage(incoming, to: 2, begin: now + 0.1, duration: 0.55)
+            stageLayers[stageSpare].string = model.stageLines[3]
+            stageReadings[stageSpare].string = model.stageRomanizations[3]
+            placeOnStage(stageSpare, slot: 3)
+            moveOnStage(order[0], to: -2, begin: now, duration: 0.4)
+            moveOnStage(order[1], to: -1, begin: now, duration: 0.5)
+            moveOnStage(order[2], to: 0, begin: now, duration: 0.55)
+            moveOnStage(order[3], to: 1, begin: now + 0.04, duration: 0.55)
+            moveOnStage(stageSpare, to: 2, begin: now + 0.1, duration: 0.55)
             stageOrder = [order[1], order[2], order[3], stageSpare]
             stageSpare = order[0]
         } else {
             for (offset, index) in stageOrder.enumerated() {
                 let layer = stageLayers[index]
-                placeOnStage(layer, slot: offset - 1)
-                if isOnStage { Motion.riseIn(layer, from: 8, duration: 0.45, begin: now + Double(offset) * 0.04) }
                 layer.string = model.stageLines[offset]
+                stageReadings[index].string = model.stageRomanizations[offset]
+                placeOnStage(index, slot: offset - 1)
+                if isOnStage { Motion.riseIn(layer, from: 8, duration: 0.45, begin: now + Double(offset) * 0.04) }
             }
-            placeOnStage(stageLayers[stageSpare], slot: 3)
+            placeOnStage(stageSpare, slot: 3)
         }
     }
 
-    private func stageTarget(_ slot: Int) -> (position: CGPoint, scale: CGFloat, opacity: Float) {
+    private func stageTarget(_ slot: Int, index: Int) -> (position: CGPoint, scale: CGFloat, opacity: Float) {
         let line = layout.stageLine(slot)
-        let position = CGPoint(x: line.midX, y: line.midY - (slot == 0 && !(romanization.string as? String ?? "").isEmpty ? 7 : 0))
+        let position = CGPoint(x: line.midX, y: line.midY - (slot == 0 && !(stageReadings[index].string as? String ?? "").isEmpty ? 7 : 0))
         if slot == 0 { return stageIsStatus ? (position, 0.8, 0.55) : (position, 1, 1) }
         var opacity = Self.stageOpacity[slot] ?? 0
         if slot == stageHover, opacity > 0 { opacity = Self.stageHoverOpacity }
         return (position, HomeLayout.stageScale, opacity)
     }
 
-    private func placeOnStage(_ layer: CALayer, slot: Int) {
-        let target = stageTarget(slot)
+    private func placeOnStage(_ index: Int, slot: Int) {
+        let layer = stageLayers[index]
+        let reading = stageReadings[index]
+        let target = stageTarget(slot, index: index)
+        reading.removeAllAnimations()
+        reading.opacity = slot == 0 ? 0.7 : 0
         layer.removeAllAnimations()
         layer.position = target.position
         layer.transform = CATransform3DMakeScale(target.scale, target.scale, 1)
         layer.opacity = target.opacity
     }
 
-    private func moveOnStage(_ layer: CALayer, to slot: Int, begin: CFTimeInterval, duration: CFTimeInterval) {
-        let target = stageTarget(slot)
+    private func moveOnStage(_ index: Int, to slot: Int, begin: CFTimeInterval, duration: CFTimeInterval) {
+        let layer = stageLayers[index]
+        let reading = stageReadings[index]
+        let target = stageTarget(slot, index: index)
+        // The reading inherits its original line's position and scale, even when interrupted.
+        let readingOpacity: Float = slot == 0 ? 0.7 : 0
+        Motion.ease(reading, "opacity", from: reading.presentation()?.opacity ?? reading.opacity,
+                    to: readingOpacity, duration: duration, begin: begin)
+        reading.opacity = readingOpacity
         let shown = layer.presentation() ?? layer
         Motion.ease(layer, "position", from: NSValue(point: shown.position), to: NSValue(point: target.position), duration: duration, begin: begin)
         Motion.ease(layer, "transform.scale", from: shown.value(forKeyPath: "transform.scale") ?? 1, to: target.scale, duration: duration, begin: begin)
@@ -349,7 +360,7 @@ final class HomeScene {
         let now = CACurrentMediaTime()
         for slot in changed where slot != 0 {
             let layer = stageLayers[stageOrder[slot + 1]]
-            let opacity = stageTarget(slot).opacity
+            let opacity = stageTarget(slot, index: stageOrder[slot + 1]).opacity
             Motion.ease(layer, "opacity", from: layer.presentation()?.opacity ?? layer.opacity, to: opacity, duration: 0.18, begin: now)
             layer.opacity = opacity
         }
@@ -393,7 +404,7 @@ final class HomeScene {
         stageWash.opacity = onStage ? 1 : 0
         // Lines left lit by a hover go back to their own opacity.
         for (slot, index) in zip(HomeLayout.stageSlots, stageOrder) where slot != 0 {
-            stageLayers[index].opacity = stageTarget(slot).opacity
+            stageLayers[index].opacity = stageTarget(slot, index: stageOrder[slot + 1]).opacity
         }
     }
 

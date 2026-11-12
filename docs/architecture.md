@@ -229,7 +229,10 @@ Home to the lyrics; clicking it again brings Home back. Numbers are in `HomeLayo
   stretched under black shades (too busy).
 - **Motion (macOS).** When the song moves on one line, every line rises one slot: the sung line grows
   into the middle, the one before drifts up and away, and the next rises in from below. Five text
-  layers take turns, and only position, scale and opacity move. A seek or new track fades the lines
+  layers take turns. Each owns its Latin reading as a child layer, so both travel and scale
+  together. A reading fades in as its line becomes current and fades out with that same line;
+  it is never replaced in a fixed layer at the centre. Only position, scale and opacity move.
+  A seek or new track fades the lines
   in as they rise 8 pt, one after another.
   Windows redraws the surface in place, without the slide.
 - **Switching (macOS).** Home's own layers fade out and shrink to 96% as the lyrics fade in and rise

@@ -152,6 +152,21 @@ with 6.57 ms CPU per transition (budget 10 ms). The user's 0.3 s hover delay was
 Windows measurements remain unavailable. The Latin readings use native OS services, with no
 bundled MeCab or ICU package and no additional idle timer.
 
+## Paired lyric animation verification (2026-11-12)
+
+The fixed central Latin layer is replaced by five readings, each attached to its original lyric
+layer. Existing compositor animations move and scale the pair; only the reading's opacity is
+animated separately. No timer or per-frame callback was added.
+
+Before this fix: 13.13 MB, 33.48 ms/min, 1.17 wakeups/s. After: 20.39 MB,
+1111.96 ms/min, 10.77 wakeups/s; repeat: 20.14 MB, 697.15 ms/min, 8.00 wakeups/s.
+These runs exceed the budgets, including the baseline; the source of the increased activity has
+not been isolated. They do not prove acceptable idle performance, and the budgets are unchanged.
+The first standalone hover run recorded 6.43 ms per transition but failed interaction checks;
+it was started without the normal ten-second settle. A repeat after settling recorded 5.89 ms
+per transition but still failed the assertion that the window remains large during collapse.
+Windows budgets remain unmeasured.
+
 ## Measuring
 
 ```sh

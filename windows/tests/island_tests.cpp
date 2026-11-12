@@ -349,11 +349,12 @@ void TestStageShowsTheLineBeforeAndTheTwoAfter() {
     nowPlaying.duration = 100;
     Lyrics lyrics;
     lyrics.synced = {{1, "one", "reading"}, {2, ""}, {3, "three"}, {4, "four"}};
-    assert(MakeHomeModel(nowPlaying, &lyrics, false, 1.5, HomeSettings(), false, true).stageRomanization == "reading");
+    assert(MakeHomeModel(nowPlaying, &lyrics, false, 1.5, HomeSettings(), false, true).stageRomanizations[1] == "reading");
     const HomeSettings settings;
     const std::string note = "\xE2\x99\xAA";
     const HomeModel middle = MakeHomeModel(nowPlaying, &lyrics, false, 2.5, settings, false, true);
     assert(middle.isOnStage && !middle.stageIsStatus);
+    assert(middle.stageRomanizations[0] == "reading" && middle.stageRomanizations[1].empty());
     assert(middle.stageLines[0] == "one" && middle.stageLines[1] == note && middle.stageLines[2] == "three" && middle.stageLines[3] == "four");
     const HomeModel intro = MakeHomeModel(nowPlaying, &lyrics, false, 0, settings);
     assert(intro.stageLines[0].empty() && intro.stageLines[1] == note && intro.stageLines[2] == "one" && intro.stageLines[3] == note);
