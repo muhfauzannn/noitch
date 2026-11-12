@@ -16,3 +16,6 @@ windows/out/
 # Benchmarks
 macos/benchmarks/*/build/
 macos/benchmarks/*/run.log
+
+# Release tooling
+__pycache__/

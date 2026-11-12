@@ -1,0 +1,195 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# Serialize retries and publication for the same tag. Never cancel signing/uploads.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  validate:
+    # GitHub exposes draft releases only to callers with push access.
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.contract.outputs.tag }}
+      version: ${{ steps.contract.outputs.version }}
+      commit: ${{ steps.contract.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check release contract tests
+        run: python3 .github/scripts/test_release.py
+      - name: Validate release contract
+        id: contract
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 .github/scripts/release.py validate --tag "$RELEASE_TAG"
+      - name: Refuse existing releases, including drafts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.contract.outputs.tag }}
+        run: |
+          gh api --paginate "repos/$GH_REPO/releases" --jq '.[].tag_name' > existing-tags
+          if grep -Fx -- "$RELEASE_TAG" existing-tags; then
+            echo '::error::Release already exists. Never overwrite assets; see docs/releases.md.'
+            exit 1
+          fi
+
+  macos:
+    needs: validate
+    runs-on: macos-26
+    environment: release-signing
+    timeout-minutes: 90
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+      MACOS_BUNDLE_ID: ${{ vars.MACOS_BUNDLE_ID }}
+      MACOS_TEAM_ID: ${{ vars.MACOS_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - name: Test, build, sign, notarize and verify DMG
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: bash macos/scripts/release.sh
+      - name: Record final asset provenance
+        run: >-
+          python3 .github/scripts/release.py metadata --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
+          --platform macos-arm64 --folder macos/build/release --toolchain macos/build/release-toolchain.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-macos
+          overwrite: true
+          path: macos/build/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    needs: validate
+    runs-on: windows-2025
+    environment: release-signing
+    timeout-minutes: 30
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+      WINDOWS_SIGNING_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_THUMBPRINT }}
+      WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - name: Test, build, sign and verify portable executable
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: ./windows/scripts/release.ps1
+      - name: Record final asset provenance
+        shell: bash
+        run: >-
+          python .github/scripts/release.py metadata --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
+          --platform windows-x64 --folder windows/build/release --toolchain windows/build/release-toolchain.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-windows
+          overwrite: true
+          path: windows/build/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  draft:
+    needs: [validate, macos, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: assets
+      - name: Verify both outputs and create draft
+        run: |
+          python3 .github/scripts/release.py verify --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --folder assets
+          gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_COMMIT" --draft --title "Noitch $RELEASE_TAG" --generate-notes
+          # Deliberately no --clobber. A partial upload leaves a draft, never a public release.
+          gh release upload "$RELEASE_TAG" assets/*
+          gh release download "$RELEASE_TAG" --dir downloaded
+          python3 .github/scripts/release.py compare --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --folder assets --other downloaded
+
+  verify-macos:
+    # GitHub exposes draft releases only to callers with push access.
+    permissions:
+      contents: write
+    needs: [validate, draft]
+    runs-on: macos-26
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      MACOS_BUNDLE_ID: ${{ vars.MACOS_BUNDLE_ID }}
+      MACOS_TEAM_ID: ${{ vars.MACOS_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - run: |
+          gh release download "$RELEASE_TAG" --pattern '*.dmg' --dir downloaded
+          bash macos/scripts/verify-release.sh "downloaded/Noitch-$RELEASE_VERSION-macos-arm64.dmg"
+
+  verify-windows:
+    # GitHub exposes draft releases only to callers with push access.
+    permissions:
+      contents: write
+    needs: [validate, draft]
+    runs-on: windows-2025
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      WINDOWS_SIGNING_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_THUMBPRINT }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - run: |
+          gh release download $env:RELEASE_TAG --pattern '*.exe' --dir downloaded
+          if ($LASTEXITCODE -ne 0) { throw 'Asset download failed' }
+          ./windows/scripts/verify-release.ps1 -Path "downloaded/Noitch-$env:RELEASE_VERSION-windows-x64.exe"

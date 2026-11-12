@@ -3,7 +3,16 @@ cmake_minimum_required(VERSION 3.25)
 # Static vcruntime, set before project(). See the link options below for the UCRT.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(Noitch VERSION 0.1.0 LANGUAGES CXX)
+set(NOITCH_VERSION "0.1.0" CACHE STRING "Release version")
+if(NOT NOITCH_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "NOITCH_VERSION must be MAJOR.MINOR.PATCH")
+endif()
+project(Noitch VERSION ${NOITCH_VERSION} LANGUAGES CXX RC)
+string(REPLACE "." "," NOITCH_VERSION_COMMA "${NOITCH_VERSION}")
+configure_file(src/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/version.rc @ONLY)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/noitch.manifest" NOITCH_MANIFEST)
+string(REPLACE "version=\"0.1.0.0\"" "version=\"${NOITCH_VERSION}.0\"" NOITCH_MANIFEST "${NOITCH_MANIFEST}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/noitch.manifest" "${NOITCH_MANIFEST}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,7 +26,8 @@ add_test(NAME island_tests COMMAND island_tests)
 
 add_executable(Noitch WIN32
     src/main.cpp
-    src/noitch.manifest
+    ${CMAKE_CURRENT_BINARY_DIR}/noitch.manifest
+    ${CMAKE_CURRENT_BINARY_DIR}/version.rc
     src/island/compositor.cpp
     src/island/island_window.cpp
     src/island/header_scene.cpp

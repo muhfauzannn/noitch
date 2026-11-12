@@ -1,0 +1,68 @@
+name: Publish verified release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing draft tag (vMAJOR.MINOR.PATCH)'
+        required: true
+        type: string
+      build_run_id:
+        description: 'Successful Release workflow run ID which created this draft'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: release-publish
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check source run and tag
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+          sys.path.insert(0, '.github/scripts')
+          from release import version, git, validate_run
+          tag = os.environ['RELEASE_TAG']
+          version(tag)
+          run_id = os.environ['BUILD_RUN_ID']
+          if not run_id.isdecimal():
+              raise ValueError('Expected a numeric run ID')
+          commit = git('rev-parse', f'refs/tags/{tag}^{{commit}}')
+          subprocess.run(['git', 'merge-base', '--is-ancestor', commit, 'origin/main'], check=True)
+          run = json.loads(subprocess.check_output(['gh', 'api', f'repos/{os.environ["GH_REPO"]}/actions/runs/{run_id}']))
+          validate_run(run, commit)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'RELEASE_COMMIT={commit}\n')
+          PY
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build_run_id }}
+          pattern: release-*
+          merge-multiple: true
+          path: assets
+      - name: Compare draft against verified build and publish
+        run: |
+          python3 .github/scripts/release.py verify --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --folder assets
+          gh release download "$RELEASE_TAG" --dir downloaded
+          python3 .github/scripts/release.py compare --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --folder assets --other downloaded
+          gh release edit "$RELEASE_TAG" --draft=false

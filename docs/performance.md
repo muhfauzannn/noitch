@@ -302,3 +302,19 @@ Then these experiments, each of which could change a decision:
 | Does a Windows.UI.Composition version cost more? | Tests the [DirectComposition decision](tech-stack.md#rendering-directcomposition) |
 | What do WinRT, Direct2D and DirectWrite add to private memory, and does it return after release? | They are the first things loaded after launch |
 | Does EcoQoS (`PROCESS_POWER_THROTTLING`) help without hurting hover latency? | Possible battery gain |
+
+## Release automation verification (2026-11-12)
+
+The CD change edits packaging/workflows and Windows version resources, with no macOS runtime code
+or build-optimization changes. Two sequential Release idle runs on this M5 with the normal saved
+settings (`measure.sh`, no recording override) measured:
+
+| Run | Footprint MB | CPU ms/min | Wakeups/s | Binary KB |
+| --- | --- | --- | --- | --- |
+| Baseline for CD verification | 11.25 | 34.23 | 1.20 | 1787 |
+| After CD changes | 10.66 | 38.25 | 1.13 | 1787 |
+
+Both exceed the CPU and wakeup budgets; neither establishes compliance or a performance improvement.
+Playback was not controlled/recorded, and clipboard recording was not overridden. These numbers do
+not isolate the source of activity. Budgets remain unchanged. Hover was not rerun because no window,
+hover or animation code changed. Windows budgets and packaged/signed runtime behavior remain unmeasured.

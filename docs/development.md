@@ -172,6 +172,17 @@ original no-polling idle budget can be checked without changing the saved settin
 Treat the Windows app as untested code. Start with
 [First run on Windows](performance.md#first-run-on-windows).
 
+## Releases
+
+Tag-based CD builds signed macOS arm64 DMGs and Windows x64 portable executables into a private
+GitHub draft. Explicit publication verifies the original build artifacts again and uses a protected
+environment. See [releases.md](releases.md) for certificates, variables, secrets, approval and recovery.
+The workflow has not yet been run with production signing credentials. Local CD verification passed
+117 macOS tests, Windows pure-logic tests on macOS, five release-contract tests, shell syntax checks
+and YAML parsing. PowerShell/MSVC and end-to-end signing/publication have not been run. The two
+idle budget runs exceed CPU/wakeup limits; see performance.md. CD does not replace native smoke tests
+or local budgets.
+
 ## Before distributing
 
 - `app.noitch.mac` is a placeholder bundle identifier.

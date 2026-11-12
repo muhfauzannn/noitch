@@ -1,0 +1,42 @@
+name: Release contract
+on:
+  pull_request:
+    paths:
+      - .github/scripts/**
+      - .github/workflows/*release*.yml
+      - macos/scripts/*release*.sh
+      - windows/scripts/*release*.ps1
+  push:
+    branches: [main]
+    paths:
+      - .github/scripts/**
+      - .github/workflows/*release*.yml
+      - macos/scripts/*release*.sh
+      - windows/scripts/*release*.ps1
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: python3 .github/scripts/test_release.py
+      - run: bash -n macos/scripts/release.sh macos/scripts/verify-release.sh
+  powershell-syntax:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Parse release scripts without signing credentials
+        run: |
+          foreach ($path in @('windows/scripts/release.ps1', 'windows/scripts/verify-release.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $path), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
