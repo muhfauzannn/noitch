@@ -162,8 +162,8 @@ inline std::string CourseLabel(std::string_view shortName, std::string_view full
         std::string word = name.substr(start, end - start);
         std::string lower = word;
         for (char& c : lower) c = static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
-        const bool small = lower == "dan" || lower == "and" || lower == "of" || lower == "the" || lower == "untuk" || lower == "di" || lower == "ke";
-        if (!word.empty() && !small && IsAsciiLetter(word[0])) initials.push_back(static_cast<char>(word[0] >= 'a' && word[0] <= 'z' ? word[0] - 'a' + 'A' : word[0]));
+        const bool isSmallWord = lower == "dan" || lower == "and" || lower == "of" || lower == "the" || lower == "untuk" || lower == "di" || lower == "ke";
+        if (!word.empty() && !isSmallWord && IsAsciiLetter(word[0])) initials.push_back(static_cast<char>(word[0] >= 'a' && word[0] <= 'z' ? word[0] - 'a' + 'A' : word[0]));
         start = end + 1;
     }
     if (initials.size() >= 2) return initials.substr(0, 5);

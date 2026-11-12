@@ -25,7 +25,7 @@ final class ShelfSource {
         guard recording else { return }
         lastChange = pasteboard.changeCount
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.capture() }
+            MainActor.assumeIsolated { _ = self?.capture() }
         }
         timer.tolerance = 0.15
         RunLoop.main.add(timer, forMode: .common)

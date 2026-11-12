@@ -20,7 +20,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 enable_testing()
 
-add_executable(island_tests tests/island_tests.cpp)
+add_executable(island_tests tests/island_tests.cpp tests/windows_sdk_compatibility.cpp)
 target_include_directories(island_tests PRIVATE src)
 add_test(NAME island_tests COMMAND island_tests)
 

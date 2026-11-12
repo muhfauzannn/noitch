@@ -50,7 +50,18 @@ HRESULT ShelfScene::Create(Compositor& compositor, Painter& painter, ShelfLayout
 void ShelfScene::Release() {
     if (compositor_ && surface_) compositor_->RemoveLayer(PageLayer(IslandPage::Shelf));
     surface_.Reset();
-    for (auto* format : {&segment_, &status_, &empty_, &name_, &cardText_, &cardTitle_, &cardSmall_, &kind_, &typeLabel_, &count_, &icon_, &bigIcon_}) format->Reset();
+    segment_.Reset();
+    status_.Reset();
+    empty_.Reset();
+    name_.Reset();
+    cardText_.Reset();
+    cardTitle_.Reset();
+    cardSmall_.Reset();
+    kind_.Reset();
+    typeLabel_.Reset();
+    count_.Reset();
+    icon_.Reset();
+    bigIcon_.Reset();
 }
 
 void ShelfScene::PaintToolbar(bool clipboard, bool recording, size_t offset, size_t count, size_t total, const std::string& message) {

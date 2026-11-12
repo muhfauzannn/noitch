@@ -318,3 +318,23 @@ Both exceed the CPU and wakeup budgets; neither establishes compliance or a perf
 Playback was not controlled/recorded, and clipboard recording was not overridden. These numbers do
 not isolate the source of activity. Budgets remain unchanged. Hover was not rerun because no window,
 hover or animation code changed. Windows budgets and packaged/signed runtime behavior remain unmeasured.
+
+## Native CI build repair verification (2026-11-12)
+
+The Shelf callback now discards the capture result inside its main-actor closure, so it returns
+`Void` on the older CI compiler. The clipboard interval, tolerance and stop conditions are unchanged.
+Windows changes rename a local variable that conflicts with an SDK macro and reset the same COM
+formats directly. No runtime service, timer, thread or animation behavior was added.
+
+Two sequential local Release runs with the normal saved settings (`measure.sh`, no recording
+override) on the same M5 measured:
+
+| Run | Footprint MB | CPU ms/min | Wakeups/s | Binary KB |
+| --- | --- | --- | --- | --- |
+| Before CI fixes | 10.58 | 7.96 | 1.33 | 1787 |
+| After CI fixes | 10.78 | 12.25 | 1.13 | 1786 |
+
+Memory and CPU are within budget in both runs. Wakeups exceed the 0.5/s baseline budget in both;
+clipboard recording was not overridden and playback was not controlled. These samples do not
+establish a performance improvement or isolate the wakeup source. Budgets are unchanged. No window,
+hover or animation code changed, so hover was not rerun. Native Windows measurements remain unavailable.

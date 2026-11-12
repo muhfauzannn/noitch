@@ -45,10 +45,21 @@ HRESULT TasksScene::Create(Compositor& compositor, Painter& painter, const Tasks
 void TasksScene::Release() {
     if (compositor_ && surface_) compositor_->RemoveLayer(PageLayer(IslandPage::Tasks));
     surface_.Reset();
-    for (auto* format : {&labelFormat_, &countdownFormat_, &titleFormat_, &chipFormat_, &smallFormat_, &buttonFormat_, &dayFormat_, &rowFormat_, &captionFormat_,
-                         &dueFormat_, &toggleFormat_, &iconFormat_, &messageFormat_, &detailFormat_, &checkFormat_}) {
-        format->Reset();
-    }
+    labelFormat_.Reset();
+    countdownFormat_.Reset();
+    titleFormat_.Reset();
+    chipFormat_.Reset();
+    smallFormat_.Reset();
+    buttonFormat_.Reset();
+    dayFormat_.Reset();
+    rowFormat_.Reset();
+    captionFormat_.Reset();
+    dueFormat_.Reset();
+    toggleFormat_.Reset();
+    iconFormat_.Reset();
+    messageFormat_.Reset();
+    detailFormat_.Reset();
+    checkFormat_.Reset();
     hasShown_ = false;
 }
 

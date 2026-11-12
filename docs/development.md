@@ -67,7 +67,7 @@ New source files must be added to `windows/CMakeLists.txt`.
 The pure logic tests also run on macOS:
 
 ```sh
-clang++ -std=c++20 -Iwindows/src windows/tests/island_tests.cpp -o /tmp/island_tests && /tmp/island_tests
+clang++ -std=c++20 -Iwindows/src windows/tests/island_tests.cpp windows/tests/windows_sdk_compatibility.cpp -o /tmp/island_tests && /tmp/island_tests
 ```
 
 To check that the Windows code still compiles without a Windows machine, use Zig's bundled mingw
@@ -100,7 +100,8 @@ the hover check stay local, because shared runners are too noisy for performance
 needs a real cursor. Run them before merging anything that touches the window, hover or animation
 code.
 
-To try the Windows app without Visual Studio, download `Noitch-windows-x64` from the workflow run.
+When a Windows CI build succeeds, its `Noitch-windows-x64` artifact lets you try the app without
+Visual Studio. The latest native build failed before producing this artifact.
 
 ## Verification status
 
@@ -110,7 +111,7 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 116 unit tests | Passing locally, including romanization and paired lyric animation regression tests |
+| Builds; 117 unit tests | Passing locally on Xcode 27.2, including shelf, romanization and paired lyric animation regression tests. Xcode 26.6 CI retry remains pending after the callback fix below |
 | Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
 | Calendar in Home: three-day strip with arrows, deadline rings, rows, narrower music column | Checked by a window screenshot with `--demo-tasks --demo-media --open` (sample events and tasks, no EventKit); the arrows by click, a deadline row, the access prompt, real calendars, change notifications and the timers **not checked on screen** |
 | Pin in the header, General's shortcut field, Usage's marks, calendar dates (type with an underline) | Checked by window screenshots (`--demo-media --open --settings`); pinning by click or shortcut, recording a shortcut, the days' push, the underline's spring and the lyric fix during opening **not checked on screen** |
@@ -163,7 +164,7 @@ original no-polling idle budget can be checked without changing the saved settin
 | Compiles | With Zig and mingw, using a stub for the WinRT header. It no longer links there |
 | `media_session_source.cpp` | **Never compiled**: only the Windows SDK has its headers |
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |
-| **Built with MSVC** | **Never**; `windows.yml` will do this on its first run |
+| **Built with MSVC** | CI configured successfully, but Debug compilation failed on a Windows SDK macro collision and two `ComPtr` cleanup loops. Source fixes are local; a new native build is pending |
 | Lyrics stage romanization using system ICU and Japanese IME | Pure model tests, including reading selection across line advancement, pass on macOS; Windows source has **not been compiled or run** |
 | Shelf / Clipboard | Pure collection/layout and bounded DIB thumbnail tests pass on macOS. New Windows UI/OLE/clipboard code has **not been compiled or run** here |
 | **Run on Windows** | **Never** |
@@ -171,6 +172,27 @@ original no-polling idle budget can be checked without changing the saved settin
 
 Treat the Windows app as untested code. Start with
 [First run on Windows](performance.md#first-run-on-windows).
+
+## CI build repair (2026-11-12)
+
+The [macOS run](https://github.com/muhfauzannn/noitch/actions/runs/43251892954) failed during
+compilation, before tests ran: Xcode 26.6 could not diagnose the Shelf timer expression returning
+`ShelfItem?` through `MainActor.assumeIsolated`. The callback now explicitly discards that value,
+so its actor-isolated closure returns `Void`. Recording interval, run-loop mode and lifetime stay
+the same. Xcode 27.2 locally builds and passes all 117 tests; Xcode 26.6 is not installed locally,
+so that exact compiler still needs a fresh CI run.
+
+The [Windows run](https://github.com/muhfauzannn/noitch/actions/runs/43251893235) configured with
+MSVC, then failed in Debug compilation. `task_model.h` used `small`, a macro supplied by the Windows
+SDK, as a local variable name. It is now `isSmallWord`. Shelf and Tasks tried to take addresses of
+`ComPtr` values in a cleanup initializer list; WRL overloads that operator for COM output parameters.
+Both scenes now reset each owned format directly, in the same order. No raw COM reference counting
+was introduced. A separate test translation unit recreates the SDK macro and is included in the
+CMake test target; it failed before the rename and passes with the fix on macOS.
+
+These repairs do not establish a successful MSVC build or native Windows runtime behavior. No CI
+job was skipped or test disabled. A push containing the platform source changes will trigger both
+existing platform workflows. Release creation still requires a `v*` tag and configured signing.
 
 ## Releases
 
