@@ -134,13 +134,10 @@ struct TasksTests {
         #expect(text(20) == "0m")
     }
 
-    @Test func `the runway covers two weeks and stacks a day's tasks`() {
-        #expect(TaskRule.runwayPosition(Self.now, now: Self.now) == 0)
-        #expect(TaskRule.runwayPosition(Self.now + 7 * 86400, now: Self.now) == 0.5)
-        #expect(TaskRule.runwayPosition(Self.now + 15 * 86400, now: Self.now) == nil)
-        #expect(TaskRule.runwayPosition(Self.now - 60, now: Self.now) == nil)
-        let tasks = [Self.task(1, due: Self.now + 3600), Self.task(2, due: Self.now + 7200), Self.task(3, due: Self.now + 86400)]
-        #expect(TaskRule.stackLevels(tasks, calendar: Self.calendar) == [0, 1, 0])
+    @Test func `days count from today in local time`() {
+        #expect(TaskRule.dayOffset(Self.now + 3600, now: Self.now, calendar: Self.calendar) == 0)
+        #expect(TaskRule.dayOffset(Self.now + 3 * 3600, now: Self.now, calendar: Self.calendar) == 1)
+        #expect(TaskRule.dayOffset(Self.now - 22 * 3600, now: Self.now, calendar: Self.calendar) == -1)
     }
 
     // MARK: Reminders
@@ -205,7 +202,14 @@ struct TasksTests {
         let layout = TasksLayout(size: IslandGeometry.expandedSize, headerHeight: 38)
         #expect(layout.more.maxY <= layout.size.height - 4)
         #expect(layout.openButton.maxY <= layout.size.height - 4)
-        #expect(layout.row(0).minY >= layout.runway.maxY)
+        #expect(layout.row(0).minY >= layout.load.maxY)
+        #expect(layout.barLetter(0).maxY <= layout.row(0).minY)
+        #expect(layout.bar(TaskRule.loadDays - 1, share: 1).maxX < layout.loadCaption.minX)
+        // The all-clear tick stays below the header band, clear of the notch.
+        #expect(layout.check.minY >= 38)
+        #expect(layout.message(withCheck: true).minY >= layout.check.maxY)
+        #expect(layout.messageButton(withCheck: true).maxY <= layout.size.height - 8)
+        #expect(layout.messageDetail(withCheck: true).maxY <= layout.messageButton(withCheck: true).minY)
         #expect(layout.rowDue(0).maxX <= layout.size.width - TasksLayout.sidePadding)
         // Clear of the shared header's tabs.
         #expect(layout.bodyTop >= 38)
@@ -238,18 +242,21 @@ struct TasksTests {
         let tasks = (1...5).map { Self.task($0, due: Self.now + Double($0) * 3 * 3600) }
         let model = TasksPageModel.make(tasks: tasks, unviewed: [2], signedIn: true, checking: false, problem: nil, asOf: Self.now,
                                         now: Self.now, offset: 0, calendar: Self.calendar)
-        guard case let .list(hero, dots, rows, more) = model.content else {
+        guard case let .list(hero, load, rows, more) = model.content else {
             Issue.record("expected a list")
             return
         }
         #expect(hero.label == "Next due")
         #expect(hero.countdown == [.init(value: 3, unit: "h")])
         #expect(hero.severity == .critical)
-        #expect(dots.count == 5)
-        #expect(dots[1].isNew)
+        // Due at 00:00, 03:00, 06:00, 09:00 and 12:00 on the 13th, all tomorrow.
+        #expect(load.map(\.count) == [0, 5, 0, 0, 0, 0, 0])
+        #expect(load.map(\.letter).prefix(3) == ["T", "F", "S"])
+        #expect(load[1].isBusiest && load[1].hasNew && load[1].hasUrgent)
+        #expect(model.loadCaption == ["Busiest: tomorrow · 5", "5 due in 7 days"])
         #expect(rows.map(\.id) == [1, 2, 3])
+        #expect(rows[0].day == 1)
         #expect(more == "+2 more · scroll")
-        #expect(model.days.prefix(3) == ["T", "F", "S"])
         let scrolled = TasksPageModel.make(tasks: tasks, unviewed: [], signedIn: true, checking: false, problem: .unavailable, asOf: Self.now - 600,
                                            now: Self.now, offset: 9, calendar: Self.calendar)
         guard case let .list(staleHero, _, scrolledRows, scrolledMore) = scrolled.content else { return }

@@ -48,7 +48,7 @@ void TasksController::Render() {
     if (!isShown_ || !scene_.Exists()) return;
     const double now = TaskNow();
     model_ = TasksPageModel::Make(watch_->Tasks(), newOnShow_, watch_->Settings().IsSignedIn(), watch_->IsChecking(), watch_->Problem(), watch_->AsOf(), now,
-                                  offset_, LocalUtcOffset(), showOverdue_);
+                                  offset_, LocalUtcOffset(), showOverdue_, TasksSiteName(watch_->Settings().site));
     scene_.Paint(model_, hoveredRow_);
     // One shot at the next minute while shown: the countdown and due times are in minutes.
     const double delay = 60 - std::fmod(now, 60) + 0.2;
@@ -58,7 +58,7 @@ void TasksController::Render() {
 TasksController::Target TasksController::TargetAt(float x, float y) const {
     if (!scene_.Exists()) return Target::None;
     const TasksLayout& layout = scene_.Layout();
-    if (model_.isMessage) return !model_.button.empty() && layout.MessageButton().Contains(x, y) ? Target::Message : Target::None;
+    if (model_.isMessage) return !model_.button.empty() && layout.MessageButton(model_.allClear).Contains(x, y) ? Target::Message : Target::None;
     if (layout.OpenButton().Contains(x, y)) return Target::Open;
     if (!model_.overdueToggle.empty() && layout.OverdueToggle().Contains(x, y)) return Target::Overdue;
     for (int i = 0; i < static_cast<int>(model_.rows.size()); ++i) {

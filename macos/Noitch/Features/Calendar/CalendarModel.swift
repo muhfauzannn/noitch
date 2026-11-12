@@ -11,6 +11,13 @@ struct CalendarEvent: Equatable {
     var color: [Double]?
 }
 
+/// A Moodle task's deadline, shown among the day's events in the tasks' own colour.
+struct CalendarDeadline: Equatable {
+    var title: String
+    var course: String
+    var due: Date
+}
+
 /// Whether the panel may read calendars.
 enum CalendarAccess: Equatable {
     /// Never asked: the panel offers to ask, rather than prompting as soon as Home opens.
@@ -26,6 +33,7 @@ struct CalendarModel: Equatable {
         var number: String
         var isToday: Bool
         var hasEvents: Bool
+        var hasDeadline: Bool
     }
 
     struct Row: Equatable {
@@ -34,9 +42,13 @@ struct CalendarModel: Equatable {
         var color: [Double]?
         /// Happening right now, so the row is brighter.
         var isNow: Bool
+        /// A task's deadline rather than an event: drawn as a ring in the tasks' colour.
+        var isDeadline = false
     }
 
     static let maxRows = 3
+    /// Days in the strip; the arrows move it by this many.
+    static let dayCount = 3
 
     var days: [Day] = []
     var selected = 0
@@ -51,21 +63,22 @@ struct CalendarModel: Equatable {
 
     init() {}
 
-    /// `weekStart` is the first day shown; `selected` counts from it. `clock` gives "14:00" and
-    /// `dayName` gives "Wed 12" for a date.
-    init(events: [CalendarEvent], weekStart: Date, selected: Int, now: Date, calendar: Calendar, access: CalendarAccess,
-         clock: (Date) -> String, dayName: (Date) -> String) {
+    /// `rangeStart` is the first day shown; `selected` counts from it. `clock` gives "14:00" and
+    /// `dayName` gives "Wed 12" for a date. Deadlines show whether or not the calendar may be read.
+    init(events: [CalendarEvent], deadlines: [CalendarDeadline] = [], rangeStart: Date, selected: Int, now: Date, calendar: Calendar,
+         access: CalendarAccess, clock: (Date) -> String, dayName: (Date) -> String) {
         self.selected = selected
         let letters = calendar.veryShortWeekdaySymbols
         let today = calendar.startOfDay(for: now)
-        let starts = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) }
+        let starts = (0..<Self.dayCount).compactMap { calendar.date(byAdding: .day, value: $0, to: rangeStart) }
         days = starts.map { start in
             let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
             return Day(
                 letter: letters[calendar.component(.weekday, from: start) - 1],
                 number: String(calendar.component(.day, from: start)),
                 isToday: start == today,
-                hasEvents: access == .granted && events.contains { $0.start < end && $0.end > start }
+                hasEvents: access == .granted && events.contains { $0.start < end && $0.end > start },
+                hasDeadline: deadlines.contains { $0.due >= start && $0.due < end }
             )
         }
         guard starts.indices.contains(selected) else { return }
@@ -77,34 +90,45 @@ struct CalendarModel: Equatable {
         case -1: heading = "Yesterday"
         default: heading = dayName(dayStart)
         }
-        switch access {
-        case .notAsked:
-            message = "Show your calendar"
+        var dayDeadlines = deadlines.filter { $0.due >= dayStart && $0.due < dayEnd }
+        let hadDeadlines = !dayDeadlines.isEmpty
+        if dayStart == today { dayDeadlines.removeAll { $0.due <= now } }
+        let deadlineRows = dayDeadlines.map { deadline in
+            (sortKey: (1, deadline.due, deadline.title),
+             row: Row(time: clock(deadline.due), title: deadline.course.isEmpty ? deadline.title : "\(deadline.title) · \(deadline.course)",
+                      color: nil, isNow: false, isDeadline: true))
+        }
+        guard access == .granted else {
+            // Without the calendar, a day with deadlines still lists them; the others offer access.
+            guard deadlineRows.isEmpty else {
+                fill(deadlineRows.sorted { $0.sortKey < $1.sortKey }.map(\.row), hadAny: hadDeadlines)
+                return
+            }
+            message = access == .notAsked ? "Show your calendar" : "Allow access in System Settings"
             messageIsAction = true
             return
-        case .denied:
-            message = "Allow access in System Settings"
-            messageIsAction = true
-            return
-        case .granted:
-            break
         }
         var onDay = events.filter { $0.start < dayEnd && $0.end > dayStart }
-        let hadAny = !onDay.isEmpty
+        let hadAny = !onDay.isEmpty || hadDeadlines
         // Today, what has finished is no longer worth a row.
         if dayStart == today { onDay.removeAll { !$0.isAllDay && $0.end <= now } }
-        onDay.sort { ($0.isAllDay ? 0 : 1, $0.start, $0.title) < ($1.isAllDay ? 0 : 1, $1.start, $1.title) }
-        rows = onDay.prefix(Self.maxRows).map { event in
+        let eventRows = onDay.map { event in
             let isNow = !event.isAllDay && event.start <= now && event.end > now
             let time = event.isAllDay ? "All day" : isNow ? "Now" : event.start < dayStart ? "Until \(clock(event.end))" : clock(event.start)
-            return Row(time: time, title: event.title.isEmpty ? "Untitled" : event.title, color: event.color, isNow: isNow)
+            return (sortKey: (event.isAllDay ? 0 : 1, event.start, event.title),
+                    row: Row(time: time, title: event.title.isEmpty ? "Untitled" : event.title, color: event.color, isNow: isNow))
         }
-        if onDay.count > Self.maxRows { more = "+\(onDay.count - Self.maxRows) more" }
-        if onDay.isEmpty { message = hadAny ? "Nothing else today" : "Nothing planned" }
+        fill((eventRows + deadlineRows).sorted { $0.sortKey < $1.sortKey }.map(\.row), hadAny: hadAny)
     }
 
-    /// The week that holds `date`, starting on the locale's first weekday.
-    static func weekStart(for date: Date, calendar: Calendar) -> Date {
-        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? calendar.startOfDay(for: date)
+    private mutating func fill(_ all: [Row], hadAny: Bool) {
+        rows = Array(all.prefix(Self.maxRows))
+        if all.count > Self.maxRows { more = "+\(all.count - Self.maxRows) more" }
+        if all.isEmpty { message = hadAny ? "Nothing else today" : "Nothing planned" }
+    }
+
+    /// The strip moved `pages` times its length from `start`.
+    static func rangeStart(_ start: Date, moved pages: Int, calendar: Calendar) -> Date {
+        calendar.date(byAdding: .day, value: pages * dayCount, to: start) ?? start
     }
 }

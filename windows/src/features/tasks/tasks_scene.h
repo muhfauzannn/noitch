@@ -10,8 +10,8 @@
 
 namespace noitch {
 
-// Draws the tasks page into one surface: the next task as a countdown, a runway of the next two weeks
-// with a dot per task, and a short list. It decides nothing, and draws only when the model or the
+// Draws the tasks page into one surface: the next task as a countdown, the next seven days as bars of
+// how much is due, and a short list. It decides nothing, and draws only when the model or the
 // hovered row changes. Windows draws the countdown in one size, and the course after the title in
 // the same colour; macOS sets each in its own style.
 class TasksScene {
@@ -39,6 +39,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> buttonFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> dayFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> rowFormat_;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> captionFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> dueFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> toggleFormat_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> iconFormat_;
@@ -50,13 +51,13 @@ private:
 // Shared by the page and the closed island's alert.
 namespace task_colors {
 
-inline constexpr D2D1_COLOR_F kCritical = {1.0f, 0.35f, 0.31f, 1};
-inline constexpr D2D1_COLOR_F kWatch = {1.0f, 0.71f, 0.28f, 1};
-inline constexpr D2D1_COLOR_F kFresh = {0.3f, 0.55f, 1.0f, 1};
+// One accent, indigo, on white and greys; red only for what is due within a day or overdue.
+inline constexpr D2D1_COLOR_F kAccent = {0.49f, 0.53f, 1.0f, 1};
+inline constexpr D2D1_COLOR_F kCritical = {1.0f, 0.42f, 0.42f, 1};
+// New tasks are marked in the accent, so nothing on the page competes with it.
+inline constexpr D2D1_COLOR_F kFresh = kAccent;
 
-inline D2D1_COLOR_F For(Severity severity) {
-    return severity == Severity::Critical ? kCritical : severity == Severity::Watch ? kWatch : D2D1_COLOR_F{1, 1, 1, 1};
-}
+inline D2D1_COLOR_F For(Severity severity) { return severity == Severity::Critical ? kCritical : D2D1_COLOR_F{1, 1, 1, 1}; }
 
 // Segoe MDL2 Assets: a page, a tick and a speech bubble.
 inline const wchar_t* Glyph(TaskModule module) {

@@ -34,10 +34,10 @@ final class CalendarSource: NSObject {
         store = nil
     }
 
-    /// Events overlapping the seven days from `weekStart`. Synchronous: a week is a small read.
-    func events(weekStart: Date, calendar: Calendar) -> [CalendarEvent] {
-        guard let store, let end = calendar.date(byAdding: .day, value: 7, to: weekStart) else { return [] }
-        let predicate = store.predicateForEvents(withStart: weekStart, end: end, calendars: nil)
+    /// Events overlapping the days the strip shows, from `start`. Synchronous: three days are a small read.
+    func events(from start: Date, calendar: Calendar) -> [CalendarEvent] {
+        guard let store, let end = calendar.date(byAdding: .day, value: CalendarModel.dayCount, to: start) else { return [] }
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         return store.events(matching: predicate).map { event in
             let color = event.calendar?.cgColor.flatMap { NSColor(cgColor: $0)?.usingColorSpace(.sRGB) }
             return CalendarEvent(

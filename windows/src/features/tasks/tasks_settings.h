@@ -12,6 +12,18 @@
 namespace noitch {
 
 inline constexpr char kDefaultTasksSite[] = "https://scele.cs.ui.ac.id";
+// The sites offered in settings, before "Other…": Fasilkom's Scele and UI's EMAS3.
+inline constexpr const char* kKnownTaskSites[][2] = {{"Scele \xC2\xB7 scele.cs.ui.ac.id", "https://scele.cs.ui.ac.id"},
+                                                     {"EMAS3 \xC2\xB7 emas3.ui.ac.id", "https://emas3.ui.ac.id"}};
+inline constexpr int kKnownTaskSiteCount = 2;
+
+// What the page calls the site: "Scele", "EMAS3", or "Moodle" for one typed in.
+inline std::string TasksSiteName(std::string_view site) {
+    if (site == "https://scele.cs.ui.ac.id") return "Scele";
+    if (site == "https://emas3.ui.ac.id") return "EMAS3";
+    return "Moodle";
+}
+
 // Minutes between checks while the island is closed. 30 is the most often the owner approved
 // (2026-11-12); 0 checks only when the island opens, the page shows or the PC wakes.
 inline constexpr double kTaskCheckChoices[] = {30, 60, 0};

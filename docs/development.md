@@ -31,6 +31,8 @@ Debug builds also take `--open`, which opens the island at launch so it can be c
 `screencapture -l <window id>` without moving the cursor, and `--settings`, which opens the settings
 window. `--demo-tasks` fills the tasks page with sample tasks, with no account or network, and
 announces a new one four seconds after launch, to see the alert; add `-openOn tasks` to open on it.
+With `--demo-all-clear` only an overdue sample is left, for the empty state. With `--demo-media` as
+well nothing is unseen, so the island opens on Home and the calendar shows the samples' deadlines.
 The demo track has a coloured cover, so the artwork tint shows, and the calendar shows sample events
 without asking for access.
 
@@ -102,7 +104,9 @@ Keep this honest and up to date.
 | --- | --- |
 | Builds; 64 unit tests | Passing |
 | Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
-| Calendar in Home: week strip, rows, narrower music column | Checked by a window screenshot with `--demo-media --open` (sample events, no EventKit); the access prompt, real calendars, change notifications and the timers **not checked on screen** |
+| Calendar in Home: three-day strip with arrows, deadline rings, rows, narrower music column | Checked by a window screenshot with `--demo-tasks --demo-media --open` (sample events and tasks, no EventKit); the arrows by click, a deadline row, the access prompt, real calendars, change notifications and the timers **not checked on screen** |
+| Tasks page (day bars, indigo palette, overdue toggle, all clear) and the closed-island slip and dot | Checked by window screenshots with `--demo-tasks`, `--demo-all-clear` and `--open`; clicks, scrolling, hover and the bars' reveal **not checked on screen** |
+| Tasks against a real Moodle site, sign-in, Keychain, the 30-minute check, reminders | **Not run**: needs a signed-in account |
 | Closed island with music (wings, six moving bars) | Checked by window screenshots with `--demo-media`; real playback, artwork, pause timing and the player-app watching **not checked on screen** |
 | Settings window with sidebar | General page checked by a window screenshot (`--settings`, Debug only); other pages and every control's effect **not checked on screen** |
 | Usage page read against real Claude Code and Codex logs | Totals checked by a one-off probe, not against ccusage |

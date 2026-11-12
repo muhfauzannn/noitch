@@ -5,7 +5,8 @@ namespace noitch {
 namespace {
 
 // Segoe MDL2 Assets ships with Windows 10 and 11, so icons need no image files.
-constexpr wchar_t kGlyphMusic[] = L"\xEC4F";
+// A house, for Home.
+constexpr wchar_t kGlyphHome[] = L"\xE80F";
 constexpr wchar_t kGlyphUsage[] = L"\xE9D2";
 constexpr wchar_t kGlyphTasks[] = L"\xE8FD";
 constexpr wchar_t kGlyphSettings[] = L"\xE713";
@@ -42,7 +43,7 @@ HRESULT HeaderScene::Paint(IslandPage page, HeaderControl hovered, bool isPresse
         const HomeRect frame = layout_.Frame(hovered);
         painter_->Fill(frame, frame.height / 2, White(isPressed ? 0.22f : 0.12f));
     }
-    painter_->Glyph(kGlyphMusic, iconFormat_.Get(), layout_.Frame(HeaderControl::HomeTab), White(page == IslandPage::Home ? 1 : kIdleTabOpacity));
+    painter_->Glyph(kGlyphHome, iconFormat_.Get(), layout_.Frame(HeaderControl::HomeTab), White(page == IslandPage::Home ? 1 : kIdleTabOpacity));
     if (layout_.Pages().usage) {
         painter_->Glyph(kGlyphUsage, iconFormat_.Get(), layout_.Frame(HeaderControl::UsageTab), White(page == IslandPage::Usage ? 1 : kIdleTabOpacity));
     }

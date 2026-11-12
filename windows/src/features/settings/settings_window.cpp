@@ -30,6 +30,7 @@ constexpr int kFirstRowId = 1000;
 constexpr int kSignInId = 60;
 constexpr int kUseKeyId = 61;
 constexpr int kSignOutId = 62;
+constexpr int kSitePickerId = 63;
 
 std::wstring WideText(const std::string& text) {
     const int length = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
@@ -125,7 +126,7 @@ void SettingsWindow::ShowPage(int index) {
     secondary_.clear();
     rows_.clear();
     rowControls_.clear();
-    siteEdit_ = userEdit_ = passwordEdit_ = keyEdit_ = signInButton_ = useKeyButton_ = statusLabel_ = nullptr;
+    sitePicker_ = siteEdit_ = userEdit_ = passwordEdit_ = keyEdit_ = signInButton_ = useKeyButton_ = statusLabel_ = nullptr;
     ++signInGeneration_;
 
     const HINSTANCE instance = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(hwnd_, GWLP_HINSTANCE));
@@ -221,7 +222,18 @@ int SettingsWindow::BuildAccount(int left, int width, int y) {
                                  SS_LEFT, 0, left + 4, y, width - 8, kCaptionHeight * 2, smallFont_));
         return y + kCaptionHeight * 2 + 4;
     }
-    siteEdit_ = field(L"Site", settings_.tasks.site, 0);
+    add(L"STATIC", L"Site", SS_CENTERIMAGE, 0, left + 4, y, width - kFieldWidth - 16, kRowHeight, font_);
+    sitePicker_ = add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, kSitePickerId, fieldX, y, kFieldWidth, 200, font_);
+    int known = kKnownTaskSiteCount;
+    for (int i = 0; i < kKnownTaskSiteCount; ++i) {
+        SendMessageW(sitePicker_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(WideText(kKnownTaskSites[i][0]).c_str()));
+        if (settings_.tasks.site == kKnownTaskSites[i][1]) known = i;
+    }
+    SendMessageW(sitePicker_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Other\x2026"));
+    SendMessageW(sitePicker_, CB_SETCURSEL, known, 0);
+    y += kRowHeight + 6;
+    siteEdit_ = field(L"Address (for Other)", settings_.tasks.site, 0);
+    EnableWindow(siteEdit_, known == kKnownTaskSiteCount);
     userEdit_ = field(L"Username", "", 0);
     passwordEdit_ = field(L"Password", "", ES_PASSWORD);
     signInButton_ = add(L"BUTTON", L"Sign in", BS_DEFPUSHBUTTON | WS_TABSTOP, kSignInId, left + width - 96, y, 96, kRowHeight, font_);
@@ -236,6 +248,19 @@ int SettingsWindow::BuildAccount(int left, int width, int y) {
     secondary_.push_back(add(L"STATIC", L"From the site's Preferences \x203A Security keys: the key for the Moodle mobile web service.", SS_LEFT, 0, left + 4, y,
                              width - 8, kCaptionHeight * 2, smallFont_));
     return y + kCaptionHeight * 2 + 4;
+}
+
+void SettingsWindow::SiteChosen() {
+    const auto index = static_cast<int>(SendMessageW(sitePicker_, CB_GETCURSEL, 0, 0));
+    const bool known = index >= 0 && index < kKnownTaskSiteCount;
+    EnableWindow(siteEdit_, !known);
+    if (known) {
+        SetWindowTextW(siteEdit_, WideText(kKnownTaskSites[index][1]).c_str());
+    } else {
+        SetWindowTextW(siteEdit_, L"");
+        SetFocus(siteEdit_);
+    }
+    Report(L"");
 }
 
 void SettingsWindow::Report(const std::wstring& text) {
@@ -370,6 +395,10 @@ LRESULT SettingsWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wparam, LP
             }
             if (code == BN_CLICKED && (id == kSignInId || id == kUseKeyId)) {
                 StartSignIn(id == kUseKeyId);
+                return 0;
+            }
+            if (code == CBN_SELCHANGE && id == kSitePickerId) {
+                SiteChosen();
                 return 0;
             }
             if (code == BN_CLICKED && id == kSignOutId) {

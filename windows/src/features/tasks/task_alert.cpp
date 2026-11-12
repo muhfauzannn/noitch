@@ -64,7 +64,7 @@ HRESULT TaskAlertScene::Paint(const std::optional<TaskSlip>& slip, bool dot, boo
         if (!liveShown) {
             // The music's wings keep their artwork and bars; without music, the slip has its own.
             const HomeRect glyph = px(layout_.Glyph());
-            const D2D1_COLOR_F plate = slip->urgent || slip->module == TaskModule::Quiz ? task_colors::kCritical : task_colors::kWatch;
+            const D2D1_COLOR_F plate = slip->urgent ? task_colors::kCritical : task_colors::kAccent;
             painter_.Fill(glyph, 5 * scale_, plate);
             painter_.Glyph(task_colors::Glyph(slip->module), glyphFormat_.Get(), {glyph.x, glyph.y + 3 * scale_, glyph.width, glyph.height - 3 * scale_},
                            D2D1::ColorF(0, 0, 0, 1));

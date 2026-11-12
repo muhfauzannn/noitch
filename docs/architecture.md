@@ -261,9 +261,15 @@ With "Show calendar" on, Home gains a 150 pt panel on the right, past a thin div
 column narrows to make room (numbers in `HomeLayout`). The island stays 580 pt wide: a 720 pt island
 was tried and found too long.
 
-- **Week strip.** Seven days of the week that holds today, starting on the locale's first weekday:
-  a letter over each date, a dot under days with events, today's date in red. A plate marks the
-  chosen day and springs to a clicked one; hovering a day shows a faint plate.
+- **Day strip.** Three days between ‹ and ›, starting on today: a letter over each date, a dot under
+  days with events, an indigo ring under days with a Moodle deadline, today's date in red. The arrows
+  move the strip by three days, and the dates crossfade. A plate marks the chosen day and springs to a
+  clicked one; hovering a day shows a faint plate. Seven days of the week came first and were too
+  many for 150 pt.
+- **Deadlines.** Tasks from the tasks page (signed in, page on) show among the day's events: a ring
+  instead of a bar, in the tasks' indigo, with the due time in indigo and "Tugas 3 · PBP". Today drops
+  the ones that have passed. They show even without calendar access; a day with none then offers
+  access as before. Windows has no calendar, so no deadlines there either.
 - **Day.** "Today", "Tomorrow", "Yesterday" or "Fri 13", with "+2 more" on the same line when the day
   has more than three events. Then up to three rows: a bar in the calendar's colour, the time ("All
   day", "Now", "14:00"), the title. Today drops what has ended and makes the current event bold.
@@ -274,8 +280,8 @@ was tried and found too long.
 - **Opening.** The store, the read and the first text wait 0.2 s after Home opens, when the panel
   reveals anyway, so opening costs no more than before. A first hover run without this was slow
   enough to fail the hover check.
-- **Events.** `EKEventStoreChanged` notifications reload the week; one one-shot timer fires at the
-  next start, end or midnight so rows change on time. Nothing polls. Each opening starts on today.
+- **Events.** `EKEventStoreChanged` notifications reload the three days; one one-shot timer fires at
+  the next start, end, deadline or midnight so rows change on time. A change in the task list redraws. Nothing polls. Each opening starts on today.
 - **Windows.** Not supported: Windows' calendar API (`AppointmentStore`) is only available to packaged
   (MSIX) apps, and the Windows app isn't packaged.
 
@@ -389,19 +395,28 @@ The third page tracks what is still due on a Moodle site: by default Scele, the 
 (`https://scele.cs.ui.ac.id`). The design was approved on 2026-11-12, and its
 [design page](https://claude.ai/artifact/HpTrJWPxU23AkJzVzJr8Ae) has the reasoning and the mockups.
 
-- **Page.** On the left, the next task as a countdown ("1d 2h"), white with more than three days to
-  go, amber within three days, red within a day or overdue, over its title, course and due time, with
-  "Open in Scele". On the right, a runway of the next 14 days from now, a dot per task (stacked on a
-  busy day, ringed in blue while new), and under it three rows: icon, title and course, and when it is
-  due ("Tomorrow 23:55", "Fri 10:00", "Overdue 2d"). Scroll up and down to move through the rest.
-  Hovering a row lights its dot; clicking a row or the button opens the task in the browser, only for
+- **Page.** On the left, the next task as a countdown ("1d 2h"), white, or red within a day or
+  overdue, over its title, course and due time, with "Open in Scele" (or EMAS3, or Moodle for another
+  site). On the right, the next seven days as bars of how much is due each day, from today: the
+  busiest day in the accent, a day with something due within a day in red, the rest grey, a new task's
+  day outlined; beside them "Busiest: Thu · 3" over "5 due in 7 days". On macOS the bars rise out of
+  their line as the page appears. Under them three rows: icon, title and course, and when it is due
+  ("Tomorrow 23:55", "Fri 10:00"). Scroll up and down to move through the rest. A 14-day line with a
+  dot per task came first and was replaced: it said when, not how much. Hovering a row widens its
+  day's bar; clicking a row or the button opens the task in the browser, only for
   links on the signed-in site.
 - **Overdue.** Work past its deadline (kept up to a week) is hidden by default: the page is about
   what can still be done. "Show 2 overdue", in red at the right end of the line under the list, adds
   it to the top of the list and the countdown ("Overdue 2d"); "Hide overdue" takes it away again, and
   every new showing of the page starts hidden. With only overdue work left, the page says "All clear ·
-  Nothing else due" with the same button. Signed out, the page offers "Sign in…", which opens settings. With
-  nothing due it says "All clear", and on macOS the tick draws itself.
+  Nothing else due" with the same button.
+- **Other states.** Signed out, the page offers "Sign in…", which opens settings. With nothing due it
+  says "All clear" under a tick that sits below the header band (it once reached into the notch), and
+  on macOS the tick draws itself.
+- **Colour.** One accent, indigo, on white and greys: the busiest day, the course chip, the row
+  icons, new tasks and the tick. Red only for what is due within a day or overdue. Amber, blue and a
+  red-amber-white scale came first and were too busy. Home's calendar uses the same indigo for
+  deadlines.
 - **Closed island.** When a check finds a task that wasn't there before, the pill takes the music's
   wing and strip shape (the live spring) for 8 s: the module's icon in the left wing, "+1" in the right
   and "New · Fri 23:55 · PBP · Tugas 3" under the notch. With music playing the wings keep the artwork
@@ -491,7 +506,7 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | AI Usage | Claude Code, Codex | On | One column each; one alone is centered. With both off, Claude stays |
 | AI Usage | Warn at | 70% | Amber from here; red from 90%, or 5 points above when that is higher |
 | AI Usage | Check Claude every | Minute | Or 5 or 15 minutes. Never more often than the approved once a minute; logs are still read every minute |
-| Tasks | Account | Signed out | Site (default `https://scele.cs.ui.ac.id`, HTTPS only), username and password, or a security key; signed in, the name and Sign out |
+| Tasks | Account | Signed out | Site: Scele (`scele.cs.ui.ac.id`, default), EMAS3 (`emas3.ui.ac.id`) or Other with an address (HTTPS only); username and password, or a security key; signed in, the name and Sign out |
 | Tasks | Check for new tasks | Every 30 minutes | Or every hour, or only when the island opens. Never more often than the approved 30 minutes |
 | Tasks | Alert on the closed island | On | The slip, then the dot |
 | Tasks | Remind before due | 1 day and 1 hour | Or 1 hour, or off |
@@ -520,7 +535,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Page switch | Tab click, or a sideways swipe of 40 pt (one wheel notch on Windows); one page per gesture; slide 24 pt with a crossfade, see [Pages](#pages) |
 | Usage layout | Numbers in `UsageLayout` (macOS) and `usage_layout.h` (Windows), which must match |
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
-| Tasks layout | Numbers in `TasksLayout` and `TaskAlertLayout` (macOS) and `tasks_layout.h` (Windows), which must match; 14-day runway, three rows |
+| Tasks layout | Numbers in `TasksLayout` and `TaskAlertLayout` (macOS) and `tasks_layout.h` (Windows), which must match; seven day bars, three rows; one indigo accent, red for within a day |
 | Task rules | `TaskRule` (macOS) and `task_model.h` (Windows): amber within 3 days, red within 1; overdue kept a week and hidden until asked for; slip 8 s; reminders 1 day and 1 hour before; checks every 30 min at most |
 | Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause; a 20 pt lyric strip under the notch, 12 pt text. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |

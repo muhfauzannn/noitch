@@ -33,6 +33,8 @@ private:
     void FinishSignIn(LPARAM result);
     void SignOut();
     void Report(const std::wstring& text);
+    // A known site fills the address and locks it; "Other…" opens it for typing.
+    void SiteChosen();
 
     HWND hwnd_ = nullptr;
     HWND sidebar_ = nullptr;
@@ -49,6 +51,7 @@ private:
     std::vector<HWND> secondary_;
     std::vector<const SettingsRow*> rows_;
     std::vector<HWND> rowControls_;
+    HWND sitePicker_ = nullptr;
     HWND siteEdit_ = nullptr;
     HWND userEdit_ = nullptr;
     HWND passwordEdit_ = nullptr;

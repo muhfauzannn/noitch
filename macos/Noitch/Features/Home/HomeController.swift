@@ -47,11 +47,18 @@ final class HomeController {
 
     private var isDemo: Bool { monitor.isDemo }
 
-    init(settings: HomeSettings, monitor: NowPlayingMonitor) {
+    /// The Moodle tasks, for their deadlines in the calendar.
+    private let tasks: () -> [MoodleTask]
+
+    init(settings: HomeSettings, monitor: NowPlayingMonitor, tasks: @escaping () -> [MoodleTask]) {
         self.settings = settings
         self.monitor = monitor
+        self.tasks = tasks
         monitor.onHomeUpdate = { [unowned self] update in if isHolding { receive(update) } }
     }
+
+    /// The task list changed; the calendar shows its deadlines.
+    func tasksChanged() { calendar?.tasksChanged() }
 
     /// True from opening until the grace period ends: Home keeps the stream running meanwhile.
     private var isHolding = false
@@ -83,7 +90,7 @@ final class HomeController {
             if layout.showsCalendar {
                 let panel = CalendarScene(layout: layout, scale: scale)
                 scene.addGroup(panel.root)
-                if calendar == nil { calendar = CalendarController() }
+                if calendar == nil { calendar = CalendarController(tasks: tasks) }
                 calendar?.attach(panel, layout: layout)
             } else {
                 calendar?.release()

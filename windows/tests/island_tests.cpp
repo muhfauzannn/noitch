@@ -872,10 +872,9 @@ void TestDueTimesReadAsPeopleSayThem() {
     assert(TaskRule::Span(5 * 3600 + 20 * 60, 2) == "5h 20m");
     assert(TaskRule::Span(2 * 86400 + 59, 2) == "2d");
     assert(TaskRule::Span(45 * 60, 2) == "45m" && TaskRule::Span(20, 2) == "0m");
-    assert(*TaskRule::RunwayPosition(kTaskNow + 7 * 86400, kTaskNow) == 0.5);
-    assert(!TaskRule::RunwayPosition(kTaskNow + 15 * 86400, kTaskNow) && !TaskRule::RunwayPosition(kTaskNow - 60, kTaskNow));
-    const std::vector<MoodleTask> day = {SampleTask(1, kTaskNow + 3600), SampleTask(2, kTaskNow + 7200), SampleTask(3, kTaskNow + 86400)};
-    assert((TaskRule::StackLevels(day, kJakarta) == std::vector<int>{0, 1, 0}));
+    assert(TaskRule::DayOffset(kTaskNow + 3600, kTaskNow, kJakarta) == 0);
+    assert(TaskRule::DayOffset(kTaskNow + 3 * 3600, kTaskNow, kJakarta) == 1);
+    assert(TaskRule::DayOffset(kTaskNow - 22 * 3600, kTaskNow, kJakarta) == -1);
 }
 
 void TestRemindersFallOnceEach() {
@@ -919,9 +918,13 @@ void TestTasksPageSaysWhatToDo() {
     for (int i = 1; i <= 5; ++i) tasks.push_back(SampleTask(i, kTaskNow + i * 3 * 3600));
     model = TasksPageModel::Make(tasks, {2}, true, false, MoodleProblem::None, kTaskNow, kTaskNow, 0, kJakarta);
     assert(!model.isMessage && model.heroLabel == "Next due" && model.countdown.size() == 1 && model.countdown[0].first == 3);
-    assert(model.heroSeverity == Severity::Critical && model.dots.size() == 5 && model.dots[1].isNew);
-    assert(model.rows.size() == 3 && model.rows[0].id == 1 && model.more == "+2 more \xC2\xB7 scroll");
-    assert(model.days[0] == "T" && model.days[1] == "F" && model.days[2] == "S");
+    // Due at 00:00 to 12:00 on the 13th: all tomorrow.
+    assert(model.heroSeverity == Severity::Critical && model.load.size() == 7 && model.load[1].count == 5 && model.load[0].count == 0);
+    assert(model.load[1].isBusiest && model.load[1].hasNew && model.load[1].hasUrgent && !model.load[0].isBusiest);
+    assert(model.loadCaption == "Busiest: tomorrow \xC2\xB7 5" && model.loadDetail == "5 due in 7 days");
+    assert(model.rows.size() == 3 && model.rows[0].id == 1 && model.rows[0].day == 1 && model.more == "+2 more \xC2\xB7 scroll");
+    assert(model.load[0].letter == "T" && model.load[1].letter == "F" && model.load[2].letter == "S");
+    assert(TasksPageModel::Make({}, {}, false, false, MoodleProblem::None, std::nullopt, kTaskNow, 0, kJakarta, false, "EMAS3").title == "See your EMAS3 tasks here");
     model = TasksPageModel::Make(tasks, {}, true, false, MoodleProblem::Unavailable, kTaskNow - 600, kTaskNow, 9, kJakarta);
     assert(model.rows[0].id == 3 && model.more == "3\xE2\x80\x93" "5 of 5" && model.heroLabel == "Next due \xC2\xB7 as of 20:50");
 }
@@ -963,7 +966,12 @@ void TestTaskAlertShapesThePill() {
 void TestTasksPageFitsAndSitesNormalize() {
     const TasksLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 38, 1);
     assert(layout.More().Bottom() <= layout.Height() - 4 && layout.OpenButton().Bottom() <= layout.Height() - 4);
-    assert(layout.Row(0).y >= layout.Runway().Bottom() && layout.RowDue(0).Right() <= layout.Width() - TasksLayout::kSidePadding);
+    assert(layout.Row(0).y >= layout.Load().Bottom() && layout.RowDue(0).Right() <= layout.Width() - TasksLayout::kSidePadding);
+    assert(layout.BarLetter(0).Bottom() <= layout.Row(0).y && layout.Bar(TaskRule::kLoadDays - 1, 1).Right() < layout.LoadCaption().x);
+    // The all-clear tick stays below the header band, clear of the notch.
+    assert(layout.Check().y >= 38 && layout.Message(true).y >= layout.Check().Bottom());
+    assert(layout.MessageDetail(true).Bottom() <= layout.MessageButton(true).y && layout.MessageButton(true).Bottom() <= layout.Height() - 8);
+    assert(TasksSiteName("https://emas3.ui.ac.id") == "EMAS3" && TasksSiteName("https://moodle.example.ac.id") == "Moodle");
     assert(NormalizedTasksSite("scele.cs.ui.ac.id/") == "https://scele.cs.ui.ac.id");
     assert(NormalizedTasksSite("http://scele.cs.ui.ac.id").empty() && NormalizedTasksSite("localhost").empty());
     assert(TasksSiteHost("https://scele.cs.ui.ac.id/moodle") == "scele.cs.ui.ac.id");

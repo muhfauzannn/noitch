@@ -14,6 +14,8 @@ enum HomeIcon {
     case music
     case usage
     case lyrics
+    /// A house, for Home's tab.
+    case home
     /// A list on a card, for the tasks page's tab.
     case tasks
     /// A page with a folded corner.
@@ -21,13 +23,13 @@ enum HomeIcon {
     /// A tick cut out of a disc.
     case quiz
 
-    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .tasks, .assignment, .quiz]
+    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .home, .tasks, .assignment, .quiz]
 
     /// Only the gear and the lyrics bubble rely on the even-odd rule. Others have overlapping parts
     /// that it would punch out.
     var hasHole: Bool {
         switch self {
-        case .settings, .lyrics, .tasks, .assignment, .quiz: true
+        case .settings, .lyrics, .home, .tasks, .assignment, .quiz: true
         default: false
         }
     }
@@ -82,6 +84,19 @@ enum HomeIcon {
             path.addRoundedRect(in: CGRect(x: 16, y: 9, width: 4, height: 11), cornerWidth: 1, cornerHeight: 1)
         case .lyrics:
             Self.addBubble(to: path)
+        case .home:
+            // A roof over a body with a door cut out, in one outline so the eaves have no seam.
+            path.move(to: CGPoint(x: 12, y: 2.5))
+            path.addLine(to: CGPoint(x: 21.5, y: 11))
+            path.addLine(to: CGPoint(x: 19, y: 11))
+            path.addLine(to: CGPoint(x: 19, y: 20.5))
+            path.addArc(tangent1End: CGPoint(x: 19, y: 21.5), tangent2End: CGPoint(x: 18, y: 21.5), radius: 1)
+            path.addLine(to: CGPoint(x: 6, y: 21.5))
+            path.addArc(tangent1End: CGPoint(x: 5, y: 21.5), tangent2End: CGPoint(x: 5, y: 20.5), radius: 1)
+            path.addLine(to: CGPoint(x: 5, y: 11))
+            path.addLine(to: CGPoint(x: 2.5, y: 11))
+            path.closeSubpath()
+            path.addRoundedRect(in: CGRect(x: 10, y: 14.5, width: 4, height: 7), cornerWidth: 1, cornerHeight: 1)
         case .tasks:
             path.addRoundedRect(in: CGRect(x: 4, y: 3, width: 16, height: 18), cornerWidth: 3.5, cornerHeight: 3.5)
             for (y, width) in [(7.5, 8.0), (11.0, 8.0), (14.5, 5.0)] as [(CGFloat, CGFloat)] {

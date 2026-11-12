@@ -71,13 +71,18 @@ struct HomeLayout: Equatable {
     var calendarDivider: CGRect { CGRect(x: calendarPanel.minX - Self.calendarGap, y: bodyTop, width: 1, height: calendarPanel.height - 2) }
 
     /// A weekday letter over its date, one of seven across the panel.
+    /// Each arrow beside the strip of days.
+    static let calendarArrow: CGFloat = 20
     func calendarDay(_ index: Int) -> CGRect {
-        let width = Self.calendarWidth / 7
-        return CGRect(x: calendarPanel.minX + CGFloat(index) * width, y: calendarPanel.minY, width: width, height: 34)
+        let width = (Self.calendarWidth - Self.calendarArrow * 2) / CGFloat(CalendarModel.dayCount)
+        return CGRect(x: calendarPanel.minX + Self.calendarArrow + CGFloat(index) * width, y: calendarPanel.minY, width: width, height: 34)
     }
     func calendarDayIndex(at point: CGPoint) -> Int? {
-        (0..<7).first { calendarDay($0).contains(point) }
+        (0..<CalendarModel.dayCount).first { calendarDay($0).contains(point) }
     }
+    /// The arrows sit level with the dates, which the plates mark.
+    var calendarPrevious: CGRect { CGRect(x: calendarPanel.minX, y: calendarPanel.minY + 12, width: Self.calendarArrow, height: 20) }
+    var calendarNext: CGRect { CGRect(x: calendarPanel.maxX - Self.calendarArrow, y: calendarPanel.minY + 12, width: Self.calendarArrow, height: 20) }
     var calendarHeading: CGRect { CGRect(x: calendarPanel.minX, y: calendarPanel.minY + 38, width: Self.calendarWidth, height: 14) }
     func calendarRow(_ index: Int) -> CGRect {
         CGRect(x: calendarPanel.minX, y: calendarHeading.maxY + 3 + CGFloat(index) * Self.calendarRowHeight, width: Self.calendarWidth, height: Self.calendarRowHeight)

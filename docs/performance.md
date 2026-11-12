@@ -15,6 +15,11 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the tasks page's day bars and indigo palette, Home's three-day calendar with deadlines and the
+site choice (2026-11-12, same M5), signed out: 9.74 and 9.74 MB, 1.72 and 2.62 ms/min, 0.13 wakeups/s;
+the binary is 1524 KB. A first run read 9.89 MB, 18.21 ms/min and 0.47 wakeups/s, close to the
+budgets, and did not recur.
+
 With the tasks page and its closed-island alert (2026-11-12, same M5), signed out, so no check runs:
 10.50 and 10.45 MB, 2.38 and 1.91 ms/min, 0.13 and 0.10 wakeups/s, 4.28 ms per transition, all 23
 hover checks passing with Hover delay at None. Just before, on main: 9.97 MB, 2.89 ms/min, 0.10

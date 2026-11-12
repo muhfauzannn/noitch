@@ -20,6 +20,7 @@ enum TasksSettingsPane {
 /// form through its buttons' handlers, so it lives exactly as long as the page.
 private final class AccountRows {
     private weak var form: SettingsForm?
+    private let sitePicker = NSPopUpButton(frame: .zero, pullsDown: false)
     private let site = AccountRows.field("")
     private let username = AccountRows.field("")
     private let password = NSSecureTextField()
@@ -36,6 +37,10 @@ private final class AccountRows {
         self.form = form
         AccountRows.style(password)
         signIn.keyEquivalent = "\r"
+        sitePicker.controlSize = .small
+        sitePicker.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        sitePicker.addItems(withTitles: TasksSettings.knownSites.map(\.0) + ["Other…"])
+        site.placeholderString = "moodle.example.ac.id"
     }
 
     func build() {
@@ -44,7 +49,8 @@ private final class AccountRows {
             accountCaption = form.row("Signed in", caption: " ", control: signOut)
         }
         signedOutViews = form.section("Account", footer: "Your password is sent once to the site to get a key, and isn't stored. The key is kept in your Keychain.") {
-            form.row("Site", control: site)
+            form.row("Site", control: sitePicker)
+            form.row("Address", caption: "Only for Other: any Moodle site over https.", control: site)
             form.row("Username", control: username)
             form.row("Password", control: password)
             status = form.row("", caption: " ", control: signIn)
@@ -53,6 +59,7 @@ private final class AccountRows {
             form.row("Key", control: key)
             form.row("", control: useKey)
         }
+        form.bind(sitePicker) { [self] _ in siteChosen() }
         form.bind(signIn) { [self] _ in startSignIn() }
         form.bind(useKey) { [self] _ in startUseKey() }
         form.bind(signOut) { [self] _ in doSignOut() }
@@ -60,9 +67,26 @@ private final class AccountRows {
         refresh()
     }
 
+    /// A known site fills the address and locks it; "Other…" opens it for typing.
+    private func siteChosen() {
+        let index = sitePicker.indexOfSelectedItem
+        let known = TasksSettings.knownSites.indices.contains(index)
+        site.isEnabled = !known
+        if known {
+            site.stringValue = TasksSettings.knownSites[index].1
+        } else {
+            if TasksSettings.knownSites.contains(where: { $0.1 == site.stringValue }) { site.stringValue = "" }
+            site.window?.makeFirstResponder(site)
+        }
+        report(nil)
+    }
+
     private func refresh() {
         guard let settings = form?.settings.tasks else { return }
         site.stringValue = settings.site
+        let known = TasksSettings.knownSites.firstIndex { $0.1 == settings.site }
+        sitePicker.selectItem(at: known ?? TasksSettings.knownSites.count)
+        site.isEnabled = known == nil
         accountCaption?.stringValue = settings.accountName + " · " + (URL(string: settings.site)?.host ?? settings.site)
         signedInViews.forEach { $0.isHidden = !settings.isSignedIn }
         signedOutViews.forEach { $0.isHidden = settings.isSignedIn }

@@ -4,8 +4,8 @@ import Foundation
 nonisolated enum TaskRule {
     /// Overdue work stays listed this long, so a missed deadline doesn't simply vanish.
     static let overdueKept: Double = 7 * 86400
-    /// The runway on the page shows this many days from now.
-    static let runwayDays = 14
+    /// The page's load bars show this many days, from today.
+    static let loadDays = 7
     /// Rows the page's list shows at once; scrolling moves through the rest.
     static let visibleRows = 3
     static let day: Double = 86400
@@ -121,20 +121,10 @@ nonisolated enum TaskRule {
         return Array(all[first...].prefix(parts)).filter { $0.0 > 0 || $0.1 == all[first].1 }
     }
 
-    /// Where a due time sits on the runway, 0 at now and 1 at its far end, or nil past either end.
-    static func runwayPosition(_ due: Double, now: Double) -> Double? {
-        let fraction = (due - now) / (Double(runwayDays) * day)
-        return (0...1).contains(fraction) ? fraction : nil
-    }
-
-    /// How many tasks earlier in the list fall on the same day, so the runway can stack their dots.
-    static func stackLevels(_ tasks: [MoodleTask], calendar: Calendar) -> [Int] {
-        var counts: [Date: Int] = [:]
-        return tasks.map { task in
-            let day = calendar.startOfDay(for: Date(timeIntervalSince1970: task.due))
-            defer { counts[day, default: 0] += 1 }
-            return counts[day] ?? 0
-        }
+    /// Local days from today to the due day: 0 for today, 1 for tomorrow, negative before today.
+    static func dayOffset(_ due: Double, now: Double, calendar: Calendar) -> Int {
+        calendar.dateComponents([.day], from: calendar.startOfDay(for: Date(timeIntervalSince1970: now)),
+                                to: calendar.startOfDay(for: Date(timeIntervalSince1970: due))).day ?? 0
     }
 
     // MARK: Reminders
@@ -239,14 +229,18 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
         var module: TaskModule
         var isNew: Bool
         var url: String
+        /// The day's bar, when it falls in the next seven days.
+        var day: Int?
     }
 
-    struct Dot: Equatable, Sendable {
-        var id: Int
-        var fraction: Double
-        var stack: Int
-        var severity: Severity
-        var isNew: Bool
+    /// One of the next seven days, as a bar as tall as its share of the work.
+    struct DayLoad: Equatable, Sendable {
+        var letter: String
+        var count: Int
+        /// Something due within a day falls on it.
+        var hasUrgent: Bool
+        var hasNew: Bool
+        var isBusiest: Bool
     }
 
     struct Hero: Equatable, Sendable {
@@ -268,7 +262,7 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
         /// A short message in the middle, with a button when `button` is set; `buttonAction` says what
         /// it does.
         case message(title: String, detail: String, button: String?, allClear: Bool)
-        case list(hero: Hero, dots: [Dot], rows: [Row], more: String)
+        case list(hero: Hero, load: [DayLoad], rows: [Row], more: String)
     }
 
     enum ButtonAction: Equatable, Sendable {
@@ -277,40 +271,50 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
     }
 
     var content: Content
-    /// The runway's day letters, from today.
-    var days: [String] = []
+    /// Beside the bars: "Busiest: Thu · 3" over "5 due this week".
+    var loadCaption = ["", ""]
     var buttonAction = ButtonAction.openSettings
     /// "Show 2 overdue" or "Hide overdue" beside the list, or empty when nothing is overdue.
     var overdueToggle = ""
     /// How many tasks the list scrolls through.
     var listCount = 0
+    /// "Scele", "EMAS3" or "Moodle", for the button and messages.
+    var siteName = "Scele"
 
     /// Overdue work is hidden until `showOverdue`: the page is about what can still be done.
     static func make(tasks allTasks: [MoodleTask], unviewed: Set<Int>, signedIn: Bool, checking: Bool, problem: MoodleProblem?,
-                     asOf: Double?, now: Double, offset: Int, calendar: Calendar, showOverdue: Bool = false) -> TasksPageModel {
+                     asOf: Double?, now: Double, offset: Int, calendar: Calendar, showOverdue: Bool = false,
+                     siteName site: String = "Scele") -> TasksPageModel {
+        var model = makeContent(tasks: allTasks, unviewed: unviewed, signedIn: signedIn, checking: checking, problem: problem, asOf: asOf, now: now,
+                                offset: offset, calendar: calendar, showOverdue: showOverdue, site: site)
+        model.siteName = site
+        return model
+    }
+
+    private static func makeContent(tasks allTasks: [MoodleTask], unviewed: Set<Int>, signedIn: Bool, checking: Bool, problem: MoodleProblem?,
+                                    asOf: Double?, now: Double, offset: Int, calendar: Calendar, showOverdue: Bool, site: String) -> TasksPageModel {
         func clock(_ time: Double) -> String {
             let parts = calendar.dateComponents([.hour, .minute], from: Date(timeIntervalSince1970: time))
             return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
         }
         guard signedIn else {
-            return TasksPageModel(content: .message(title: "See your Scele tasks here", detail: "Sign in once in Settings. Your password isn't stored.", button: "Sign in…", allClear: false))
+            return TasksPageModel(content: .message(title: "See your \(site) tasks here", detail: "Sign in once in Settings. Your password isn't stored.", button: "Sign in…", allClear: false))
         }
         if problem == .signedOut {
-            return TasksPageModel(content: .message(title: "Signed out of Scele", detail: "The key was refused. Sign in again in Settings.", button: "Sign in…", allClear: false))
+            return TasksPageModel(content: .message(title: "Signed out of \(site)", detail: "The key was refused. Sign in again in Settings.", button: "Sign in…", allClear: false))
         }
         guard let asOf else {
-            let title = problem == nil || checking ? "Checking Scele…" : problem == .maintenance ? "Scele is under maintenance" : "Couldn't reach Scele"
+            let title = problem == nil || checking ? "Checking \(site)…" : problem == .maintenance ? "\(site) is under maintenance" : "Couldn't reach \(site)"
             return TasksPageModel(content: .message(title: title, detail: checking ? "" : "Noitch will try again soon.", button: nil, allClear: false))
         }
         let weekday = calendar.component(.weekday, from: Date(timeIntervalSince1970: now))
-        let days = (0..<TaskRule.runwayDays).map { String(TaskRule.weekdays[(weekday - 1 + $0) % 7].prefix(1)) }
         let overdue = allTasks.filter { $0.due < now }.count
         let tasks = showOverdue ? allTasks : allTasks.filter { $0.due >= now }
         let reveal = "Show \(overdue) overdue"
         guard let first = tasks.first else {
             let ahead = (overdue > 0 ? "Nothing else due" : "Nothing to do") + (problem == nil ? "" : " as of \(clock(asOf))")
             var model = TasksPageModel(content: .message(title: "All clear", detail: "\(ahead) · checked \(clock(asOf))",
-                                                         button: overdue > 0 ? reveal : nil, allClear: true), days: days)
+                                                         button: overdue > 0 ? reveal : nil, allClear: true))
             model.buttonAction = .showOverdue
             return model
         }
@@ -324,16 +328,34 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
             severity: TaskRule.urgency(due: first.due, now: now),
             url: first.url
         )
-        let stacks = TaskRule.stackLevels(tasks, calendar: calendar)
-        let dots = zip(tasks, stacks).compactMap { task, stack -> Dot? in
-            TaskRule.runwayPosition(task.due, now: now).map {
-                Dot(id: task.id, fraction: $0, stack: stack, severity: TaskRule.urgency(due: task.due, now: now), isNew: unviewed.contains(task.id))
-            }
+        // The week ahead counts what can still be done, whether or not overdue work is shown.
+        func loadDay(_ task: MoodleTask) -> Int? {
+            let offset = TaskRule.dayOffset(task.due, now: now, calendar: calendar)
+            return task.due >= now && (0..<TaskRule.loadDays).contains(offset) ? offset : nil
         }
+        var counts = Array(repeating: 0, count: TaskRule.loadDays)
+        var urgent = Array(repeating: false, count: TaskRule.loadDays)
+        var fresh = Array(repeating: false, count: TaskRule.loadDays)
+        for task in allTasks {
+            guard let day = loadDay(task) else { continue }
+            counts[day] += 1
+            urgent[day] = urgent[day] || TaskRule.urgency(due: task.due, now: now) == .critical
+            fresh[day] = fresh[day] || unviewed.contains(task.id)
+        }
+        let busiest = counts.max() ?? 0
+        let busiestDay = counts.firstIndex(of: busiest) ?? 0
+        let load = (0..<TaskRule.loadDays).map { day in
+            DayLoad(letter: String(TaskRule.weekdays[(weekday - 1 + day) % 7].prefix(1)), count: counts[day], hasUrgent: urgent[day],
+                    hasNew: fresh[day], isBusiest: busiest > 0 && day == busiestDay)
+        }
+        let total = counts.reduce(0, +)
+        let busiestName = busiestDay == 0 ? "today" : busiestDay == 1 ? "tomorrow" : TaskRule.weekdays[(weekday - 1 + busiestDay) % 7]
+        let caption = total == 0 ? ["Nothing due", "in the next 7 days"] : ["Busiest: \(busiestName) · \(busiest)", "\(total) due in 7 days"]
         let start = min(max(offset, 0), max(tasks.count - TaskRule.visibleRows, 0))
         let rows = tasks[start...].prefix(TaskRule.visibleRows).map { task in
             Row(id: task.id, title: task.title, course: task.course, due: TaskRule.dueText(task.due, now: now, calendar: calendar),
-                severity: TaskRule.urgency(due: task.due, now: now), module: task.module, isNew: unviewed.contains(task.id), url: task.url)
+                severity: TaskRule.urgency(due: task.due, now: now), module: task.module, isNew: unviewed.contains(task.id), url: task.url,
+                day: loadDay(task))
         }
         let more: String
         if tasks.count <= TaskRule.visibleRows {
@@ -343,7 +365,8 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
         } else {
             more = "\(start + 1)–\(start + rows.count) of \(tasks.count)"
         }
-        var model = TasksPageModel(content: .list(hero: hero, dots: dots, rows: Array(rows), more: more), days: days)
+        var model = TasksPageModel(content: .list(hero: hero, load: load, rows: Array(rows), more: more))
+        model.loadCaption = caption
         model.overdueToggle = overdue == 0 ? "" : showOverdue ? "Hide overdue" : reveal
         model.listCount = tasks.count
         return model

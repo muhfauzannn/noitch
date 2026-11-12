@@ -92,7 +92,7 @@ final class TasksController {
         let now = date.timeIntervalSince1970
         let model = TasksPageModel.make(tasks: watch.tasks, unviewed: newOnShow, signedIn: watch.settings.isSignedIn, checking: watch.isChecking,
                                         problem: watch.problem, asOf: watch.record?.asOf, now: now, offset: offset, calendar: .current,
-                                        showOverdue: showOverdue)
+                                        showOverdue: showOverdue, siteName: TasksSettings.siteName(watch.settings.site))
         self.model = model
         scene.apply(model)
         scheduleTick(after: now)
@@ -168,8 +168,8 @@ final class TasksController {
             if layout.openButton.insetBy(dx: -4, dy: -4).contains(point) { return .open }
             if !model.overdueToggle.isEmpty, layout.overdueToggle.insetBy(dx: -4, dy: -6).contains(point) { return .overdue }
             return rows.indices.first { layout.row($0).contains(point) }.map(Target.row)
-        case let .message(_, _, button, _):
-            return button != nil && layout.messageButton.insetBy(dx: -4, dy: -4).contains(point) ? .message : nil
+        case let .message(_, _, button, allClear):
+            return button != nil && layout.messageButton(withCheck: allClear).insetBy(dx: -4, dy: -4).contains(point) ? .message : nil
         }
     }
 

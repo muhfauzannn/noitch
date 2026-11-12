@@ -326,7 +326,8 @@ enum class TaskScope { AssignmentsAndQuizzes, Everything };
 struct TaskRule {
     // Overdue work stays listed this long, so a missed deadline doesn't simply vanish.
     static constexpr double kOverdueKept = 7 * 86400.0;
-    static constexpr int kRunwayDays = 14;
+    // The page's load bars show this many days, from today.
+    static constexpr int kLoadDays = 7;
     static constexpr int kVisibleRows = 3;
     static constexpr double kDay = 86400;
 
@@ -435,20 +436,8 @@ struct TaskRule {
         return text;
     }
 
-    // 0 at now, 1 at the runway's far end; nothing past either end.
-    static std::optional<double> RunwayPosition(double due, double now) {
-        const double fraction = (due - now) / (kRunwayDays * kDay);
-        if (fraction < 0 || fraction > 1) return std::nullopt;
-        return fraction;
-    }
-
-    // How many tasks earlier in the list fall on the same local day.
-    static std::vector<int> StackLevels(const std::vector<MoodleTask>& tasks, double offset) {
-        std::map<int64_t, int> counts;
-        std::vector<int> levels;
-        for (const MoodleTask& task : tasks) levels.push_back(counts[Local(task.due, offset).day]++);
-        return levels;
-    }
+    // Local days from today to the due day: 0 for today, 1 for tomorrow, negative before today.
+    static int DayOffset(double due, double now, double offset) { return static_cast<int>(Local(due, offset).day - Local(now, offset).day); }
 
     static std::string ReminderKey(const MoodleTask& task, double lead) {
         return std::to_string(task.id) + "@" + std::to_string(static_cast<int64_t>(lead));
@@ -576,15 +565,19 @@ struct TasksPageModel {
         TaskModule module = TaskModule::Other;
         bool isNew = false;
         std::string url;
+        // The day's bar, or -1 past the next seven days.
+        int day = -1;
         bool operator==(const Row&) const = default;
     };
-    struct Dot {
-        int64_t id = 0;
-        double fraction = 0;
-        int stack = 0;
-        Severity severity = Severity::Calm;
-        bool isNew = false;
-        bool operator==(const Dot&) const = default;
+    // One of the next seven days, as a bar as tall as its share of the work.
+    struct DayLoad {
+        std::string letter;
+        int count = 0;
+        // Something due within a day falls on it.
+        bool hasUrgent = false;
+        bool hasNew = false;
+        bool isBusiest = false;
+        bool operator==(const DayLoad&) const = default;
     };
 
     // A short message in the middle, with a button when `button` is set: it opens settings, or shows
@@ -608,17 +601,21 @@ struct TasksPageModel {
     std::string heroDue;
     Severity heroSeverity = Severity::Calm;
     std::string heroUrl;
-    std::vector<Dot> dots;
+    std::vector<DayLoad> load;
+    // Beside the bars: "Busiest: Thu · 3" over "5 due in 7 days".
+    std::string loadCaption;
+    std::string loadDetail;
     std::vector<Row> rows;
     std::string more;
-    // The runway's day letters, from today.
-    std::vector<std::string> days;
+    // "Scele", "EMAS3" or "Moodle", for the button and messages.
+    std::string siteName = "Scele";
 
     bool operator==(const TasksPageModel& o) const {
         if (isMessage != o.isMessage || title != o.title || detail != o.detail || button != o.button || allClear != o.allClear) return false;
         if (buttonShowsOverdue != o.buttonShowsOverdue || overdueToggle != o.overdueToggle || listCount != o.listCount) return false;
         if (heroLabel != o.heroLabel || heroTitle != o.heroTitle || heroCourse != o.heroCourse || heroDue != o.heroDue) return false;
-        if (heroSeverity != o.heroSeverity || heroUrl != o.heroUrl || dots != o.dots || rows != o.rows || more != o.more || days != o.days) return false;
+        if (heroSeverity != o.heroSeverity || heroUrl != o.heroUrl || load != o.load || rows != o.rows || more != o.more) return false;
+        if (loadCaption != o.loadCaption || loadDetail != o.loadDetail || siteName != o.siteName) return false;
         if (countdown.size() != o.countdown.size()) return false;
         for (size_t i = 0; i < countdown.size(); ++i) {
             if (countdown[i].first != o.countdown[i].first || std::string_view(countdown[i].second) != o.countdown[i].second) return false;
@@ -628,8 +625,10 @@ struct TasksPageModel {
 
     // Overdue work is hidden until `showOverdue`: the page is about what can still be done.
     static TasksPageModel Make(const std::vector<MoodleTask>& allTasks, const std::set<int64_t>& unviewed, bool signedIn, bool checking,
-                               MoodleProblem problem, std::optional<double> asOf, double now, int offset, double utcOffset, bool showOverdue = false) {
+                               MoodleProblem problem, std::optional<double> asOf, double now, int offset, double utcOffset, bool showOverdue = false,
+                               const std::string& site = "Scele") {
         TasksPageModel model;
+        model.siteName = site;
         const auto clock = [utcOffset](double time) {
             const TaskRule::LocalTime local = TaskRule::Local(time, utcOffset);
             char text[8];
@@ -637,25 +636,24 @@ struct TasksPageModel {
             return std::string(text);
         };
         if (!signedIn) {
-            model.title = "See your Scele tasks here";
+            model.title = "See your " + site + " tasks here";
             model.detail = "Sign in once in Settings. Your password isn't stored.";
             model.button = "Sign in\xE2\x80\xA6";
             return model;
         }
         if (problem == MoodleProblem::SignedOut) {
-            model.title = "Signed out of Scele";
+            model.title = "Signed out of " + site;
             model.detail = "The key was refused. Sign in again in Settings.";
             model.button = "Sign in\xE2\x80\xA6";
             return model;
         }
         if (!asOf) {
             const bool waiting = problem == MoodleProblem::None || checking;
-            model.title = waiting ? "Checking Scele\xE2\x80\xA6" : problem == MoodleProblem::Maintenance ? "Scele is under maintenance" : "Couldn't reach Scele";
+            model.title = waiting ? "Checking " + site + "\xE2\x80\xA6" : problem == MoodleProblem::Maintenance ? site + " is under maintenance" : "Couldn't reach " + site;
             model.detail = checking ? "" : "Noitch will try again soon.";
             return model;
         }
         const int weekday = TaskRule::Local(now, utcOffset).weekday;
-        for (int day = 0; day < TaskRule::kRunwayDays; ++day) model.days.emplace_back(1, TaskRule::kWeekdays[(weekday + day) % 7][0]);
         std::vector<MoodleTask> tasks;
         int overdue = 0;
         for (const MoodleTask& task : allTasks) {
@@ -683,18 +681,38 @@ struct TasksPageModel {
         model.heroDue = TaskRule::FullDue(first.due, utcOffset);
         model.heroSeverity = TaskRule::Urgency(first.due, now);
         model.heroUrl = first.url;
-        const std::vector<int> stacks = TaskRule::StackLevels(tasks, utcOffset);
-        for (size_t i = 0; i < tasks.size(); ++i) {
-            if (const auto fraction = TaskRule::RunwayPosition(tasks[i].due, now)) {
-                model.dots.push_back({tasks[i].id, *fraction, stacks[i], TaskRule::Urgency(tasks[i].due, now), unviewed.count(tasks[i].id) > 0});
-            }
+        // The week ahead counts what can still be done, whether or not overdue work is shown.
+        const auto loadDay = [&](const MoodleTask& task) {
+            const int day = TaskRule::DayOffset(task.due, now, utcOffset);
+            return task.due >= now && day >= 0 && day < TaskRule::kLoadDays ? day : -1;
+        };
+        model.load.resize(TaskRule::kLoadDays);
+        for (int day = 0; day < TaskRule::kLoadDays; ++day) model.load[static_cast<size_t>(day)].letter = std::string(1, TaskRule::kWeekdays[(weekday + day) % 7][0]);
+        int total = 0;
+        for (const MoodleTask& task : allTasks) {
+            const int day = loadDay(task);
+            if (day < 0) continue;
+            DayLoad& load = model.load[static_cast<size_t>(day)];
+            ++load.count;
+            ++total;
+            load.hasUrgent = load.hasUrgent || TaskRule::Urgency(task.due, now) == Severity::Critical;
+            load.hasNew = load.hasNew || unviewed.count(task.id) > 0;
         }
+        int busiestDay = 0;
+        for (int day = 1; day < TaskRule::kLoadDays; ++day) {
+            if (model.load[static_cast<size_t>(day)].count > model.load[static_cast<size_t>(busiestDay)].count) busiestDay = day;
+        }
+        const int busiest = model.load[static_cast<size_t>(busiestDay)].count;
+        model.load[static_cast<size_t>(busiestDay)].isBusiest = busiest > 0;
+        const std::string busiestName = busiestDay == 0 ? "today" : busiestDay == 1 ? "tomorrow" : TaskRule::kWeekdays[(weekday + busiestDay) % 7];
+        model.loadCaption = total == 0 ? "Nothing due" : "Busiest: " + busiestName + " \xC2\xB7 " + std::to_string(busiest);
+        model.loadDetail = total == 0 ? "in the next 7 days" : std::to_string(total) + " due in 7 days";
         const int count = static_cast<int>(tasks.size());
         const int start = std::clamp(offset, 0, std::max(count - TaskRule::kVisibleRows, 0));
         for (int i = start; i < std::min(start + TaskRule::kVisibleRows, count); ++i) {
             const MoodleTask& task = tasks[static_cast<size_t>(i)];
             model.rows.push_back({task.id, task.title, task.course, TaskRule::DueText(task.due, now, utcOffset), TaskRule::Urgency(task.due, now), task.module,
-                                  unviewed.count(task.id) > 0, task.url});
+                                  unviewed.count(task.id) > 0, task.url, loadDay(task)});
         }
         if (count > TaskRule::kVisibleRows) {
             model.more = start == 0 ? "+" + std::to_string(count - TaskRule::kVisibleRows) + " more \xC2\xB7 scroll"

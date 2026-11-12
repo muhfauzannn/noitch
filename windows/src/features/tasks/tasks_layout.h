@@ -18,9 +18,12 @@ public:
     static constexpr float kHeaderGap = 6;
     static constexpr float kHeroWidth = 178;
     static constexpr float kColumnGap = 22;
-    static constexpr float kRunwayHeight = 34;
-    static constexpr float kAxisY = 14;
-    static constexpr float kDot = 9;
+    static constexpr float kLoadHeight = 36;
+    static constexpr float kBarWidth = 14;
+    static constexpr float kBarGap = 10;
+    // The tallest a bar grows; an empty day keeps a short stub.
+    static constexpr float kBarMax = 21;
+    static constexpr float kBarStub = 3;
     static constexpr float kRowHeight = 24;
     static constexpr float kRowGap = 1;
 
@@ -38,18 +41,18 @@ public:
     HomeRect HeroDue() const { return Px({kSidePadding + 50, BodyTop() + 77, kHeroWidth - 50, 14}); }
     HomeRect OpenButton() const { return Px({kSidePadding, BodyTop() + 97, 104, 20}); }
 
-    HomeRect Runway() const { return Px(RunwayLogical()); }
-    // The centre of a dot at `fraction` along the runway, raised one dot per `stack`. Pixels.
-    void DotCenter(double fraction, int stack, float* x, float* y) const {
-        const HomeRect runway = RunwayLogical();
-        const float inset = kDot / 2 + 1;
-        *x = (runway.x + inset + static_cast<float>(fraction) * (runway.width - inset * 2)) * scale_;
-        *y = (runway.y + kAxisY - static_cast<float>(std::min(stack, 2)) * (kDot - 2)) * scale_;
+    HomeRect Load() const { return Px({ColumnX(), BodyTop(), ColumnWidth(), kLoadHeight}); }
+    // A day's bar, `share` of the busiest day's height, standing on the bars' line.
+    HomeRect Bar(int day, float share) const {
+        const float height = kBarStub + (kBarMax - kBarStub) * std::clamp(share, 0.0f, 1.0f);
+        return Px({ColumnX() + day * (kBarWidth + kBarGap), BarBase() - height, kBarWidth, height});
     }
-    HomeRect DayLabel(int day) const {
-        const HomeRect runway = RunwayLogical();
-        const float width = runway.width / TaskRule::kRunwayDays;
-        return Px({runway.x + day * width, runway.y + kAxisY + 7, width, 11});
+    HomeRect BarLetter(int day) const { return Px({ColumnX() + day * (kBarWidth + kBarGap) - 4, BarBase() + 2, kBarWidth + 8, 11}); }
+    HomeRect LoadCaption() const { return Px(CaptionLogical()); }
+    HomeRect LoadDetail() const {
+        HomeRect caption = CaptionLogical();
+        caption.y += 15;
+        return Px(caption);
     }
 
     HomeRect Row(int index) const { return Px(RowLogical(index)); }
@@ -76,19 +79,26 @@ public:
         return Px({ColumnX() + ColumnWidth() - 6 - kOverdueWidth, last.Bottom() + 2, kOverdueWidth, 12});
     }
 
-    HomeRect Message() const { return Px({kSidePadding, BodyTop() + 30, width_ - kSidePadding * 2, 20}); }
-    HomeRect MessageDetail() const { return Px({kSidePadding, BodyTop() + 52, width_ - kSidePadding * 2, 15}); }
-    HomeRect MessageButton() const { return Px({(width_ - 92) / 2, BodyTop() + 76, 92, 22}); }
-    HomeRect Check() const { return Px({(width_ - 34) / 2, BodyTop() - 8, 34, 34}); }
+    // Under the all-clear tick everything moves down, so the tick stays clear of the header band and
+    // the notch.
+    HomeRect Message(bool withCheck) const { return Px({kSidePadding, BodyTop() + 22 + Shift(withCheck), width_ - kSidePadding * 2, 20}); }
+    HomeRect MessageDetail(bool withCheck) const { return Px({kSidePadding, BodyTop() + 44 + Shift(withCheck), width_ - kSidePadding * 2, 15}); }
+    HomeRect MessageButton(bool withCheck) const { return Px({(width_ - 116) / 2, BodyTop() + 66 + Shift(withCheck), 116, 22}); }
+    HomeRect Check() const { return Px({(width_ - 30) / 2, BodyTop() + 2, 30, 30}); }
 
     float BodyTop() const { return header_ + kHeaderGap; }
 
 private:
     float ColumnX() const { return kSidePadding + kHeroWidth + kColumnGap; }
     float ColumnWidth() const { return width_ - ColumnX() - kSidePadding; }
-    HomeRect RunwayLogical() const { return {ColumnX(), BodyTop(), ColumnWidth(), kRunwayHeight}; }
+    float BarBase() const { return BodyTop() + 23; }
+    HomeRect CaptionLogical() const {
+        const float x = ColumnX() + TaskRule::kLoadDays * (kBarWidth + kBarGap) + 8;
+        return {x, BodyTop() + 3, ColumnX() + ColumnWidth() - x, 14};
+    }
+    static float Shift(bool withCheck) { return withCheck ? 16.0f : 0.0f; }
     HomeRect RowLogical(int index) const {
-        return {ColumnX(), BodyTop() + kRunwayHeight + 4 + index * (kRowHeight + kRowGap), ColumnWidth(), kRowHeight};
+        return {ColumnX(), BodyTop() + kLoadHeight + 4 + index * (kRowHeight + kRowGap), ColumnWidth(), kRowHeight};
     }
     HomeRect Px(HomeRect r) const { return {r.x * scale_, r.y * scale_, r.width * scale_, r.height * scale_}; }
 

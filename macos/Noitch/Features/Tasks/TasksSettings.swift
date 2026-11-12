@@ -3,6 +3,8 @@ import Foundation
 /// The tasks page's preferences. The account's key itself is in the Keychain, never here.
 struct TasksSettings: Equatable {
     static let defaultSite = "https://scele.cs.ui.ac.id"
+    /// The sites offered in settings, before "Other…": Fasilkom's Scele and UI's EMAS3.
+    static let knownSites = [("Scele · scele.cs.ui.ac.id", "https://scele.cs.ui.ac.id"), ("EMAS3 · emas3.ui.ac.id", "https://emas3.ui.ac.id")]
     /// Minutes between checks while the island is closed. 30 is the most often the owner approved
     /// (2026-11-12); 0 checks only when the island opens, the page shows or the Mac wakes.
     static let checkChoices = [30.0, 60, 0]
@@ -16,6 +18,15 @@ struct TasksSettings: Equatable {
     var scope = TaskScope.assignmentsAndQuizzes
 
     var isSignedIn: Bool { !accountName.isEmpty }
+
+    /// What the page calls the site: "Scele", "EMAS3", or "Moodle" for one typed in.
+    nonisolated static func siteName(_ site: String) -> String {
+        switch site {
+        case "https://scele.cs.ui.ac.id": "Scele"
+        case "https://emas3.ui.ac.id": "EMAS3"
+        default: "Moodle"
+        }
+    }
 
     static func load(_ store: SettingsStore) -> TasksSettings {
         var settings = TasksSettings()

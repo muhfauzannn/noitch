@@ -72,7 +72,7 @@ final class TaskAlertScene {
         let accent = content.urgent ? TasksScene.critical : TasksScene.fresh
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        glyphPlate.backgroundColor = (content.urgent ? TasksScene.critical : content.module == .quiz ? TasksScene.critical : TasksScene.watch).cgColor
+        glyphPlate.backgroundColor = (content.urgent ? TasksScene.critical : TasksScene.accent).cgColor
         glyph.path = TasksScene.icon(content.module).path(side: glyph.bounds.width)
         count.string = content.count
         count.foregroundColor = accent.cgColor

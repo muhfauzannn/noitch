@@ -42,7 +42,7 @@ final class PagerScene {
 
         let tabs: [(HeaderControl, HomeIcon)] = layout.pages.map { page in
             switch page {
-            case .home: (.tab(.home), .music)
+            case .home: (.tab(.home), .home)
             case .usage: (.tab(.usage), .usage)
             case .tasks: (.tab(.tasks), .tasks)
             }

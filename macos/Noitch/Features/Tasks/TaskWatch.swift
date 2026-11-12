@@ -246,11 +246,19 @@ final class TaskWatch {
             MoodleTask(id: 6, title: "Kuis 5", course: "SDA", module: .quiz, due: now + 9.3 * 86400, url: "https://scele.cs.ui.ac.id"),
             MoodleTask(id: 8, title: "Tugas 2: Wireframe", course: "PBP", module: .assignment, due: now - 2 * 86400, url: "https://scele.cs.ui.ac.id"),
         ], seen: [1, 2, 3, 4, 5, 6, 8], unviewed: [3])
+        // `--demo-all-clear` keeps only the overdue sample, for the empty state and its button.
+        // With `--demo-media` nothing is unseen, so the island opens on Home and its calendar.
+        if ProcessInfo.processInfo.arguments.contains("--demo-media") { record?.unviewed = [] }
+        if ProcessInfo.processInfo.arguments.contains("--demo-all-clear") {
+            record?.tasks.removeAll { $0.due >= now }
+            record?.unviewed = []
+        }
         // Far in the future, so opening never asks the network: there is no key.
         lastCheck = now + 1e9
         onChange?()
         onUnviewedChange?()
         // A new task arrives a few seconds after launch, to show the alert.
+        guard !ProcessInfo.processInfo.arguments.contains("--demo-all-clear"), !ProcessInfo.processInfo.arguments.contains("--demo-media") else { return }
         Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, var record = self.record else { return }

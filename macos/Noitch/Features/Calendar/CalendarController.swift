@@ -9,16 +9,26 @@ final class CalendarController: NSObject {
     private var scene: CalendarScene?
     private var layout: HomeLayout?
     private var calendar = Calendar.current
-    private var weekStart = Date()
+    /// The first of the three days shown.
+    private var rangeStart = Date()
     private var selected = 0
     private var events: [CalendarEvent] = []
     private var isShown = false
     private var timer: Timer?
     private var hovered: Int?
 
-    override init() {
+    /// The Moodle tasks still to do, so their deadlines show among the events.
+    private let tasks: () -> [MoodleTask]
+
+    init(tasks: @escaping () -> [MoodleTask]) {
+        self.tasks = tasks
         super.init()
         source.onChange = { [unowned self] in reload() }
+    }
+
+    /// The task list changed.
+    func tasksChanged() {
+        if isShown { render() }
     }
 
     /// A new scene for a new Home layout. Its layers belong to Home's scene.
@@ -31,11 +41,10 @@ final class CalendarController: NSObject {
     func pageWillShow() {
         isShown = true
         NotificationCenter.default.addObserver(self, selector: #selector(accessChanged), name: CalendarSource.accessChanged, object: nil)
-        // Every opening starts on today, in the week that holds it.
+        // Every opening starts on today, as the first of the three days.
         calendar = Calendar.current
-        let now = Date()
-        weekStart = CalendarModel.weekStart(for: now, calendar: calendar)
-        selected = calendar.dateComponents([.day], from: weekStart, to: calendar.startOfDay(for: now)).day ?? 0
+        rangeStart = calendar.startOfDay(for: Date())
+        selected = 0
         // The store, the read and the first text all wait until the island has opened: the panel
         // reveals last anyway, and the opening should cost nothing extra.
         timer?.invalidate()
@@ -83,6 +92,11 @@ final class CalendarController: NSObject {
     /// True when the click was the calendar's.
     func click(at point: CGPoint) -> Bool {
         guard let layout, layout.showsCalendar else { return false }
+        for (frame, step) in [(layout.calendarPrevious, -1), (layout.calendarNext, 1)] where frame.insetBy(dx: -4, dy: -6).contains(point) {
+            rangeStart = CalendarModel.rangeStart(rangeStart, moved: step, calendar: calendar)
+            reload()
+            return true
+        }
         if let day = layout.calendarDayIndex(at: point) {
             selected = day
             render()
@@ -115,14 +129,14 @@ final class CalendarController: NSObject {
     private func reload() {
         guard isShown else { return }
         if isDemo {
-            events = Self.demoEvents(weekStart: weekStart, calendar: calendar)
+            events = Self.demoEvents(from: rangeStart, calendar: calendar)
         } else {
-            events = source.access == .granted ? source.events(weekStart: weekStart, calendar: calendar) : []
+            events = source.access == .granted ? source.events(from: rangeStart, calendar: calendar) : []
         }
         render()
     }
 
-    private static func demoEvents(weekStart: Date, calendar: Calendar) -> [CalendarEvent] {
+    private static func demoEvents(from start: Date, calendar: Calendar) -> [CalendarEvent] {
         let today = calendar.startOfDay(for: Date())
         func at(_ day: Date, _ hour: Int, _ minutes: Int, _ length: Double, _ title: String, _ color: [Double], allDay: Bool = false) -> CalendarEvent {
             let start = calendar.date(byAdding: .minute, value: hour * 60 + minutes, to: day) ?? day
@@ -137,15 +151,16 @@ final class CalendarController: NSObject {
             at(today, 23, 0, 0.5, "Gym", [0.11, 0.62, 0.46]),
             at(today, 23, 30, 0.5, "Dinner with Rani", [0.85, 0.35, 0.19]),
             at(tomorrow, 9, 30, 0.5, "Standup", [0.49, 0.47, 0.87]),
-            at(weekStart, 0, 0, 0, "Public holiday", [0.11, 0.62, 0.46], allDay: true),
+            at(start, 0, 0, 0, "Public holiday", [0.11, 0.62, 0.46], allDay: true),
         ]
     }
 
     private func render() {
         guard let scene else { return }
         let now = Date()
+        let deadlines = tasks().map { CalendarDeadline(title: $0.title, course: $0.course, due: Date(timeIntervalSince1970: $0.due)) }
         scene.apply(CalendarModel(
-            events: events, weekStart: weekStart, selected: selected, now: now, calendar: calendar, access: access,
+            events: events, deadlines: deadlines, rangeStart: rangeStart, selected: selected, now: now, calendar: calendar, access: access,
             clock: { Self.clock.string(from: $0) }, dayName: { Self.dayName.string(from: $0) }
         ))
         scheduleNextChange(after: now)
@@ -157,7 +172,8 @@ final class CalendarController: NSObject {
         timer = nil
         guard isShown else { return }
         let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(3600)
-        let next = events.flatMap { [$0.start, $0.end] }.filter { $0 > now }.min().map { min($0, midnight) } ?? midnight
+        let deadlines = tasks().map { Date(timeIntervalSince1970: $0.due) }
+        let next = (events.flatMap { [$0.start, $0.end] } + deadlines).filter { $0 > now }.min().map { min($0, midnight) } ?? midnight
         let timer = Timer(fireAt: next.addingTimeInterval(0.5), interval: 0, target: self, selector: #selector(nextChange), userInfo: nil, repeats: false)
         timer.tolerance = 5
         RunLoop.main.add(timer, forMode: .common)
@@ -167,12 +183,10 @@ final class CalendarController: NSObject {
     @objc private func nextChange() {
         timer = nil
         let now = Date()
-        // Past midnight the week may have moved on; the chosen day stays today.
+        // Past midnight a strip that started on yesterday moves on to the new today.
         let today = calendar.startOfDay(for: now)
-        let week = CalendarModel.weekStart(for: now, calendar: calendar)
-        if week != weekStart {
-            weekStart = week
-            selected = calendar.dateComponents([.day], from: week, to: today).day ?? 0
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: today), rangeStart == yesterday, selected == 0 {
+            rangeStart = today
             reload()
         } else {
             render()

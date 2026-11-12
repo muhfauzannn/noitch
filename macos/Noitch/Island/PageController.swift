@@ -30,7 +30,7 @@ final class PageController {
 
     init(settings: AppSettings, monitor: NowPlayingMonitor, watch: TaskWatch) {
         self.settings = settings.pages
-        home = HomeController(settings: settings.home, monitor: monitor)
+        home = HomeController(settings: settings.home, monitor: monitor, tasks: { [unowned watch] in watch.tasks })
         usage = UsageController(settings: settings.usage)
         tasks = TasksController(watch: watch)
         home.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .home, visible: page == .home) }
@@ -40,7 +40,10 @@ final class PageController {
     }
 
     /// The task list changed while the island may be showing it.
-    func tasksChanged() { tasks.watchChanged() }
+    func tasksChanged() {
+        tasks.watchChanged()
+        home.tasksChanged()
+    }
 
     var isInteracting: Bool { home.isInteracting }
 
