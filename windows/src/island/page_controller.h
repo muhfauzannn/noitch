@@ -6,6 +6,7 @@
 
 #include "compositor.h"
 #include "features/home/home_controller.h"
+#include "features/shelf/shelf_controller.h"
 #include "features/settings/app_settings.h"
 #include "features/tasks/task_watch.h"
 #include "features/tasks/tasks_controller.h"
@@ -27,6 +28,7 @@ public:
 
     void Initialize(HWND window, Compositor* compositor, double (*now)(), NowPlayingMonitor* monitor, TaskWatch* watch);
     // The task list changed while the island may be showing it.
+    ~PageController() { shelf_.Stop(); }
     void TasksChanged() { tasks_.WatchChanged(); }
     void Apply(const AppSettings& settings);
 
@@ -48,12 +50,14 @@ public:
     // Vertical wheel, in points; only the tasks page scrolls its list.
     void ScrolledVertically(double delta);
 
-    bool IsInteracting() const { return home_.IsInteracting(); }
+    bool IsInteracting() const { return home_.IsInteracting() || shelf_.IsInteracting(); }
 
     // Set by the island, which owns the settings window.
     void (*onOpenSettings)(void* context) = nullptr;
     void* onOpenSettingsContext = nullptr;
     // The header's pin was pressed; the island owns the pin. Shares onOpenSettingsContext.
+    void (*onOpenShelf)(void* context) = nullptr;
+    void OpenShelf() { Select(IslandPage::Shelf); }
     void (*onTogglePin)(void* context) = nullptr;
     void SetPinned(bool pinned) {
         pinned_ = pinned;
@@ -77,6 +81,7 @@ private:
     HomeController home_;
     UsageController usage_;
     TasksController tasks_;
+    ShelfController shelf_;
     Painter painter_;
     HeaderScene header_;
     PageSettings pages_;

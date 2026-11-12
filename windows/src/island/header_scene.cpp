@@ -51,6 +51,7 @@ HRESULT HeaderScene::Paint(IslandPage page, HeaderControl hovered, bool isPresse
     if (layout_.Pages().tasks) {
         painter_->Glyph(kGlyphTasks, iconFormat_.Get(), layout_.Frame(HeaderControl::TasksTab), White(page == IslandPage::Tasks ? 1 : kIdleTabOpacity));
     }
+    if (layout_.Pages().shelf) painter_->Glyph(L"\xE7B8", iconFormat_.Get(), layout_.Frame(HeaderControl::ShelfTab), White(page == IslandPage::Shelf ? 1 : kIdleTabOpacity));
     const HomeRect pin = layout_.Frame(HeaderControl::Pin);
     if (pinned) painter_->Fill(pin, pin.height / 2, White(1));
     painter_->Glyph(kGlyphPin, iconFormat_.Get(), pin, pinned ? D2D1::ColorF(0, 0, 0, 1) : White(kIdleTabOpacity));

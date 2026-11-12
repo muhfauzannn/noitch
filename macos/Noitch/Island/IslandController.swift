@@ -44,6 +44,17 @@ final class IslandController: NSObject {
         pages.onTogglePin = { [unowned self] in togglePin() }
         hotKey.onPress = { [unowned self] in togglePin() }
         hotKey.register(settings.general.pinShortcut)
+        view.onDropEntered = { [unowned self] in
+            guard settings.pages.showShelf else { return false }
+            transition(to: .expanded)
+            pages.setDragging(true)
+            pages.prepareDrop()
+            return true
+        }
+        view.onDropExited = { [unowned self] in pages.endDrop(); pages.setDragging(false) }
+        view.onDropFiles = { [unowned self] urls in pages.acceptDrop(urls) }
+        view.onDragItems = { [unowned self] point in pages.dragItems(at: point) }
+        view.onDragState = { [unowned self] dragging in pages.setDragging(dragging) }
         view.onHorizontalScroll = { [unowned self] delta, time in if state == .expanded { pages.scrolled(by: delta, at: time) } }
         view.onVerticalScroll = { [unowned self] delta in if state == .expanded { pages.scrolledVertically(by: delta) } }
         view.onPointerMoved = { [unowned self] point in if state == .expanded { pages.pointerMoved(to: point) } }

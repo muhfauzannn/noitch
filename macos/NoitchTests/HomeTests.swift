@@ -229,16 +229,17 @@ struct HomeTests {
         #expect(pages.page(opening: .usage) == .home)
         pages.openOn = .usage
         pages.showUsage = false
-        #expect(pages.visible == [.home, .tasks] && pages.page(opening: .usage) == .home)
+        #expect(pages.visible == [.home, .tasks, .shelf] && pages.page(opening: .usage) == .home)
         // Tasks moves up into Usage's slot.
         var header = HeaderLayout(size: IslandGeometry.expandedSize, headerHeight: 32, pages: pages.visible)
         #expect(header.control(at: CGPoint(x: HeaderLayout.sidePadding + 45, y: 16)) == .tab(.tasks))
         pages.showTasks = false
+        pages.showShelf = false
         #expect(pages.visible == [.home])
         header = HeaderLayout(size: IslandGeometry.expandedSize, headerHeight: 32, pages: pages.visible)
         #expect(header.control(at: CGPoint(x: HeaderLayout.sidePadding + 45, y: 16)) == nil)
         pages = PageSettings()
-        #expect(pages.visible == [.home, .usage, .tasks])
+        #expect(pages.visible == [.home, .usage, .tasks, .shelf])
         pages.openOn = .tasks
         #expect(pages.page(opening: .home) == .tasks)
     }

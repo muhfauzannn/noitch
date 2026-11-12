@@ -83,12 +83,14 @@ enum DisplayChoice: String, CaseIterable {
 struct PageSettings: Equatable {
     var showUsage = true
     var showTasks = true
+    var showShelf = true
     var openOn = OpenPage.last
 
     static func load(_ store: SettingsStore) -> PageSettings {
         var settings = PageSettings()
         store.read("showUsagePage", into: &settings.showUsage)
         store.read("showTasksPage", into: &settings.showTasks)
+        store.read("showShelfPage", into: &settings.showShelf)
         store.read("openOn", into: &settings.openOn)
         return settings
     }
@@ -96,12 +98,13 @@ struct PageSettings: Equatable {
     func save(_ store: SettingsStore) {
         store.write("showUsagePage", showUsage)
         store.write("showTasksPage", showTasks)
+        store.write("showShelfPage", showShelf)
         store.write("openOn", openOn)
     }
 
     /// Home is always there: the island needs one page, and it is the one with the controls.
     var visible: [IslandPage] {
-        [.home] + (showUsage ? [.usage] : []) + (showTasks ? [.tasks] : [])
+        [.home] + (showUsage ? [.usage] : []) + (showTasks ? [.tasks] : []) + (showShelf ? [.shelf] : [])
     }
 
     /// The page to show on opening, given the one shown last.
@@ -111,6 +114,7 @@ struct PageSettings: Equatable {
         case .home: .home
         case .usage: .usage
         case .tasks: .tasks
+        case .shelf: .shelf
         }
         return visible.contains(wanted) ? wanted : .home
     }
@@ -121,6 +125,7 @@ enum OpenPage: String, CaseIterable {
     case home
     case usage
     case tasks
+    case shelf
 
     var title: String {
         switch self {
@@ -128,6 +133,7 @@ enum OpenPage: String, CaseIterable {
         case .home: "Home"
         case .usage: "AI Usage"
         case .tasks: "Tasks"
+        case .shelf: "Shelf"
         }
     }
 }

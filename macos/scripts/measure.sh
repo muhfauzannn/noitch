@@ -1,10 +1,12 @@
 #!/bin/bash
 # Builds Release, runs the real app and checks it against docs/performance.md.
-# Usage: macos/scripts/measure.sh [--hover] [idle seconds]   Exits non-zero if a budget is exceeded.
+# Usage: macos/scripts/measure.sh [--clipboard-paused] [--hover] [idle seconds]   Exits non-zero if a budget is exceeded.
 # --hover also runs hover-check.swift, which moves the real cursor for about 25 seconds.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+clipboard_paused=0
+if [[ "${1:-}" == "--clipboard-paused" ]]; then clipboard_paused=1; shift; fi
 hover=0
 if [[ "${1:-}" == "--hover" ]]; then hover=1; shift; fi
 window=${1:-30}
@@ -27,7 +29,11 @@ clang -O2 -o "$probe" scripts/probe.c
 
 pkill -x Noitch 2>/dev/null || true
 sleep 1
-"$app/Contents/MacOS/Noitch" &
+if [[ "$clipboard_paused" == 1 ]]; then
+    "$app/Contents/MacOS/Noitch" -shelfRecording NO &
+else
+    "$app/Contents/MacOS/Noitch" &
+fi
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true' EXIT
 sleep "$settle"

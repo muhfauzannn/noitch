@@ -15,7 +15,9 @@ Three rules produce almost all of the performance, and both apps are built on th
    no timers, polling loops or display links at rest.
 
 The result is that the app's cost is proportional to the number of events it handles, not to time
-passing or to frames drawn. The spec for "at rest" is simple: **zero threads runnable**.
+passing or to frames drawn. The spec for "at rest" is simple: **zero threads runnable**. The explicitly approved clipboard
+recording exception adds a one-second pasteboard check while enabled; Pause restores that idle
+contract. See [Shelf and clipboard](#shelf-and-clipboard).
 
 | Concern | macOS | Windows |
 | --- | --- | --- |
@@ -50,7 +52,7 @@ macos/
   Noitch.xcodeproj         Synchronized folders: new files need no project edits
   Noitch/App/              Process entry and lifecycle
   Noitch/Island/           The island: window, layers, geometry, state
-  Noitch/Features/         Home, NowPlaying, Lyrics, Usage, Tasks, Settings
+  Noitch/Features/         Home, NowPlaying, Lyrics, Usage, Tasks, Shelf, Settings
   Vendor/MediaRemoteAdapter/ Third-party adapter, embedded in the app bundle
   NoitchTests/             Swift Testing, pure logic
   scripts/                 Budget and hover checks against the real app
@@ -73,9 +75,9 @@ The two apps have the same shape, with three kinds of module:
 
 | Role | macOS | Windows | Rule |
 | --- | --- | --- | --- |
-| Controller: owns state, reacts to events | `IslandController`, `PageController`, `HomeController`, `UsageController`, `TasksController`, `TaskWatch`, `TaskAlertController` | `IslandWindow`, `PageController`, `HomeController`, `UsageController`, `TasksController`, `TaskWatch`, `TaskAlertController` | The only places state changes |
-| Scene: owns compositor objects | `IslandView`, `IslandPanel`, `PagerScene`, `HomeScene`, `UsageScene`, `TasksScene`, `TaskAlertScene` | `Compositor`, `Painter`, `HeaderScene`, `HomeScene`, `UsageScene`, `TasksScene`, `TaskAlertScene` | Makes no decisions |
-| Pure logic: values in, values out | `IslandGeometry`, `IslandState`, `IslandPage`, `HomeLayout`, `HomeModel`, `NowPlaying`, `Lyrics`, `AIUsage`, `UsageModel`, `UsageLayout`, `MoodleFormat`, `TaskModel`, `TasksLayout` | `island_geometry.h`, `spring.h`, `island_page.h`, `home_layout.h`, `home_model.h`, `now_playing.h`, `lyrics.h`, `ai_usage.h`, `usage_model.h`, `usage_layout.h`, `task_model.h`, `tasks_layout.h` | No OS headers, fully tested |
+| Controller: owns state, reacts to events | `IslandController`, `PageController`, `HomeController`, `UsageController`, `TasksController`, `TaskWatch`, `TaskAlertController`, `ShelfController` | `IslandWindow`, `PageController`, `HomeController`, `UsageController`, `TasksController`, `TaskWatch`, `TaskAlertController`, `ShelfController` | The only places state changes |
+| Scene: owns compositor objects | `IslandView`, `IslandPanel`, `PagerScene`, `HomeScene`, `UsageScene`, `TasksScene`, `TaskAlertScene`, `ShelfScene` | `Compositor`, `Painter`, `HeaderScene`, `HomeScene`, `UsageScene`, `TasksScene`, `TaskAlertScene`, `ShelfScene` | Makes no decisions |
+| Pure logic: values in, values out | `IslandGeometry`, `IslandState`, `IslandPage`, `ShelfItem`, `ShelfCollection`, `ShelfLayout`, `HomeLayout`, `HomeModel`, `NowPlaying`, `Lyrics`, `AIUsage`, `UsageModel`, `UsageLayout`, `MoodleFormat`, `TaskModel`, `TasksLayout` | `island_geometry.h`, `spring.h`, `island_page.h`, `shelf_model.h`, `shelf_thumbnail.h`, `home_layout.h`, `home_model.h`, `now_playing.h`, `lyrics.h`, `ai_usage.h`, `usage_model.h`, `usage_layout.h`, `task_model.h`, `tasks_layout.h` | No OS headers, fully tested |
 
 `PageController` owns which page is showing. The island tells it when it opens and closes and
 forwards pointer and scroll events; it passes them on to the current page. Each feature controller
@@ -123,7 +125,7 @@ single settle timer is simply reset, so a stale completion cannot occur.
 
 ## Pages
 
-The expanded island has pages, in tab order: Home, Usage, then Tasks. A shared header in the band beside the
+The expanded island has pages, in tab order: Home, Usage, Tasks, then Shelf. A shared header in the band beside the
 notch holds a tab per page at the left and settings at the right; pages keep their own buttons clear
 of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
 
@@ -141,6 +143,47 @@ of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
   shared Direct2D painter are released 11 s after the island closes.
 - On Windows the content is a container visual inside the pill's clip with one child per layer:
   the header on top, pages below, each with its own opacity effect and X offset.
+
+## Shelf and clipboard
+
+Shelf is the fourth page, containing Files and Clipboard modes. It keeps the native 580 × 180
+island: mode buttons beneath the header, three cards, and paging arrows plus a footer. Cards use
+quiet white surfaces, blue file-type labels and a blue hover outline; hovering reveals pin and
+remove controls. Empty Files invites a drop. Clipboard has Pause/Resume; Clear preserves pins.
+Settings can hide Shelf or choose it as the opening page. Explicit pager routing remains adequate
+for four pages; no registry or shared platform layer was introduced.
+
+- **Shelf.** Drop files onto the closed notch to open Shelf, or onto the expanded island. Each file
+  becomes a card holding its original path, never a moved or copied original. Drop batches are
+  capped at 50 on macOS and 16 on Windows. Clicking a card copies its contents; dragging it supplies
+  files, text or clipboard images to another application. Missing original files cannot be copied.
+- **Clipboard.** Plain text, http(s) links, file selections and images are recorded locally. Rich-text
+  formatting is not retained. macOS accepts
+  PNG/TIFF; Windows accepts CF_DIB (also offered as CF_DIB to compatible drag destinations). Payloads stay on disk; only metadata and up to three 128 px
+  thumbnails are held for rendering. Windows previews uncompressed 24/32-bit RGB DIBs; other DIBs
+  still copy back without modification and show a type card. No network service is used.
+- **Bounds.** Up to 50 items in each mode, text up to 64 KB UTF-8, each image up to 4 MB. Duplicate
+  copies move to the front and retain pins. The oldest unpinned item is evicted when full; an
+  entirely pinned collection rejects new items. Clear removes unpinned items, not original files.
+  Individual remove also releases pinned history items. Unreferenced payload files are pruned.
+- **Storage.** macOS uses Application Support/Noitch/Shelf (`items.json` and hashed payload names);
+  Windows uses LocalAppData/Noitch/Shelf (`items.bin` and payload names). Manifest writes are atomic
+  replacements. Paths and previews persist, with no promise that referenced files cannot be moved
+  by another application. Clipboard secrets marked concealed/transient by their source are skipped,
+  as are our own clipboard writes; unmarked secrets cannot be reliably identified. History is
+  ordinary local application data, not an encrypted vault.
+- **Lifetime.** macOS's public pasteboard API has no change notification. The owner explicitly
+  approved one 1-second `changeCount` check while recording is enabled on 2026-11-12. The timer runs
+  on the existing main run loop and stops on Pause, when Shelf is disabled, and on quit. Unchanged
+  counts cause no data reads or redraws. The setting persists. This is a narrow exception to the
+  no-polling-at-rest rule and necessarily changes the idle wakeup expectation while enabled.
+  Clipboard changes between checks may be missed. Windows uses `AddClipboardFormatListener` and
+  `WM_CLIPBOARDUPDATE`, without polling. Pause unregisters the listener.
+- **Drag and rendering.** AppKit dragging registration and OLE IDropTarget/IDropSource supply native
+  events. Windows initializes OLE on the existing UI thread's STA before other COM use, required by
+  drag-and-drop; it adds no application thread. Surfaces/layers are built on showing Shelf, animate
+  with the existing pager compositor and are released after its outgoing fade. Thumbnails are
+  released on hide. No per-frame work, new helpers, dependencies or private APIs were added.
 
 ## Home
 
@@ -586,6 +629,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Pin | A pin in the header left of settings, and the pin shortcut. Pinned, the island stays open when the pointer leaves; pinning a closed island opens it. Letting go closes it unless the pointer is over it. The pin shows as a white disc. Not kept across launches. See [Pinning](#pinning) |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
+| Shelf | Files / Clipboard modes, three 77 pt cards, 50 items per mode, pin/remove/copy/drag, local payload storage; see [Shelf and clipboard](#shelf-and-clipboard) |
 | Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines with a smaller Latin reading beneath the sung non-Latin line, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; a wash of the artwork's colour rising from the bottom. See [Lyrics stage](#lyrics-stage) |
 | Release after closing | 10 s |
 

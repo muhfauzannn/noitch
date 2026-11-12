@@ -4,16 +4,22 @@ A lightweight Dynamic Island style overlay for macOS and Windows. Two separate n
 the lowest possible memory, CPU and battery use.
 
 A black island at the top of the screen that expands on hover into Home: the current track, artwork,
-synced lyrics, a progress slider and playback controls. Open settings from the gear or by right-clicking.
+synced lyrics, a progress slider and playback controls. Other tabs show AI usage, Moodle tasks,
+and Shelf. Open settings from the gear or by right-clicking.
+
+Shelf keeps files between apps: drop onto the notch, click a card to copy, or drag it to another
+app. Its Clipboard mode remembers up to 50 text, link, image or file entries locally. Pin the ones
+you want to keep; Clear preserves pins. Pause stops recording. macOS recording checks once per
+second (an approved performance exception); Windows uses clipboard-change events.
 
 | | macOS | Windows |
 | --- | --- | --- |
 | Stack | Swift, AppKit, Core Animation | C++20, Win32, DirectComposition |
-| Memory at rest | About 9 MB | Not measured |
-| CPU at rest | About 1 ms per minute | Not measured |
-| App size | 816 KB | Not measured |
+| Memory at rest | About 10–11 MB in recent runs | Not measured |
+| CPU at rest | About 1–2 ms/min paused; 13 ms/min recording | Not measured |
+| App binary size | 1763 KB | Not measured |
 | Dependencies | MediaRemoteAdapter | None |
-| Status | Runs and passes its checks | **Never run**; now playing never compiled |
+| Status | Build and 116 tests pass; Shelf live drag/drop and current hover remain unverified | **Never run**; now playing never compiled |
 
 ## Quick start
 

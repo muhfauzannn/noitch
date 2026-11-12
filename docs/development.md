@@ -43,6 +43,12 @@ the same mouse events.
 
 New Swift files are picked up automatically; don't edit the project file to add them.
 
+`--demo-shelf --open -openOn shelf` opens Shelf with sample file cards and disables recording for
+that process. `macos/scripts/render-shelf.sh` renders Files, Clipboard and empty-state previews
+without reading the real clipboard or opening windows; generated PNGs live in `macos/build/`.
+`measure.sh --clipboard-paused [--hover]` pauses recording only for the measured process, so the
+original no-polling idle budget can be checked without changing the saved setting.
+
 ## Windows
 
 Requires Visual Studio 2022 or later with the Desktop development with C++ workload, and CMake 3.25
@@ -104,7 +110,7 @@ Keep this honest and up to date.
 
 | Check | Status |
 | --- | --- |
-| Builds; 110 unit tests | Passing locally, including romanization and paired lyric animation regression tests |
+| Builds; 116 unit tests | Passing locally, including romanization and paired lyric animation regression tests |
 | Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
 | Calendar in Home: three-day strip with arrows, deadline rings, rows, narrower music column | Checked by a window screenshot with `--demo-tasks --demo-media --open` (sample events and tasks, no EventKit); the arrows by click, a deadline row, the access prompt, real calendars, change notifications and the timers **not checked on screen** |
 | Pin in the header, General's shortcut field, Usage's marks, calendar dates (type with an underline) | Checked by window screenshots (`--demo-media --open --settings`); pinning by click or shortcut, recording a shortcut, the days' push, the underline's spring and the lyric fix during opening **not checked on screen** |
@@ -117,13 +123,14 @@ Keep this honest and up to date.
 | Claude limits from the usage endpoint and Keychain | **Not run**: needs the Keychain prompt answered in the real app |
 | Tab switch, swipe, page animation, usage page layout | **Not checked on screen** |
 | Budgets at rest | Latest romanization runs exceed budgets, including the pre-change baseline; see performance.md |
-| Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Previously passing; paired lyric fix repeat records 5.89 ms/transition but fails the collapse-window assertion. See performance.md |
+| Immediate hover, top-edge entry, real-notch re-entry, fast scroll, invisible-area rejection (23 automated checks) | Previously passing; latest shelf run is blocked by Window Server/loginwindow covering the test point. The checker now reports BLOCKED for obstructed sessions. See performance.md |
 | Pill and flare shape, collapsed and expanded | Checked by screenshot |
 | Home layout before the redesign, header buttons, opening Settings by click | Checked with `--demo-media` and real clicks |
 | Redesigned Home (wash, two lyric lines, skip state) | Checked by an offscreen render; the lyric slide and skip timing **not checked on screen** |
 | Content clipped to the pill while opening | **Not checked on screen** |
 | Adapter stream, play/pause and seek by real clicks | Passing with a browser player on macOS 26.6 |
 | Adapter stops after closing, and on quit | Passing |
+| Shelf / Clipboard | 116 tests pass, including shelf bounds, deduplication, pinned eviction, isolated text/image/file pasteboard round trips, private-marker exclusion, payload pruning and keeping originals. Native previews inspected offscreen. Idle budgets pass with recording paused; active wakeups use the approved exception. Hover/real drag/drop and after-use memory blocked by the locked session; Windows UI remains unverified |
 | Lyrics stage romanization | Japanese sample checked again with a window-only screenshot after pairing each reading with its original; paired Latin animation has a regression test for line advancement and seek; the earlier standalone hover checks passed with 6.57 ms/transition; kanji reading, kanji-only lines with track context, Latin passthrough, Chinese, Korean and Cyrillic covered by tests. Real playback and retained memory after tokenizer use remain unverified |
 | Lyrics lookup from LRCLIB | Passing for one known track, outside a real playback session |
 | Artwork, next, previous, shuffle, repeat on a real player | **Not tested**; the player used sent no artwork |
@@ -136,7 +143,13 @@ Keep this honest and up to date.
 | macOS 14 and 15 | **Not tested**; only run on 26.6 |
 | Intel | **Not tested**; local Release builds are arm64 only |
 
-### Windows
+#`--demo-shelf --open -openOn shelf` opens Shelf with sample file cards and disables recording for
+that process. `macos/scripts/render-shelf.sh` renders Files, Clipboard and empty-state previews
+without reading the real clipboard or opening windows; generated PNGs live in `macos/build/`.
+`measure.sh --clipboard-paused [--hover]` pauses recording only for the measured process, so the
+original no-polling idle budget can be checked without changing the saved setting.
+
+## Windows
 
 | Check | Status |
 | --- | --- |
@@ -152,6 +165,7 @@ Keep this honest and up to date.
 | CMake configures; resolved MSVC flags inspected | Done, without MSVC itself |
 | **Built with MSVC** | **Never**; `windows.yml` will do this on its first run |
 | Lyrics stage romanization using system ICU and Japanese IME | Pure model tests, including reading selection across line advancement, pass on macOS; Windows source has **not been compiled or run** |
+| Shelf / Clipboard | Pure collection/layout and bounded DIB thumbnail tests pass on macOS. New Windows UI/OLE/clipboard code has **not been compiled or run** here |
 | **Run on Windows** | **Never** |
 | Rendering, hover, click-through, DPI, Home, Settings | **Unverified** |
 

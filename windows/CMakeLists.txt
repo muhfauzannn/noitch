@@ -23,6 +23,10 @@ add_executable(Noitch WIN32
     src/island/header_scene.cpp
     src/island/page_controller.cpp
     src/island/painter.cpp
+    src/features/shelf/shelf_source.cpp
+    src/features/shelf/shelf_drag.cpp
+    src/features/shelf/shelf_scene.cpp
+    src/features/shelf/shelf_controller.cpp
     src/features/home/home_controller.cpp
     src/features/home/home_scene.cpp
     src/features/live/live_controller.cpp

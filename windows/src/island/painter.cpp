@@ -158,4 +158,14 @@ void Painter::Shape(const std::vector<LogoCommand>& commands, const HomeRect& re
     context_->FillGeometry(geometry.Get(), brush_.Get());
 }
 
+void Painter::Bitmap(const uint32_t* pixels, UINT width, UINT height, const HomeRect& rect) {
+    if (!pixels || !width || !height) return;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> bitmap;
+    const auto properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE));
+    if (SUCCEEDED(context_->CreateBitmap(D2D1::SizeU(width, height), pixels, width * 4, &properties, &bitmap))) {
+        const auto target = D2D1::RectF(rect.x, rect.y, rect.Right(), rect.Bottom());
+        context_->DrawBitmap(bitmap.Get(), &target, 1, D2D1_INTERPOLATION_MODE_LINEAR);
+    }
+}
+
 }  // namespace noitch

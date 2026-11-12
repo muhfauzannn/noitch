@@ -48,6 +48,7 @@ final class PagerScene {
             case .home: (.tab(.home), .home)
             case .usage: (.tab(.usage), .usage)
             case .tasks: (.tab(.tasks), .tasks)
+            case .shelf: (.tab(.shelf), .shelf)
             }
         }
         pinPlate.frame = layout.frame(of: .pin)

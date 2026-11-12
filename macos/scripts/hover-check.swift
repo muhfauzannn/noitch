@@ -67,7 +67,15 @@ guard collapsedWidth > 0 else {
 if let island = islandWindow(), let islandLayer = island["kCGWindowLayer"] as? Int {
     for window in windows() where (window["kCGWindowOwnerPID"] as? Int32) != pid {
         if let layer = window["kCGWindowLayer"] as? Int, layer > islandLayer, frame(of: window).contains(notch) {
-            print("note  \(window["kCGWindowOwnerName"] ?? "another app") is above the island; quit it for a valid result")
+            let owner = window["kCGWindowOwnerName"] as? String ?? "another app"
+            if owner == "loginwindow" || owner == "Window Server" {
+                print("BLOCKED  the lock/login screen covers the island; retry in an unlocked interactive session. Do not quit system processes.")
+                moveCursor(to: originalCursor)
+                exit(2)
+            }
+            print("BLOCKED  \(owner) covers the island; close its overlay before checking hover")
+            moveCursor(to: originalCursor)
+            exit(2)
         }
     }
 }

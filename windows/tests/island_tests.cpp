@@ -15,6 +15,8 @@
 #include "features/tasks/task_model.h"
 #include "features/tasks/tasks_layout.h"
 #include "features/lyrics/lyrics.h"
+#include "features/shelf/shelf_model.h"
+#include "features/shelf/shelf_thumbnail.h"
 #include "features/now_playing/now_playing.h"
 #include "features/usage/ai_limits.h"
 #include "features/usage/ai_usage.h"
@@ -651,10 +653,11 @@ void TestSwipeStepsOnePageHoweverLongItRuns() {
     assert(!NeighborPage(IslandPage::Home, -1, {}, &next));
     assert(NeighborPage(IslandPage::Home, 1, {}, &next) && next == IslandPage::Usage);
     assert(NeighborPage(IslandPage::Usage, 1, {}, &next) && next == IslandPage::Tasks);
-    assert(!NeighborPage(IslandPage::Tasks, 1, {}, &next));
+    assert(NeighborPage(IslandPage::Tasks, 1, {}, &next) && next == IslandPage::Shelf);
+    assert(!NeighborPage(IslandPage::Shelf, 1, {}, &next));
     // With Usage off, Tasks follows Home directly.
     assert(NeighborPage(IslandPage::Home, 1, {false, true}, &next) && next == IslandPage::Tasks);
-    assert(!NeighborPage(IslandPage::Home, 1, {false, false}, &next));
+    assert(!NeighborPage(IslandPage::Home, 1, {false, false, false}, &next));
 }
 
 }  // namespace
@@ -685,6 +688,7 @@ void TestPagesOpenWhereTheSettingsSay() {
     const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1, pages.Visible());
     assert(header.ControlAt(22 + 45, 16) == HeaderControl::TasksTab);
     pages.showTasks = false;
+    pages.showShelf = false;
     const HeaderLayout homeOnly(IslandGeometry::ExpandedWidth(), 32, 1, pages.Visible());
     assert(homeOnly.ControlAt(22 + 45, 16) == HeaderControl::None);
     pages = PageSettings{};
@@ -1007,7 +1011,46 @@ void TestTasksPageFitsAndSitesNormalize() {
 
 }  // namespace
 
+void TestShelfHistoryAndLayout() {
+    std::vector<ShelfItem> values;
+    for (int i = 0; i < 50; ++i) {
+        ShelfItem item; item.id = std::to_string(i); item.pinned = i == 0;
+        assert(InsertShelfItem(values, item));
+    }
+    ShelfItem fresh; fresh.id = "fresh";
+    assert(InsertShelfItem(values, fresh) && values.size() == 50);
+    assert(std::none_of(values.begin(), values.end(), [](const auto& item) { return item.id == "1"; }));
+    ShelfItem repeated; repeated.id = "0";
+    assert(InsertShelfItem(values, repeated) && values.front().pinned && values.size() == 50);
+    for (auto& item : values) item.pinned = true;
+    const auto old = values;
+    fresh.id = "cannot fit";
+    assert(!InsertShelfItem(values, fresh) && values == old);
+    for (float scale : {1.0f, 1.5f, 2.0f}) for (float header : {24.0f, 32.0f, 38.0f}) {
+        ShelfLayout layout(580, 180, header, scale);
+        for (int slot = 0; slot < 3; ++slot) {
+            assert(layout.Card(slot).Bottom() < layout.Footer().y);
+            for (int button = 0; button < 6; ++button) assert(!layout.Card(slot).Intersects(layout.Button(button)));
+        }
+        for (int i = 0; i < 5; ++i) assert(layout.Button(i).Right() <= layout.Button(i + 1).x);
+    }
+    std::vector<uint8_t> dib(44, 0);
+    dib[0] = 40; dib[4] = 1; dib[8] = 1; dib[12] = 1; dib[14] = 24;
+    dib[40] = 5; dib[41] = 10; dib[42] = 250;
+    const auto preview = DecodeShelfThumbnail(dib);
+    assert(preview.width == 1 && preview.height == 1 && preview.pixels[0] == 0xfffa0a05u);
+    dib.resize(41);
+    assert(DecodeShelfThumbnail(dib).pixels.empty());
+    dib.resize(44); dib[4] = 0xff; dib[5] = 0xff; dib[6] = 0xff; dib[7] = 0x7f;
+    assert(DecodeShelfThumbnail(dib).pixels.empty());
+    PageSettings pages; pages.openOn = OpenPage::Shelf;
+    assert(pages.Opening(IslandPage::Home) == IslandPage::Shelf);
+    pages.showShelf = false;
+    assert(pages.Opening(IslandPage::Shelf) == IslandPage::Home);
+}
+
 int main() {
+    TestShelfHistoryAndLayout();
     TestTimesParseInUtcAndWithAnOffset();
     TestScannerReadsOnlyTheObjectsOwnFields();
     TestClaudeLinesGiveOneEntryPerRequest();

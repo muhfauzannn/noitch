@@ -192,6 +192,38 @@ all budgets in all playback states. Repeat under a fixed track and capture a pro
 reproduced spike before attributing it to a particular feature. These are diagnostic 20-second
 intervals, not replacements for the normal 30-second budget checks or after-use measurements.
 
+## Shelf and clipboard verification (2026-11-12)
+
+Same local hardware, Release, before: **10.36 MB, 1.00 ms CPU/min, 0.13 wakeups/s**.
+After, recording active: **10.52 MB, 13.43 ms CPU/min, 1.50 wakeups/s**. After, recording paused
+with `measure.sh --clipboard-paused --hover`: **10.34 MB, 1.66 ms CPU/min, 0.17 wakeups/s**.
+A final paused run after storage-pruning fixes measured **10.95 MB, 1.25 ms CPU/min,
+0.13 wakeups/s**. The binary grew from 1592 to 1763 KB. These are normal 30-second launch-idle intervals after the
+script's ten-second settle, with the local media state and current stored history.
+
+The recording-active wakeup count exceeds the original 0.5/s idle budget. The owner explicitly
+approved the one-second clipboard poll; that narrow exception is enabled only while recording.
+The original budgets are unchanged and pass with recording paused. CPU and footprint pass in
+both measured states. This does not establish performance with 50 image entries or memory retained
+after a real drag/drop session; those checks remain outstanding.
+
+Hover could not be validated: the Window Server/loginwindow lock-screen surfaces cover the target.
+The initial run's changing window sizes and failures are invalid as a hover regression test. The
+checker now returns BLOCKED (exit 2) when an on-screen surface above the island covers the test
+point, and never suggests quitting loginwindow or Window Server. A subsequent standalone attempt
+without the observed lock surfaces still did not receive usable hover input; interaction remains
+unverified rather than established as a production regression. A controlled build of pre-Shelf
+`main` (`67f3d0d`), launched with hover explicitly enabled and zero delay, reproduced the same
+non-opening assertions and 195 pt window width. The failure therefore is not isolated to this
+feature change; no passing hover result is claimed for either build in this session. Real drag/drop, clipboard paste
+into external applications and after-use memory require an unlocked interactive session.
+
+Offscreen Files, Clipboard and empty-state native layer renders were inspected. The 116 macOS
+tests cover bounds, de-duplication, pinned eviction, private clipboard markers, copy echoes,
+text/image/file round trips on isolated named pasteboards, payload pruning and keeping originals.
+Windows pure tests pass with AddressSanitizer and UndefinedBehaviorSanitizer, including bounded
+DIB thumbnails. Windows app code has not been compiled or run here; its budgets remain unknown.
+
 ## Measuring
 
 ```sh

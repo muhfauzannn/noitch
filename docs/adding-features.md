@@ -22,7 +22,8 @@ shared.
 
 A feature that needs its own page adds a case to `IslandPage` (both platforms), a tab in the header,
 and a branch in `PageController`'s show, hide and reveal switches. Tasks made it three, and the
-switches are still simpler than a protocol, so they stay; reconsider at the fourth.
+switches are still simpler than a protocol, so they stay. Shelf made it four; explicit routing remains
+small enough to keep. Reconsider before a fifth.
 
 A feature with preferences adds a settings part and a settings page in its own folder (see
 [Settings](architecture.md#settings)): a `<Name>Settings` value added to `AppSettings`, and a pane

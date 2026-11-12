@@ -71,6 +71,11 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
     live_.context = this;
     live_.Initialize(hwnd_, &compositor_, &monitor_, NowSeconds, settings_.home);
     pages_.onOpenSettings = [](void* context) { static_cast<IslandWindow*>(context)->OpenSettings(); };
+    pages_.onOpenShelf = [](void* context) {
+        auto* self = static_cast<IslandWindow*>(context);
+        self->TransitionTo(IslandState::Expanded);
+        self->pages_.OpenShelf();
+    };
     pages_.onTogglePin = [](void* context) { static_cast<IslandWindow*>(context)->TogglePin(); };
     pages_.onOpenSettingsContext = this;
     settingsWindow_.context = this;

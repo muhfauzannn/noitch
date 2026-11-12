@@ -3,7 +3,13 @@ import QuartzCore
 
 /// Hosts the pill and its flares. Nothing here draws per frame: the pill is a solid-color layer and
 /// the flares are fixed shapes that only move, so every frame comes from the render server.
-final class IslandView: NSView {
+final class IslandView: NSView, NSDraggingSource {
+    var onDropEntered: (() -> Bool)?
+    var onDropExited: (() -> Void)?
+    var onDropFiles: (([URL]) -> Bool)?
+    var onDragItems: ((CGPoint) -> [NSDraggingItem])?
+    var onDragState: ((Bool) -> Void)?
+    private var dragOrigin: CGPoint?
     var onHoverChange: ((Bool, CGPoint) -> Void)?
     var onSecondaryClick: ((NSEvent) -> Void)?
     /// Points are from the pill's top-left corner with y growing downward, as `HomeLayout` measures.
@@ -32,6 +38,7 @@ final class IslandView: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        registerForDraggedTypes([.fileURL])
         wantsLayer = true
         layerContentsRedrawPolicy = .never
         pill.backgroundColor = NSColor.black.cgColor
@@ -109,9 +116,44 @@ final class IslandView: NSView {
     /// The panel never becomes key, so without this the first click would only be swallowed.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    override func mouseDown(with event: NSEvent) { onPrimaryDown?(contentLocation(of: event)) }
+    override func mouseDown(with event: NSEvent) { dragOrigin = contentLocation(of: event); onPrimaryDown?(contentLocation(of: event)) }
 
-    override func mouseDragged(with event: NSEvent) { onPrimaryDragged?(contentLocation(of: event)) }
+    override func mouseDragged(with event: NSEvent) {
+        let point = contentLocation(of: event)
+        if let origin = dragOrigin, hypot(point.x - origin.x, point.y - origin.y) > 6,
+           let items = onDragItems?(origin), !items.isEmpty {
+            dragOrigin = nil
+            let image = NSImage(size: NSSize(width: 80, height: 32), flipped: false) { rect in
+                NSColor.darkGray.setFill(); NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
+                return true
+            }
+            for item in items { item.setDraggingFrame(NSRect(x: event.locationInWindow.x - 40, y: event.locationInWindow.y, width: 80, height: 32), contents: image) }
+            onDragState?(true)
+            beginDraggingSession(with: items, event: event, source: self)
+            return
+        }
+        onPrimaryDragged?(point)
+    }
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        onDragState?(false)
+        onHoverChange?(window?.frame.contains(NSEvent.mouseLocation) == true, NSEvent.mouseLocation)
+    }
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) else { return [] }
+        return onDropEntered?() == true ? .copy : []
+    }
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        onDropExited?()
+        onHoverChange?(window?.frame.contains(NSEvent.mouseLocation) == true, NSEvent.mouseLocation)
+    }
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool { true }
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+        let accepted = onDropFiles?(urls) ?? false
+        onDropExited?()
+        return accepted
+    }
 
     override func mouseUp(with event: NSEvent) { onPrimaryUp?(contentLocation(of: event)) }
 

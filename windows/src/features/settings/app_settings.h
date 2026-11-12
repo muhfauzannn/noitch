@@ -44,16 +44,17 @@ struct GeneralSettings {
 
 inline constexpr double kHoverDelays[] = {0, 0.15, 0.3, 0.5};
 
-enum class OpenPage { Last, Home, Usage, Tasks };
+enum class OpenPage { Last, Home, Usage, Tasks, Shelf };
 
 // Which pages the island has, and which it opens on. Home is always there: the island needs one
 // page, and it is the one with the controls.
 struct PageSettings {
     bool showUsage = true;
     bool showTasks = true;
+    bool showShelf = true;
     OpenPage openOn = OpenPage::Last;
 
-    VisiblePages Visible() const { return {showUsage, showTasks}; }
+    VisiblePages Visible() const { return {showUsage, showTasks, showShelf}; }
     bool Shows(IslandPage page) const { return Visible().Shows(page); }
 
     // The page to show on opening, given the one shown last.
@@ -61,6 +62,7 @@ struct PageSettings {
         const IslandPage wanted = openOn == OpenPage::Home    ? IslandPage::Home
                                   : openOn == OpenPage::Usage ? IslandPage::Usage
                                   : openOn == OpenPage::Tasks ? IslandPage::Tasks
+                                  : openOn == OpenPage::Shelf ? IslandPage::Shelf
                                                               : last;
         return Shows(wanted) ? wanted : IslandPage::Home;
     }

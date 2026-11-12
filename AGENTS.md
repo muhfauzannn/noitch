@@ -59,6 +59,11 @@ endpoint with Claude Code's login, also approved within the limits in
 30 minutes while closed, and a key kept in the Keychain or Credential Manager) are approved within
 the limits in [docs/architecture.md](docs/architecture.md#tasks).
 
+Clipboard history on macOS may check `NSPasteboard.changeCount` once per second while recording is
+enabled (approved on 2026-11-12). Pause, disabling Shelf and quitting must stop it. This exception
+adds no helper process or thread and does not cover other polling. Windows uses clipboard-change
+notifications. Limits and storage are in [docs/architecture.md](docs/architecture.md#shelf-and-clipboard).
+
 Moving to a shared cross-platform layer is out of scope. The duplication is deliberate.
 
 ## Project structure

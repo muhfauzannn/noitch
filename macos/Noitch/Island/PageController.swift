@@ -15,6 +15,7 @@ final class PageController {
     private let home: HomeController
     private let usage: UsageController
     private let tasks: TasksController
+    private let shelf: ShelfController
     private var settings: PageSettings
     private var scene: PagerScene?
     private var page = IslandPage.home
@@ -32,12 +33,14 @@ final class PageController {
 
     init(settings: AppSettings, monitor: NowPlayingMonitor, watch: TaskWatch) {
         self.settings = settings.pages
+        shelf = ShelfController(enabled: settings.pages.showShelf)
         home = HomeController(settings: settings.home, monitor: monitor, tasks: { [unowned watch] in watch.tasks })
         usage = UsageController(settings: settings.usage)
         tasks = TasksController(watch: watch)
         home.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .home, visible: page == .home) }
         usage.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .usage, visible: page == .usage) }
         tasks.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .tasks, visible: page == .tasks) }
+        shelf.onSceneCreated = { [unowned self] layer in scene?.attach(layer, for: .shelf, visible: page == .shelf) }
         tasks.onOpenSettings = { [unowned self] in onOpenSettings?() }
     }
 
@@ -47,9 +50,10 @@ final class PageController {
         home.tasksChanged()
     }
 
-    var isInteracting: Bool { home.isInteracting }
+    var isInteracting: Bool { home.isInteracting || shelf.isDragging }
 
     func apply(_ settings: AppSettings) {
+        shelf.setEnabled(settings.pages.showShelf)
         home.apply(settings.home)
         usage.apply(settings.usage)
         self.settings = settings.pages
@@ -64,7 +68,7 @@ final class PageController {
         }
     }
 
-    func stop() { home.stop() }
+    func stop() { home.stop(); shelf.stop() }
 
     // MARK: Island lifecycle
 
@@ -89,6 +93,7 @@ final class PageController {
             if let layer = home.sceneRoot { scene.attach(layer, for: .home, visible: page == .home) }
             if let layer = usage.sceneRoot { scene.attach(layer, for: .usage, visible: page == .usage) }
             if let layer = tasks.sceneRoot { scene.attach(layer, for: .tasks, visible: page == .tasks) }
+            if let layer = shelf.sceneRoot { scene.attach(layer, for: .shelf, visible: page == .shelf) }
             onSceneCreated?(scene.root)
         } else if opening != page {
             page = opening
@@ -136,15 +141,16 @@ final class PageController {
 
     /// `delta` is horizontal scroll in points, positive toward the next page.
     func scrolled(by delta: Double, at time: Double) {
-        guard isOpen, !home.isInteracting else { return }
+        guard isOpen, !isInteracting else { return }
         let step = swipe.add(delta, at: time)
         if step != 0, let next = page.neighbor(step, in: settings.visible) { select(next) }
     }
 
     /// Only the tasks page scrolls vertically, through its list.
     func scrolledVertically(by delta: Double) {
-        guard isOpen, page == .tasks else { return }
-        tasks.scrolledVertically(by: CGFloat(delta))
+        guard isOpen else { return }
+        if page == .tasks { tasks.scrolledVertically(by: CGFloat(delta)) }
+        if page == .shelf { shelf.scrolled(delta) }
     }
 
     private func showFeature(_ page: IslandPage) {
@@ -153,6 +159,8 @@ final class PageController {
             home.islandWillOpen(layout: HomeLayout(size: size, headerHeight: headerHeight), scale: scale)
         case .usage:
             usage.pageWillShow(layout: UsageLayout(size: size, headerHeight: headerHeight), scale: scale)
+        case .shelf:
+            shelf.pageWillShow(layout: ShelfLayout(size: size, headerHeight: headerHeight), scale: scale)
         case .tasks:
             tasks.pageWillShow(layout: TasksLayout(size: size, headerHeight: headerHeight), scale: scale)
         }
@@ -163,6 +171,7 @@ final class PageController {
         case .home: home.islandWillClose()
         case .usage: usage.pageWillHide()
         case .tasks: tasks.pageWillHide()
+        case .shelf: shelf.pageWillHide()
         }
     }
 
@@ -171,6 +180,7 @@ final class PageController {
         case .home: home.reveal(begin: begin)
         case .usage: usage.reveal(begin: begin)
         case .tasks: tasks.reveal(begin: begin)
+        case .shelf: shelf.reveal(begin: begin)
         }
     }
 
@@ -184,6 +194,7 @@ final class PageController {
         if control != hovered { setHover(control, isPressed: false) }
         if page == .home { home.pointerMoved(to: point) }
         if page == .tasks { tasks.pointerMoved(to: point) }
+        if page == .shelf { shelf.pointerMoved(to: point) }
     }
 
     func pointerDown(at point: CGPoint) {
@@ -194,6 +205,7 @@ final class PageController {
             pageHasPointer = true
             if page == .home { home.pointerDown(at: point) }
             if page == .tasks { tasks.pointerDown(at: point) }
+            if page == .shelf { shelf.pointerDown(at: point) }
         }
     }
 
@@ -210,8 +222,15 @@ final class PageController {
             pageHasPointer = false
             if page == .home { home.pointerUp(at: point) }
             if page == .tasks { tasks.pointerUp(at: point) }
+            if page == .shelf { shelf.pointerUp(at: point) }
         }
     }
+
+    func prepareDrop() { if settings.showShelf { select(.shelf); shelf.setDropping(true) } }
+    func endDrop() { shelf.setDropping(false) }
+    func acceptDrop(_ urls: [URL]) -> Bool { settings.showShelf && shelf.accept(urls) }
+    func dragItems(at point: CGPoint) -> [NSDraggingItem] { page == .shelf ? shelf.dragItems(at: point) : [] }
+    func setDragging(_ value: Bool) { shelf.setDragging(value) }
 
     private func activate(_ control: HeaderControl) {
         switch control {

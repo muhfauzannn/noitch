@@ -25,6 +25,8 @@ void PageController::Initialize(HWND window, Compositor* compositor, double (*no
     home_.Initialize(window, compositor, now, monitor);
     usage_.Initialize(window, compositor);
     tasks_.Initialize(window, compositor, watch);
+    shelf_.onOpen = [this] { if (pages_.showShelf && onOpenShelf) onOpenShelf(onOpenSettingsContext); };
+    shelf_.Initialize(window, compositor);
     tasks_.onOpenSettings = [](void* context) {
         auto* self = static_cast<PageController*>(context);
         if (self->onOpenSettings) self->onOpenSettings(self->onOpenSettingsContext);
@@ -36,6 +38,7 @@ void PageController::Apply(const AppSettings& settings) {
     home_.Apply(settings.home);
     usage_.Apply(settings.usage);
     pages_ = settings.pages;
+    shelf_.SetEnabled(pages_.showShelf);
     // A page turned off while shown gives way to Home. Its tab goes when the header is next built,
     // on the next opening; until then it does nothing.
     if (!pages_.Shows(page_)) {
@@ -65,6 +68,7 @@ void PageController::IslandWillOpen(float width, float height, float headerHeigh
         header_.Release();
         usage_.DeviceLost();
         tasks_.DeviceLost();
+        shelf_.DeviceLost();
     }
     if (header_.Exists() && !(header_.Layout().Pages() == pages_.Visible())) header_.Release();
     const IslandPage opening = preferred && pages_.Shows(*preferred) ? *preferred : pages_.Opening(page_);
@@ -104,6 +108,7 @@ void PageController::DeviceLost() {
     header_.Release();
     usage_.DeviceLost();
     tasks_.DeviceLost();
+    shelf_.DeviceLost();
     painter_.Release();
     home_.DeviceLost();
     if (isOpen_) IslandWillOpen(width_, height_, headerHeight_, left_, scale_);
@@ -116,6 +121,8 @@ void PageController::ShowFeature(IslandPage page) {
         return;
     } else if (page == IslandPage::Usage) {
         usage_.PageWillShow(painter_, UsageLayout(width_, height_, headerHeight_, scale_), left_, scale_);
+    } else if (page == IslandPage::Shelf) {
+        shelf_.PageWillShow(painter_, ShelfLayout(width_, height_, headerHeight_, scale_), left_);
     } else {
         tasks_.PageWillShow(painter_, TasksLayout(width_, height_, headerHeight_, scale_), left_, scale_);
     }
@@ -126,6 +133,8 @@ void PageController::HideFeature(IslandPage page) {
         home_.IslandWillClose();
     } else if (page == IslandPage::Usage) {
         usage_.PageWillHide();
+    } else if (page == IslandPage::Shelf) {
+        shelf_.PageWillHide();
     } else {
         tasks_.PageWillHide();
     }
@@ -174,7 +183,7 @@ void PageController::Settle() {
 }
 
 void PageController::Scrolled(double delta, double time) {
-    if (!isOpen_ || home_.IsInteracting()) return;
+    if (!isOpen_ || IsInteracting()) return;
     const int step = swipe_.Add(delta, time);
     IslandPage next = page_;
     if (step != 0 && NeighborPage(page_, step, pages_.Visible(), &next)) Select(next);
@@ -182,9 +191,11 @@ void PageController::Scrolled(double delta, double time) {
 
 void PageController::ScrolledVertically(double delta) {
     if (isOpen_ && page_ == IslandPage::Tasks) tasks_.ScrolledVertically(delta);
+    if (isOpen_ && page_ == IslandPage::Shelf) shelf_.Scrolled(delta);
 }
 
 bool PageController::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (shelf_.HandleMessage(message, wparam, lparam)) return true;
     if (home_.HandleMessage(message, wparam, lparam)) return true;
     if (usage_.HandleMessage(message, wparam, lparam)) return true;
     if (tasks_.HandleMessage(message, wparam, lparam)) return true;
@@ -211,6 +222,7 @@ void PageController::PointerMoved(float x, float y) {
     }
     if (page_ == IslandPage::Home) home_.PointerMoved(x, y);
     if (page_ == IslandPage::Tasks) tasks_.PointerMoved(x, y);
+    if (page_ == IslandPage::Shelf) shelf_.PointerMoved(x, y);
 }
 
 void PageController::PointerDown(float x, float y) {
@@ -223,6 +235,7 @@ void PageController::PointerDown(float x, float y) {
     pageHasPointer_ = true;
     if (page_ == IslandPage::Home) home_.PointerDown(x, y);
     if (page_ == IslandPage::Tasks) tasks_.PointerDown(x, y);
+    if (page_ == IslandPage::Shelf) shelf_.PointerDown(x, y);
 }
 
 void PageController::PointerUp(float x, float y) {
@@ -238,7 +251,7 @@ void PageController::PointerUp(float x, float y) {
             } else {
                 Select(control == HeaderControl::HomeTab    ? IslandPage::Home
                        : control == HeaderControl::UsageTab ? IslandPage::Usage
-                                                            : IslandPage::Tasks);
+                                                            : control == HeaderControl::TasksTab ? IslandPage::Tasks : IslandPage::Shelf);
             }
         }
         PaintHeader();
@@ -248,6 +261,7 @@ void PageController::PointerUp(float x, float y) {
     pageHasPointer_ = false;
     if (page_ == IslandPage::Home) home_.PointerUp(x, y);
     if (page_ == IslandPage::Tasks) tasks_.PointerUp(x, y);
+    if (page_ == IslandPage::Shelf) shelf_.PointerUp(x, y);
 }
 
 }  // namespace noitch

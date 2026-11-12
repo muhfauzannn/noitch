@@ -20,18 +20,19 @@ enum HomeIcon {
     case pin
     /// A list on a card, for the tasks page's tab.
     case tasks
+    case shelf
     /// A page with a folded corner.
     case assignment
     /// A tick cut out of a disc.
     case quiz
 
-    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .home, .pin, .tasks, .assignment, .quiz]
+    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .home, .pin, .tasks, .shelf, .assignment, .quiz]
 
     /// Only the gear and the lyrics bubble rely on the even-odd rule. Others have overlapping parts
     /// that it would punch out.
     var hasHole: Bool {
         switch self {
-        case .settings, .lyrics, .home, .tasks, .assignment, .quiz: true
+        case .settings, .lyrics, .home, .tasks, .shelf, .assignment, .quiz: true
         default: false
         }
     }
@@ -105,6 +106,10 @@ enum HomeIcon {
             path.addLine(to: CGPoint(x: 2.5, y: 11))
             path.closeSubpath()
             path.addRoundedRect(in: CGRect(x: 10, y: 14.5, width: 4, height: 7), cornerWidth: 1, cornerHeight: 1)
+        case .shelf:
+            path.addRoundedRect(in: CGRect(x: 3, y: 13, width: 18, height: 8), cornerWidth: 3, cornerHeight: 3)
+            path.addRoundedRect(in: CGRect(x: 5, y: 3, width: 14, height: 3), cornerWidth: 1, cornerHeight: 1)
+            path.addRoundedRect(in: CGRect(x: 4, y: 8, width: 16, height: 3), cornerWidth: 1, cornerHeight: 1)
         case .tasks:
             path.addRoundedRect(in: CGRect(x: 4, y: 3, width: 16, height: 18), cornerWidth: 3.5, cornerHeight: 3.5)
             for (y, width) in [(7.5, 8.0), (11.0, 8.0), (14.5, 5.0)] as [(CGFloat, CGFloat)] {

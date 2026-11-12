@@ -32,6 +32,7 @@ public:
 
     void Text(std::string_view utf8, IDWriteTextFormat* format, const HomeRect& rect, D2D1_COLOR_F color);
     void Glyph(const wchar_t* glyph, IDWriteTextFormat* format, const HomeRect& rect, D2D1_COLOR_F color);
+    void Bitmap(const uint32_t* pixels, UINT width, UINT height, const HomeRect& rect);
     void Fill(const HomeRect& rect, float radius, D2D1_COLOR_F color);
     // A ring stroke filled from the top clockwise up to `fraction` of the circle, with round ends.
     void Arc(D2D1_POINT_2F center, float radius, float width, double fraction, D2D1_COLOR_F color);

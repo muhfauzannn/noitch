@@ -125,3 +125,13 @@ reimplements its behavior and copies none of its code. Only the BSD-licensed ada
 - [WebView2 performance](https://learn.microsoft.com/microsoft-edge/webview2/concepts/performance), [Tauri measurement](https://github.com/Fledge-Software/Syrinx-app/wiki/Background-09-phase-0-verdict)
 - [WinUI 3 memory report](https://github.com/microsoft/Win2D/issues/996), [WinUI 3 performance work](https://www.techzine.eu/news/devops/141345/microsoft-promises-significant-speed-improvements-for-winui-3/)
 - [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter), [spitfiresb/notch](https://github.com/spitfiresb/notch), [Boring Notch](https://github.com/TheBoredTeam/boring.notch)
+
+## Shelf and clipboard
+
+Shelf uses the existing AppKit/Core Animation and Win32/DirectComposition stacks. macOS registers
+public AppKit drag destinations and dragging sources. Windows OLE drag-and-drop requires an STA,
+so the UI thread now calls OleInitialize before creating the island and uninitializes after
+controllers and compositor objects are destroyed. The media source already tolerates an existing
+COM apartment. No extra application thread is used; Windows behavior and memory remain unmeasured.
+Clipboard notifications are public on Windows. macOS recording uses the owner's narrow, approved
+one-second polling exception, with Pause, rather than a private pasteboard notification API.

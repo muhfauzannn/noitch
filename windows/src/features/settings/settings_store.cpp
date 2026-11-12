@@ -72,8 +72,9 @@ AppSettings LoadSettings() {
     if (ReadDword(L"PinHotkey", hotkey)) settings.general.pinHotkey = hotkey == 0 || PinHotkeyUsable(hotkey) ? hotkey : kDefaultPinHotkey;
     Read(L"ShowUsagePage", settings.pages.showUsage);
     Read(L"ShowTasksPage", settings.pages.showTasks);
+    Read(L"ShowShelfPage", settings.pages.showShelf);
     DWORD openOn = 0;
-    if (ReadDword(L"OpenOn", openOn) && openOn <= static_cast<DWORD>(OpenPage::Tasks)) settings.pages.openOn = static_cast<OpenPage>(openOn);
+    if (ReadDword(L"OpenOn", openOn) && openOn <= static_cast<DWORD>(OpenPage::Shelf)) settings.pages.openOn = static_cast<OpenPage>(openOn);
     Read(L"ShowLyrics", settings.home.showLyrics);
     Read(L"ShowNextLyric", settings.home.showNextLyric);
     Read(L"LyricsOffset", settings.home.lyricsOffset, -5, 5);
@@ -120,6 +121,7 @@ void SaveSettings(const AppSettings& settings) {
     Write(key, L"UsageWarnAt", settings.usage.warnAt);
     Write(key, L"UsageRefreshMinutes", settings.usage.refreshMinutes);
     Write(key, L"ShowTasksPage", settings.pages.showTasks);
+    Write(key, L"ShowShelfPage", settings.pages.showShelf);
     WriteText(key, L"TasksSite", settings.tasks.site);
     WriteText(key, L"TasksAccountName", settings.tasks.accountName);
     Write(key, L"TasksCheckMinutes", settings.tasks.checkMinutes);
