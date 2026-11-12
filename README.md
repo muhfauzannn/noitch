@@ -7,10 +7,12 @@ A native island for your music, tasks, files, and clipboard.
 [![macOS CI](https://github.com/muhfauzannn/noitch/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/muhfauzannn/noitch/actions/workflows/macos.yml)
 [![Windows CI](https://github.com/muhfauzannn/noitch/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/muhfauzannn/noitch/actions/workflows/windows.yml)
 
-[![Download for macOS](https://img.shields.io/badge/Download-macOS_arm64-111827?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/muhfauzannn/noitch/releases)
-[![Download for Windows](https://img.shields.io/badge/Download-Windows_x64-0078D4?style=for-the-badge)](https://github.com/muhfauzannn/noitch/releases)
+[![Download for macOS](https://img.shields.io/badge/Download-macOS_arm64-111827?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/muhfauzannn/noitch/releases/latest/download/Noitch-macos-arm64.dmg)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows_x64-0078D4?style=for-the-badge)](https://github.com/muhfauzannn/noitch/releases/latest/download/Noitch-windows-x64.exe)
 
-Release downloads are pending. These buttons open the Releases page.
+Buttons download the latest published release directly. Downloads become available after the first public release.
+
+Current builds: macOS ad-hoc signed, not notarized · Windows unsigned.
 
 [Features](#features) · [Get started](#get-started) · [Documentation](#documentation) · [Contributing](#contributing)
 
@@ -47,7 +49,11 @@ unverified; the platforms also differ in some animations and image previews. See
 
 ### Downloads
 
-There are no published releases yet. Build from source below to try Noitch.
+Use the buttons above for the latest public macOS or Windows download. Verify downloaded files with
+[DOWNLOADS.sha256](https://github.com/muhfauzannn/noitch/releases/latest/download/DOWNLOADS.sha256),
+and read the [release notes](https://github.com/muhfauzannn/noitch/releases/latest) for that version.
+Drafts and prereleases do not supply these latest-release links. Until the first public release is
+published, build from source below to try Noitch.
 
 The current release mode needs no signing certificates. It produces a macOS arm64
 `-adhoc.dmg` (**Ad-hoc signed, not notarized**) and a Windows x64 portable `-unsigned.exe`

@@ -19,3 +19,7 @@ macos/benchmarks/*/run.log
 
 # Release tooling
 __pycache__/
+
+# Temporary release-publication downloads
+/downloads/
+/downloads-verified/

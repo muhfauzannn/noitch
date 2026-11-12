@@ -4,6 +4,31 @@ Noitch produces a macOS arm64 DMG and a Windows x64 **portable executable**, not
 A stable tag `vMAJOR.MINOR.PATCH` starts the Release workflow. Each numeric component must be at
 most 65535, with no leading zeroes. Both products receive that version at build time.
 
+## Direct downloads from README
+
+The README buttons use GitHub's [latest-asset URLs](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases):
+
+- `releases/latest/download/Noitch-macos-arm64.dmg`
+- `releases/latest/download/Noitch-windows-x64.exe`
+- `releases/latest/download/DOWNLOADS.sha256` for their checksums.
+
+At publication, the workflow copies the verified versioned packages to these fixed names without
+rebuilding or re-signing them. It keeps the original packages, metadata and `SHA256SUMS` unchanged.
+The draft starts with five assets; publication requires all eight assets, including the two direct
+downloads and `DOWNLOADS.sha256`. Each direct download must hash identically to its verified original.
+Only those three additional names are permitted; any other extra asset blocks publication.
+
+A partial upload remains a draft. On retry, existing direct-download files are checked against the
+original build before the workflow skips them and uploads missing files. It never overwrites them.
+The complete release is downloaded again and verified before publishing. This also supports the
+existing five-asset `v0.1.2` draft without rebuilding it; the publication workflow must first be
+merged into `main`. Existing source tags do not need to move.
+
+GitHub resolves these URLs to its latest published non-prerelease. Drafts and prereleases do not
+make the buttons available, and with no public release the URLs will return 404. No public release
+is created merely by changing the README. Release notes/metadata still disclose the signing mode;
+the generic direct-download filename does not establish a publisher identity.
+
 ## Explicit release mode
 
 The **tagged commit's** `.github/release.json` selects the mode:
@@ -151,7 +176,8 @@ In **Actions → Publish verified release → Run workflow**, select `main` and 
 Approve the `release-publish` environment after checking the draft. The publisher validates that
 run's workflow, event, exact source commit and successful conclusion. It reads the tagged mode,
 retrieves the original build artifacts, checks metadata/mode/hashes, compares all draft assets, and
-requires the correct signing disclosure in the notes before publishing. It never rebuilds/re-signs.
+requires the correct signing disclosure, prepares/verifies the fixed-name direct downloads, and
+then publishes. It never rebuilds/re-signs.
 Build artifacts expire after seven days; publish within that window.
 
 Do not use the direct GitHub UI Publish button, which bypasses these checks. Release editing remains

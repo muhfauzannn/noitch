@@ -34,6 +34,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Test direct-download contract
+        run: python3 .github/scripts/test_downloads.py
       - name: Check source run and tag
         run: |
           python3 - <<'PY'
@@ -65,7 +67,7 @@ jobs:
         run: |
           python3 .github/scripts/release.py verify --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --mode "$RELEASE_MODE" --folder assets
           gh release download "$RELEASE_TAG" --dir downloaded
-          python3 .github/scripts/release.py compare --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --mode "$RELEASE_MODE" --folder assets --other downloaded
+          python3 .github/scripts/downloads.py check --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --mode "$RELEASE_MODE" --folder downloaded
           gh release view "$RELEASE_TAG" --json body --jq .body > "$RUNNER_TEMP/release-body.txt"
           python3 - <<'PY'
           import os, sys
@@ -74,4 +76,13 @@ jobs:
           from release import verify_notes
           verify_notes(Path(os.environ['RUNNER_TEMP'], 'release-body.txt').read_text(), os.environ['RELEASE_MODE'])
           PY
+          python3 .github/scripts/downloads.py prepare --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --mode "$RELEASE_MODE"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/existing-assets.txt"
+          for asset in downloads/*; do
+            if ! grep -Fx -- "$(basename "$asset")" "$RUNNER_TEMP/existing-assets.txt"; then
+              gh release upload "$RELEASE_TAG" "$asset"
+            fi
+          done
+          gh release download "$RELEASE_TAG" --dir downloads-verified
+          python3 .github/scripts/downloads.py check --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --mode "$RELEASE_MODE" --folder downloads-verified --complete
           gh release edit "$RELEASE_TAG" --draft=false

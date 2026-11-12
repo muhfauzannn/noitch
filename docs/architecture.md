@@ -49,7 +49,9 @@ The tagged `.github/release.json` explicitly selects `unsigned` (currently: macO
 notarization and Windows unsigned) or `signed` (Developer ID/notarization and Authenticode).
 Unsigned artifacts, metadata and release notes disclose their status; missing signed credentials
 never cause an automatic downgrade. A separate approved publication workflow compares the draft
-with the original verified build artifacts. See [releases.md](releases.md). This adds no application runtime service,
+with the original verified build artifacts. At publication it adds fixed-name download copies for
+README's latest-release links and verifies their hashes against the original packages. Versioned
+assets and their checksums remain unchanged. See [releases.md](releases.md). This adds no application runtime service,
 auto-updater, dependency, polling or process.
 
 ## Repository layout

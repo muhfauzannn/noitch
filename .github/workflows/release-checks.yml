@@ -26,6 +26,7 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 .github/scripts/test_release.py
+      - run: python3 .github/scripts/test_downloads.py
       - run: bash -n macos/scripts/release.sh macos/scripts/verify-release.sh
   powershell-syntax:
     runs-on: windows-2025
