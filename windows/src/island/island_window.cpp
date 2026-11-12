@@ -13,6 +13,7 @@ constexpr wchar_t kClassName[] = L"NoitchIsland";
 constexpr UINT_PTR kSettleTimer = 1;
 // One-shot wait while the pointer rests in the notch, when a hover delay is set.
 constexpr UINT_PTR kHoverTimer = 9;
+constexpr int kPinHotkeyId = 1;
 constexpr UINT kQuitCommand = 1;
 constexpr UINT kSettingsCommand = 2;
 // Lets the pill open far enough that content lands inside it, not at its edge.
@@ -70,6 +71,7 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
     live_.context = this;
     live_.Initialize(hwnd_, &compositor_, &monitor_, NowSeconds, settings_.home);
     pages_.onOpenSettings = [](void* context) { static_cast<IslandWindow*>(context)->OpenSettings(); };
+    pages_.onTogglePin = [](void* context) { static_cast<IslandWindow*>(context)->TogglePin(); };
     pages_.onOpenSettingsContext = this;
     settingsWindow_.context = this;
     settingsWindow_.onChange = [](void* context, const AppSettings& settings) {
@@ -79,7 +81,9 @@ HRESULT IslandWindow::Create(HINSTANCE instance) {
         self->live_.Apply(settings.home);
         self->watch_.Apply(settings.tasks, settings.pages.showTasks);
         self->taskAlert_.SetEnabled(settings.pages.showTasks && settings.tasks.alerts);
+        self->RegisterPinHotkey();
     };
+    RegisterPinHotkey();
     ApplyLayout();
     // After the layout, so an alert from the remembered list has a pill to grow from.
     watch_.Initialize(hwnd_, settings_.tasks, settings_.pages.showTasks);
@@ -131,7 +135,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             if (state_ == IslandState::Expanded) {
                 pages_.PointerUp(PointerX(lparam), PointerY(lparam));
                 // A slider drag can end outside the island, where no leave message will follow.
-                if (!CursorInWindow()) TransitionTo(IslandState::Collapsed);
+                if (!pinned_ && !CursorInWindow()) TransitionTo(IslandState::Collapsed);
             } else {
                 // A click opens at once, whatever the hover settings.
                 TransitionTo(IslandState::Expanded);
@@ -164,12 +168,15 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             trackingLeave_ = false;
             KillTimer(hwnd_, kHoverTimer);
             hoverPending_ = false;
-            if (pages_.IsInteracting()) return 0;
+            if (pages_.IsInteracting() || pinned_) return 0;
             TransitionTo(IslandState::Collapsed);
             if (CursorInCollapsedHitRegion()) OpenIfPointerInNotch();
             return 0;
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;
+        case WM_HOTKEY:
+            if (wparam == kPinHotkeyId) TogglePin();
+            return 0;
         case WM_RBUTTONUP:
             ShowMenu();
             return 0;
@@ -194,6 +201,7 @@ LRESULT IslandWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) 
             }
             return 0;
         case WM_DESTROY:
+            UnregisterHotKey(hwnd_, kPinHotkeyId);
             PostQuitMessage(0);
             return 0;
         default:
@@ -255,6 +263,25 @@ void IslandWindow::ShapeChanged() {
     compositor_.AnimatePill(motion_);
     KillTimer(hwnd_, kSettleTimer);
     SetTimer(hwnd_, kSettleTimer, static_cast<UINT>(motion_.Duration() * 1000) + 1, nullptr);
+}
+
+void IslandWindow::TogglePin() {
+    pinned_ = !pinned_;
+    pages_.SetPinned(pinned_);
+    if (pinned_) {
+        TransitionTo(IslandState::Expanded);
+    } else if (state_ == IslandState::Expanded && !CursorInWindow() && !pages_.IsInteracting()) {
+        TransitionTo(IslandState::Collapsed);
+    }
+}
+
+// The system delivers WM_HOTKEY only when the keys are pressed, so nothing runs while waiting. A
+// shortcut another app holds is refused; the island then has only its header pin.
+void IslandWindow::RegisterPinHotkey() {
+    UnregisterHotKey(hwnd_, kPinHotkeyId);
+    const unsigned hotkey = settings_.general.pinHotkey;
+    if (!PinHotkeyUsable(hotkey)) return;
+    RegisterHotKey(hwnd_, kPinHotkeyId, PinHotkeyModifiers(hotkey) | MOD_NOREPEAT, hotkey & 0xFF);
 }
 
 void IslandWindow::TransitionTo(IslandState next) {

@@ -37,6 +37,10 @@ private:
     void LiveChanged(bool active);
     // The closed pill's shape follows the music and the task alert together.
     void ShapeChanged();
+    // From the header's pin or the shortcut. Pinning opens the island; letting go closes it unless
+    // the pointer is over it.
+    void TogglePin();
+    void RegisterPinHotkey();
     float PointerX(LPARAM lparam) const;
     float PointerY(LPARAM lparam) const;
 
@@ -51,6 +55,8 @@ private:
     IslandState state_ = IslandState::Collapsed;
     bool trackingLeave_ = false;
     bool hoverPending_ = false;
+    // Pinned, the island stays open when the pointer leaves, until unpinned.
+    bool pinned_ = false;
     int compositorGeneration_ = 0;
     AppSettings settings_;
     NowPlayingMonitor monitor_;

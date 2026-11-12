@@ -18,6 +18,7 @@ final class UsageScene {
 
     private struct Column {
         let group = CALayer()
+        let logo = CAShapeLayer()
         let outer: Ring
         let inner: Ring
         let center = UsageScene.makeText(size: 20, weight: .semibold, opacity: 1, alignment: .center)
@@ -51,6 +52,11 @@ final class UsageScene {
             root.addSublayer(column.group)
             let gauge = layout.gauge(index)
             for ring in [column.outer, column.inner] { Self.build(ring, in: gauge, group: column.group, scale: scale) }
+            column.logo.frame = layout.logo(index)
+            column.logo.path = Self.brand(of: tools[index]).path(side: UsageLayout.logo)
+            column.logo.fillColor = (tools[index] == .claude ? column.accent : .white).cgColor
+            column.logo.contentsScale = scale
+            column.group.addSublayer(column.logo)
             var texts: [(CATextLayer, CGRect)] = [
                 (column.center, layout.center(index)), (column.caption, layout.caption(index)),
                 (column.name, layout.name(index)), (column.today, layout.today(index)),
@@ -131,6 +137,13 @@ final class UsageScene {
             let center = CGPoint(x: ring.track.bounds.midX, y: ring.track.bounds.midY)
             ring.tick.position = CGPoint(x: center.x + ring.radius * sin(angle) + ring.track.frame.minX,
                                          y: center.y - ring.radius * cos(angle) + ring.track.frame.minY)
+        }
+    }
+
+    private static func brand(of tool: UsageTool) -> BrandLogo {
+        switch tool {
+        case .claude: .claude
+        case .codex: .openAI
         }
     }
 

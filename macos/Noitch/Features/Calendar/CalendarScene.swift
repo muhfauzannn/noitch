@@ -1,26 +1,29 @@
 import AppKit
 import QuartzCore
 
-/// The calendar panel's layers, beside the music in Home: three days between two arrows, with a plate
-/// on the chosen one, and that day's events as a short timeline coloured by calendar. Moodle
-/// deadlines are rings in the tasks' own colour. It draws what it is given and
-/// decides nothing. Choosing a day springs the plate across and crossfades the rows.
+/// The calendar panel's layers, beside the music in Home: three days set in type between two thin
+/// chevrons, and the chosen day's events as a short timeline coloured by calendar. No boxes: each day
+/// is its weekday over a large date, with a dot for events and an indigo ring for Moodle deadlines
+/// under it. The chosen day is bright white, with a short white line over it that
+/// glides to a clicked day; the others are dim. The chevrons slide the days in from the side they
+/// point to. It draws what it is given and decides nothing.
 final class CalendarScene {
     /// Added by Home as one of its reveal groups.
     let root = CALayer()
 
-    private static let todayColor = NSColor(srgbRed: 1, green: 0.42, blue: 0.38, alpha: 1)
+    private static let underlineWidth: CGFloat = 18
 
     private let layout: HomeLayout
     private let divider = CALayer()
-    private let plate = CALayer()
-    private let hoverPlate = CALayer()
+    /// The line over the chosen day, which glides between days.
+    private let underline = CALayer()
+    /// The days' type, which slides when the strip moves.
+    private let strip = CALayer()
     private let letters: [CATextLayer]
     private let numbers: [CATextLayer]
     private let dots: [CALayer]
     private let rings: [CALayer]
-    private let arrows = [CalendarScene.makeText(size: 15, weight: .medium, opacity: 0.5, alignment: .center),
-                          CalendarScene.makeText(size: 15, weight: .medium, opacity: 0.5, alignment: .center)]
+    private let arrows = [CAShapeLayer(), CAShapeLayer()]
     private let list = CALayer()
     private let heading = CalendarScene.makeText(size: 11, weight: .medium, opacity: 0.5)
     private let more = CalendarScene.makeText(size: 11, weight: .medium, opacity: 0.5, alignment: .right)
@@ -30,6 +33,7 @@ final class CalendarScene {
     private let messagePlate = CALayer()
     private let message = CalendarScene.makeText(size: 12, weight: .medium, opacity: 1)
     private var shown: CalendarModel?
+    private var hovered: Int?
 
     init(layout: HomeLayout, scale: CGFloat) {
         self.layout = layout
@@ -39,47 +43,65 @@ final class CalendarScene {
         divider.backgroundColor = NSColor.white.withAlphaComponent(0.1).cgColor
         root.addSublayer(divider)
 
-        let side: CGFloat = 20
-        plate.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        plate.cornerRadius = side / 2
-        plate.backgroundColor = NSColor.white.cgColor
-        plate.position = Self.numberCenter(in: layout.calendarDay(0))
-        root.addSublayer(plate)
-        hoverPlate.bounds = plate.bounds
-        hoverPlate.cornerRadius = side / 2
-        hoverPlate.backgroundColor = NSColor.white.withAlphaComponent(0.14).cgColor
-        hoverPlate.isHidden = true
-        root.insertSublayer(hoverPlate, below: plate)
-
         let count = CalendarModel.dayCount
-        letters = (0..<count).map { _ in Self.makeText(size: 10, weight: .medium, opacity: 0.45, alignment: .center) }
-        numbers = (0..<count).map { _ in Self.makeText(size: 12, weight: .semibold, opacity: 1, alignment: .center) }
+        // Clipped to the days' row, so sliding dates don't show past the chevrons.
+        let first = layout.calendarDay(0)
+        let last = layout.calendarDay(count - 1)
+        strip.frame = CGRect(x: first.minX, y: first.minY, width: last.maxX - first.minX, height: first.height)
+        strip.masksToBounds = true
+        root.addSublayer(strip)
+        letters = (0..<count).map { _ in Self.makeText(size: 9, weight: .semibold, opacity: 1, alignment: .center) }
+        numbers = (0..<count).map { _ in Self.makeText(size: 20, weight: .semibold, opacity: 1, alignment: .center) }
         dots = (0..<count).map { _ in CALayer() }
         rings = (0..<count).map { _ in CALayer() }
         for index in 0..<count {
-            let cell = layout.calendarDay(index)
-            letters[index].frame = CGRect(x: cell.minX, y: cell.minY, width: cell.width, height: 12)
-            let center = Self.numberCenter(in: cell)
-            numbers[index].frame = CGRect(x: cell.minX, y: center.y - 8, width: cell.width, height: 16)
-            dots[index].bounds = CGRect(x: 0, y: 0, width: 3, height: 3)
-            dots[index].cornerRadius = 1.5
-            dots[index].backgroundColor = NSColor.white.withAlphaComponent(0.45).cgColor
+            let day = layout.calendarDay(index).offsetBy(dx: -strip.frame.minX, dy: -strip.frame.minY)
+            letters[index].frame = CGRect(x: day.minX, y: day.minY + 6, width: day.width, height: 11)
+            numbers[index].frame = CGRect(x: day.minX, y: day.minY + 16, width: day.width, height: 24)
+            dots[index].bounds = CGRect(x: 0, y: 0, width: 4, height: 4)
+            dots[index].cornerRadius = 2
+            dots[index].backgroundColor = NSColor.white.withAlphaComponent(0.5).cgColor
             rings[index].bounds = CGRect(x: 0, y: 0, width: 5, height: 5)
             rings[index].cornerRadius = 2.5
             rings[index].borderWidth = 1.2
             rings[index].borderColor = TasksScene.accent.cgColor
             for layer in [letters[index], numbers[index]] {
                 layer.contentsScale = scale
-                root.addSublayer(layer)
+                strip.addSublayer(layer)
             }
-            root.addSublayer(dots[index])
-            root.addSublayer(rings[index])
+            strip.addSublayer(dots[index])
+            strip.addSublayer(rings[index])
         }
-        for (arrow, frame, glyph) in [(arrows[0], layout.calendarPrevious, "‹"), (arrows[1], layout.calendarNext, "›")] {
-            arrow.frame = frame
-            arrow.string = glyph
-            arrow.contentsScale = scale
-            root.addSublayer(arrow)
+        // Hairlines between the days, so the three read as a grid of columns.
+        for index in 1..<count {
+            let left = layout.calendarDay(index - 1)
+            let right = layout.calendarDay(index)
+            let rule = CALayer()
+            rule.frame = CGRect(x: ((left.maxX + right.minX) / 2).rounded() - 0.5, y: left.minY + 8, width: 1, height: left.height - 12)
+            rule.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
+            root.addSublayer(rule)
+        }
+        underline.bounds = CGRect(x: 0, y: 0, width: Self.underlineWidth, height: 2)
+        underline.cornerRadius = 1
+        underline.position = Self.underlineCenter(in: layout.calendarDay(0))
+        root.addSublayer(underline)
+        for (index, frame) in [layout.calendarPrevious, layout.calendarNext].enumerated() {
+            // A thin chevron, drawn, so it sits exactly level with the dates.
+            let chevron = CGMutablePath()
+            let direction: CGFloat = index == 0 ? -1 : 1
+            let mid = CGPoint(x: frame.width / 2, y: frame.height / 2)
+            chevron.move(to: CGPoint(x: mid.x - direction * 2.5, y: mid.y - 5))
+            chevron.addLine(to: CGPoint(x: mid.x + direction * 2.5, y: mid.y))
+            chevron.addLine(to: CGPoint(x: mid.x - direction * 2.5, y: mid.y + 5))
+            arrows[index].frame = frame
+            arrows[index].path = chevron
+            arrows[index].fillColor = nil
+            arrows[index].strokeColor = NSColor.white.withAlphaComponent(0.4).cgColor
+            arrows[index].lineWidth = 1.5
+            arrows[index].lineCap = .round
+            arrows[index].lineJoin = .round
+            arrows[index].contentsScale = scale
+            root.addSublayer(arrows[index])
         }
 
         list.frame = root.bounds
@@ -120,43 +142,47 @@ final class CalendarScene {
         shown = model
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let moved = previous.map { $0.days.map(\.number) != model.days.map(\.number) } ?? false
+        let step = previous.map { model.rangeIndex - $0.rangeIndex } ?? 0
+        let moved = step != 0
+        if moved, !Motion.reduceMotion {
+            // The new days push in from the side the arrow pointed to.
+            let push = CATransition()
+            push.type = .push
+            push.subtype = step > 0 ? .fromRight : .fromLeft
+            push.duration = 0.32
+            push.timingFunction = Motion.easeOut
+            strip.add(push, forKey: "push")
+        }
         for (index, day) in model.days.enumerated() where index < letters.count {
-            if moved {
-                // The strip moved by its length: the dates crossfade in place.
-                for layer in [letters[index], numbers[index]] {
-                    let fade = CATransition()
-                    fade.type = .fade
-                    fade.duration = 0.2
-                    layer.add(fade, forKey: "fade")
-                }
-            }
             letters[index].string = day.letter
             numbers[index].string = day.number
-            // An event's dot and a deadline's ring share the spot under the date.
-            let cell = layout.calendarDay(index)
-            let both = day.hasEvents && day.hasDeadline
-            dots[index].position = CGPoint(x: cell.midX - (both ? 3.5 : 0), y: cell.maxY - 1.5)
-            rings[index].position = CGPoint(x: cell.midX + (both ? 3.5 : 0), y: cell.maxY - 1.5)
-            rings[index].isHidden = !day.hasDeadline
             let selected = index == model.selected
-            // On its plate the date is dark, or white on today's red one.
-            let color: NSColor = selected ? (day.isToday ? .white : .black) : day.isToday ? Self.todayColor : .white
-            numbers[index].foregroundColor = color.cgColor
+            // All in white: the chosen day is bright and the rest dim. The heading under the days
+            // already says "Today".
+            numbers[index].foregroundColor = NSColor.white.cgColor
+            letters[index].foregroundColor = NSColor.white.cgColor
+            numbers[index].opacity = selected ? 1 : 0.5
+            letters[index].opacity = selected ? 0.9 : 0.4
+            // Markers sit under the date.
+            let cell = layout.calendarDay(index).offsetBy(dx: -strip.frame.minX, dy: -strip.frame.minY)
+            let both = day.hasEvents && day.hasDeadline
+            dots[index].position = CGPoint(x: cell.midX - (both ? 4 : 0), y: cell.maxY - 2.5)
+            rings[index].position = CGPoint(x: cell.midX + (both ? 4 : 0), y: cell.maxY - 2.5)
             dots[index].isHidden = !day.hasEvents
+            rings[index].isHidden = !day.hasDeadline
         }
-        let target = Self.numberCenter(in: layout.calendarDay(model.selected))
+        let target = Self.underlineCenter(in: layout.calendarDay(model.selected))
         if let previous, previous.selected != model.selected, !Motion.reduceMotion {
             let spring = CASpringAnimation(perceptualDuration: 0.35, bounce: 0.15)
             spring.keyPath = "position"
-            spring.fromValue = NSValue(point: (plate.presentation() ?? plate).position)
+            spring.fromValue = NSValue(point: (underline.presentation() ?? underline).position)
             spring.toValue = NSValue(point: target)
             spring.duration = spring.settlingDuration
-            plate.add(spring, forKey: "position")
+            underline.add(spring, forKey: "position")
         }
-        plate.position = target
-        // A plate on today that isn't chosen would hide the red date, so today is told by colour.
-        plate.backgroundColor = (model.days.indices.contains(model.selected) && model.days[model.selected].isToday ? Self.todayColor : .white).cgColor
+        underline.position = target
+        underline.backgroundColor = NSColor.white.cgColor
+        showHover()
 
         if previous != nil, moved || previous?.selected != model.selected || previous?.rows != model.rows {
             let fade = CATransition()
@@ -200,21 +226,26 @@ final class CalendarScene {
         CATransaction.commit()
     }
 
-    /// `day` is the day under the pointer, if any.
+    /// `day` is the day under the pointer, if any: its tile lightens.
     func setHover(day: Int?) {
+        hovered = day
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        if let day, day != shown?.selected {
-            hoverPlate.position = Self.numberCenter(in: layout.calendarDay(day))
-            hoverPlate.isHidden = false
-        } else {
-            hoverPlate.isHidden = true
-        }
+        showHover()
         CATransaction.commit()
     }
 
-    private static func numberCenter(in cell: CGRect) -> CGPoint {
-        CGPoint(x: cell.midX, y: cell.minY + 22)
+    /// A hovered day lifts toward bright, a hint that clicking it chooses it.
+    private func showHover() {
+        guard let shown else { return }
+        for index in numbers.indices where index != shown.selected {
+            numbers[index].opacity = index == hovered ? 0.8 : 0.5
+        }
+    }
+
+    /// Over the weekday, like a tab marker.
+    private static func underlineCenter(in day: CGRect) -> CGPoint {
+        CGPoint(x: day.midX, y: day.minY + 1)
     }
 
     private static func makeText(size: CGFloat, weight: NSFont.Weight, opacity: Float, alignment: CATextLayerAlignmentMode = .left) -> CATextLayer {

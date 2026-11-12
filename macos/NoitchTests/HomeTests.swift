@@ -83,6 +83,7 @@ struct HomeTests {
             let button = layout.lyricsButton(onStage: onStage)
             #expect(pill.contains(button))
             #expect(!button.intersects(headerLayout.frame(of: .settings)))
+            #expect(!button.intersects(headerLayout.frame(of: .pin)))
         }
         // The stage hides while the button sits beside the calendar, so only its corner place counts.
         for slot in HomeLayout.stageSlots { #expect(!layout.lyricsButton(onStage: true).intersects(layout.stageLine(slot)), "slot \(slot)") }
@@ -240,5 +241,32 @@ struct HomeTests {
         #expect(pages.visible == [.home, .usage, .tasks])
         pages.openOn = .tasks
         #expect(pages.page(opening: .home) == .tasks)
+    }
+
+    @Test func `the pin sits left of settings and is found by the pointer`() {
+        let header = HeaderLayout(size: IslandGeometry.expandedSize, headerHeight: 32)
+        let pin = header.frame(of: .pin)
+        #expect(pin.maxX < header.frame(of: .settings).minX)
+        #expect(header.control(at: CGPoint(x: pin.midX, y: pin.midY)) == .pin)
+        for page in IslandPage.allCases { #expect(!pin.intersects(header.frame(of: .tab(page)))) }
+    }
+
+    @Test func `the pin shortcut is stored, read back and named`() {
+        let shortcut = Shortcut.pinDefault
+        #expect(shortcut.display == "⌃⌥N")
+        #expect(Shortcut(storedKey: Double(shortcut.keyCode), modifiers: shortcut.storedModifiers) == shortcut)
+        // Shift alone would steal typing, and an unknown key can't be named.
+        #expect(Shortcut(storedKey: Double(shortcut.keyCode), modifiers: 8) == nil)
+        #expect(Shortcut(storedKey: 200, modifiers: 1) == nil)
+        let defaults = UserDefaults(suiteName: "noitch.tests.pin")!
+        defaults.removePersistentDomain(forName: "noitch.tests.pin")
+        var settings = AppSettings()
+        settings.general.pinShortcut = Shortcut(keyCode: 49, command: true, shift: true)
+        settings.save(to: defaults)
+        #expect(AppSettings.load(from: defaults).general.pinShortcut?.display == "⇧⌘Space")
+        settings.general.pinShortcut = nil
+        settings.save(to: defaults)
+        #expect(AppSettings.load(from: defaults).general.pinShortcut == nil)
+        defaults.removePersistentDomain(forName: "noitch.tests.pin")
     }
 }

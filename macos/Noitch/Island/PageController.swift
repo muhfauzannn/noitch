@@ -9,6 +9,8 @@ final class PageController {
     /// Set by the island, which owns the panel and adds the layers to its view.
     var onSceneCreated: ((CALayer) -> Void)?
     var onOpenSettings: (() -> Void)?
+    var onTogglePin: (() -> Void)?
+    private var isPinned = false
 
     private let home: HomeController
     private let usage: UsageController
@@ -82,6 +84,7 @@ final class PageController {
             self.headerHeight = headerHeight
             self.scale = scale
             scene.select(page)
+            scene.setPinned(isPinned, animated: false)
             // A feature still in its grace period keeps its layers; take them back.
             if let layer = home.sceneRoot { scene.attach(layer, for: .home, visible: page == .home) }
             if let layer = usage.sceneRoot { scene.attach(layer, for: .usage, visible: page == .usage) }
@@ -113,6 +116,11 @@ final class PageController {
         timer.tolerance = 2
         RunLoop.main.add(timer, forMode: .common)
         releaseTimer = timer
+    }
+
+    func setPinned(_ pinned: Bool) {
+        isPinned = pinned
+        scene?.setPinned(pinned, animated: isOpen)
     }
 
     // MARK: Switching
@@ -209,6 +217,7 @@ final class PageController {
         switch control {
         case .tab(let next): select(next)
         case .settings: onOpenSettings?()
+        case .pin: onTogglePin?()
         }
     }
 

@@ -14,11 +14,30 @@
 
 namespace noitch {
 
+// The pin shortcut as the system's hotkey control stores it: the virtual key in the low byte and the
+// modifiers in the high byte (1 Shift, 2 Ctrl, 4 Alt). 0 is none.
+inline constexpr unsigned kHotkeyShift = 1;
+inline constexpr unsigned kHotkeyControl = 2;
+inline constexpr unsigned kHotkeyAlt = 4;
+// Ctrl+Alt+N.
+inline constexpr unsigned kDefaultPinHotkey = 'N' | ((kHotkeyControl | kHotkeyAlt) << 8);
+
+// A global shortcut needs Ctrl or Alt: with Shift alone it would steal typing.
+inline bool PinHotkeyUsable(unsigned hotkey) { return (hotkey & 0xFF) != 0 && ((hotkey >> 8) & (kHotkeyControl | kHotkeyAlt)) != 0; }
+
+// RegisterHotKey's MOD_ bits (1 Alt, 2 Ctrl, 4 Shift) for a stored shortcut.
+inline unsigned PinHotkeyModifiers(unsigned hotkey) {
+    const unsigned flags = (hotkey >> 8) & 0xFF;
+    return ((flags & kHotkeyAlt) ? 1u : 0u) | ((flags & kHotkeyControl) ? 2u : 0u) | ((flags & kHotkeyShift) ? 4u : 0u);
+}
+
 // How the island opens.
 struct GeneralSettings {
     bool openOnHover = true;
     // Seconds the pointer must rest in the notch before the island opens. 0 opens at once.
     double hoverDelay = 0;
+    // Pins the island open, and lets it go, from anywhere. 0 when turned off.
+    unsigned pinHotkey = kDefaultPinHotkey;
 
     bool operator==(const GeneralSettings&) const = default;
 };

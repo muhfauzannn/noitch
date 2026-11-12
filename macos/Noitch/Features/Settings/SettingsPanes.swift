@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ServiceManagement
 
 /// The pages of the settings window that belong to the app rather than one feature.
@@ -16,6 +17,20 @@ enum SettingsPanes {
         }
         form.section("Display") {
             form.choice("Show the island on", \.general.display, options: DisplayChoice.allCases.map { ($0.title, $0) })
+        }
+        form.section("Pin", footer: "Pinned, the island stays open when the pointer leaves. Pin it from the header, or from anywhere with the shortcut.") {
+            pinShortcutRow(in: form)
+        }
+    }
+
+    /// The shortcut is recorded by pressing it, as in System Settings.
+    private static func pinShortcutRow(in form: SettingsForm) {
+        let recorder = ShortcutRecorder(shortcut: form.settings.general.pinShortcut)
+        guard let caption = form.row("Pin shortcut", caption: "Click, then press the keys. Delete turns it off.", control: recorder) else { return }
+        recorder.onChange = { [weak form] shortcut in
+            guard let form else { return }
+            form.update { $0.general.pinShortcut = shortcut }
+            caption.stringValue = HotKey.refused ? "macOS refused it: another app may use these keys." : "Click, then press the keys. Delete turns it off."
         }
     }
 
@@ -66,5 +81,85 @@ enum SettingsPanes {
                 status.isHidden = false
             }
         }
+    }
+}
+
+/// A button that shows a shortcut and, once clicked, takes the next key press as the new one. Escape
+/// cancels, Delete clears. A press without ⌘, ⌥ or ⌃ is ignored: it would steal typing.
+final class ShortcutRecorder: NSButton {
+    var onChange: ((Shortcut?) -> Void)?
+    private var shortcut: Shortcut?
+    private var isRecording = false {
+        didSet { refresh() }
+    }
+
+    init(shortcut: Shortcut?) {
+        self.shortcut = shortcut
+        super.init(frame: .zero)
+        bezelStyle = .push
+        controlSize = .small
+        font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        target = self
+        action = #selector(startRecording)
+        widthAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
+        refresh()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("Created in code")
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    @objc private func startRecording() {
+        isRecording = true
+        window?.makeFirstResponder(self)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        isRecording = false
+        return super.resignFirstResponder()
+    }
+
+    // ⌘ combinations arrive here before keyDown.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isRecording else { return super.performKeyEquivalent(with: event) }
+        record(event)
+        return true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isRecording else { return super.keyDown(with: event) }
+        record(event)
+    }
+
+    private func record(_ event: NSEvent) {
+        let key = Int(event.keyCode)
+        if key == kVK_Escape, event.modifierFlags.intersection([.command, .option, .control]).isEmpty {
+            isRecording = false
+            return
+        }
+        if key == kVK_Delete || key == kVK_ForwardDelete {
+            finish(nil)
+            return
+        }
+        let pressed = Shortcut(event: event)
+        guard pressed.isUsable else {
+            NSSound.beep()
+            return
+        }
+        finish(pressed)
+    }
+
+    private func finish(_ value: Shortcut?) {
+        shortcut = value
+        isRecording = false
+        window?.makeFirstResponder(nil)
+        onChange?(value)
+    }
+
+    private func refresh() {
+        title = isRecording ? "Type a shortcut…" : shortcut?.display ?? "None"
     }
 }

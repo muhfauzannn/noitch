@@ -7,7 +7,8 @@
 
 namespace noitch {
 
-inline SettingsPane GeneralSettingsPane() {
+// General's opening and display rows; GeneralSettingsPane adds the pin.
+inline SettingsPane GeneralSettingsPaneBase() {
     std::vector<std::pair<std::wstring, double>> delays;
     for (const double delay : kHoverDelays) delays.emplace_back(delay == 0 ? L"None" : SecondsLabel(delay), delay);
     SettingsRow launch;
@@ -30,6 +31,20 @@ inline SettingsPane GeneralSettingsPane() {
             },
             {}};
 }
+
+// The shortcut that pins the island, as its own group at the end of General.
+inline SettingsPane WithPinSection(SettingsPane pane) {
+    SettingsRow hotkey;
+    hotkey.kind = SettingsRow::Kind::Hotkey;
+    hotkey.title = L"Pin shortcut";
+    hotkey.caption = L"Click, then press the keys. Backspace turns it off.";
+    hotkey.value = [](const AppSettings& s) { return static_cast<double>(s.general.pinHotkey); };
+    hotkey.setValue = [](AppSettings& s, double value) { s.general.pinHotkey = static_cast<unsigned>(value); };
+    pane.sections.push_back({L"Pin", L"Pinned, the island stays open when the pointer leaves. Pin it from the header, or from anywhere with the shortcut.", {hotkey}});
+    return pane;
+}
+
+inline SettingsPane GeneralSettingsPane() { return WithPinSection(GeneralSettingsPaneBase()); }
 
 inline SettingsPane PagesSettingsPane() {
     return {L"Pages",

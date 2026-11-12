@@ -45,7 +45,7 @@ target_include_directories(Noitch PRIVATE src)
 target_compile_definitions(Noitch PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00 _HAS_EXCEPTIONS=0)
 target_link_libraries(Noitch PRIVATE
     d3d11 dcomp shcore user32 gdi32 uuid advapi32 ole32 shell32
-    d2d1 dwrite windowscodecs winhttp runtimeobject delayimp
+    d2d1 dwrite windowscodecs winhttp runtimeobject delayimp comctl32
 )
 
 if(MSVC)

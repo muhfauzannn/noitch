@@ -99,6 +99,12 @@ final class HomeScene {
             layer.frame = root.bounds
             root.addSublayer(layer)
         }
+        // Anchored at the top edge, where the page grows from, so `reveal` can hold them at their own
+        // size while it grows. Layouts here are y-down.
+        for layer in [lyricGroup, stageGroup] {
+            layer.anchorPoint = CGPoint(x: 0.5, y: 0)
+            layer.position = CGPoint(x: root.bounds.midX, y: 0)
+        }
 
         lyricsButton.frame = layout.lyricsButton(onStage: false)
         buttonGroup.addSublayer(lyricsButton)
@@ -506,6 +512,18 @@ final class HomeScene {
         CATransaction.setDisableActions(true)
         let order = isOnStage ? [stageGroup, buttonGroup] : [groups[0], buttonGroup, groups[1], lyricGroup] + groups.dropFirst(2) + [stageGroup]
         Motion.reveal(order, begin: begin, rising: [lyricGroup, stageGroup])
+        // The page grows from its top edge with a bouncy spring, which would carry the lyrics down
+        // a few points, and back, while they rise: down first, then up. Scaled the other way on the
+        // same spring, they only rise.
+        let spring = IslandGeometry.expandSpring
+        for layer in [lyricGroup, stageGroup] {
+            let hold = CASpringAnimation(perceptualDuration: spring.response, bounce: spring.bounce)
+            hold.keyPath = "transform.scale"
+            hold.fromValue = 1 / PagerScene.hiddenScale
+            hold.toValue = 1
+            hold.duration = hold.settlingDuration
+            layer.add(hold, forKey: "holdScale")
+        }
         CATransaction.commit()
     }
 

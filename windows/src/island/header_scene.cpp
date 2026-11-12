@@ -10,6 +10,7 @@ constexpr wchar_t kGlyphHome[] = L"\xE80F";
 constexpr wchar_t kGlyphUsage[] = L"\xE9D2";
 constexpr wchar_t kGlyphTasks[] = L"\xE8FD";
 constexpr wchar_t kGlyphSettings[] = L"\xE713";
+constexpr wchar_t kGlyphPin[] = L"\xE718";
 constexpr float kIdleTabOpacity = 0.45f;
 
 D2D1_COLOR_F White(float opacity) { return D2D1::ColorF(1, 1, 1, opacity); }
@@ -33,7 +34,7 @@ void HeaderScene::Release() {
     iconFormat_.Reset();
 }
 
-HRESULT HeaderScene::Paint(IslandPage page, HeaderControl hovered, bool isPressed) {
+HRESULT HeaderScene::Paint(IslandPage page, HeaderControl hovered, bool isPressed, bool pinned) {
     if (!surface_) return S_OK;
     HRESULT hr = painter_->Begin(surface_.Get(), width_, height_);
     if (FAILED(hr)) return hr;
@@ -50,6 +51,9 @@ HRESULT HeaderScene::Paint(IslandPage page, HeaderControl hovered, bool isPresse
     if (layout_.Pages().tasks) {
         painter_->Glyph(kGlyphTasks, iconFormat_.Get(), layout_.Frame(HeaderControl::TasksTab), White(page == IslandPage::Tasks ? 1 : kIdleTabOpacity));
     }
+    const HomeRect pin = layout_.Frame(HeaderControl::Pin);
+    if (pinned) painter_->Fill(pin, pin.height / 2, White(1));
+    painter_->Glyph(kGlyphPin, iconFormat_.Get(), pin, pinned ? D2D1::ColorF(0, 0, 0, 1) : White(kIdleTabOpacity));
     painter_->Glyph(kGlyphSettings, iconFormat_.Get(), layout_.Frame(HeaderControl::Settings), White(1));
     if (FAILED(hr = painter_->End(surface_.Get()))) return hr;
     return compositor_->Commit();

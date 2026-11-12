@@ -191,6 +191,10 @@ mid-fade continues from what is on screen.
   button, title, lyric lines, slider, transport, calendar; on the lyrics stage, the lyrics then the
   button; Usage: one per column). Lyric groups rise 8 pt from below; the rest drop 8 pt, and scales the whole of it from 0.94
   with the opening spring. Reduce Motion drops the slide.
+- The page grows from its top edge, so on its own the spring would carry the lyrics a few points
+  down and back while they rose: down, then up. The lyric groups are scaled the other way on the
+  same spring (from 1/0.94), anchored at the same edge, so they only rise. Windows has no scale, so
+  nothing to undo there.
 - Windows draws each layer into one surface, so the content fades and slides as a whole: no
   stagger and no scale. The
   ease-out is an exact cubic, one `IDCompositionAnimation` segment each for an effect group's
@@ -257,15 +261,20 @@ A macOS update could break the adapter. Home then shows "Nothing playing"; nothi
 
 ### Calendar in Home (macOS)
 
-With "Show calendar" on, Home gains a 150 pt panel on the right, past a thin divider, and the music
+With "Show calendar" on, Home gains a 172 pt panel on the right, past a thin divider, and the music
 column narrows to make room (numbers in `HomeLayout`). The island stays 580 pt wide: a 720 pt island
 was tried and found too long.
 
-- **Day strip.** Three days between ‹ and ›, starting on today: a letter over each date, a dot under
-  days with events, an indigo ring under days with a Moodle deadline, today's date in red. The arrows
-  move the strip by three days, and the dates crossfade. A plate marks the chosen day and springs to a
-  clicked one; hovering a day shows a faint plate. Seven days of the week came first and were too
-  many for 150 pt.
+- **Days.** Three days set in type between two thin chevrons, starting on today, with no boxes: the
+  weekday ("THU") over a 20 pt date, then a dot for events and an indigo ring for a Moodle deadline.
+  Everything is white: the chosen day bright, the others at half, and the heading under them says
+  "Today" (today was red at first; the owner asked for neutral white). A short white line over the
+  chosen day springs to a clicked day (it sat under the date first; the owner moved
+  it up). Hovering a day lifts it toward bright. The
+  chevrons move three days, and the new days push in from the side they point to. Before this the
+  owner picked it from four mockups (2026-11-12), after seven days in a row (too many for the 150 pt the panel had then),
+  three bare dates between text arrows (untidy) and three filled tiles (disliked). The panel then
+  grew to 172 pt with hairlines between the days, so the three read as a grid.
 - **Deadlines.** Tasks from the tasks page (signed in, page on) show among the day's events: a ring
   instead of a bar, in the tasks' indigo, with the due time in indigo and "Tugas 3 · PBP". Today drops
   the ones that have passed. They show even without calendar access; a day with none then offers
@@ -278,7 +287,8 @@ was tried and found too long.
   clicked. After a refusal the same place opens System Settings. The app is hardened, so it carries
   the `com.apple.security.personal-information.calendars` entitlement and a usage description.
 - **Opening.** The store, the read and the first text wait 0.2 s after Home opens, when the panel
-  reveals anyway, so opening costs no more than before. A first hover run without this was slow
+  reveals anyway, so opening costs no more than before. That includes a new scene's first draw:
+  drawing it on attach took about 50 ms of the opening and made the hover check's first opening late. A first hover run without this was slow
   enough to fail the hover check.
 - **Events.** `EKEventStoreChanged` notifications reload the three days; one one-shot timer fires at
   the next start, end, deadline or midnight so rows change on time. A change in the task list redraws. Nothing polls. Each opening starts on today.
@@ -328,6 +338,10 @@ does.
 The second page answers one question per tool: how much of my five-hour and weekly limit is left,
 and will it last? For Claude Code and Codex side by side:
 
+- **Marks.** Each column's name has its tool's mark before it: Claude's in its coral, OpenAI's in
+  white for Codex. The shapes are Simple Icons' (CC0), turned into absolute moves, lines and cubics in
+  `BrandLogo.swift` and `brand_logo.h` from the same text, and drawn as a shape layer on macOS and a
+  Direct2D path on Windows. They are their owners' trademarks, shown only to name each tool.
 - **Gauge.** Two rings: five hours inside, the week outside, in the tool's colour (Claude coral, Codex
   blue; the week lighter). A white dot on each ring marks how much of that window's *time* has
   passed, so fill running past the dot means usage is ahead of the clock. The middle shows the
@@ -491,6 +505,7 @@ A new feature adds its values to `AppSettings` and its page to the window's list
 | General | Hover delay | None | 0.15, 0.3 or 0.5 s of rest in the notch first: one one-shot timer, cancelled on leaving |
 | General | Haptic feedback | Off | macOS only: a tap on a Force Touch trackpad as the island opens. Windows has no such API for desktop apps |
 | General | Show the island on | Built-in display with a notch | macOS only: or the main (menu bar) display. Windows always uses the primary display |
+| General | Pin shortcut | ⌃⌥N on macOS, Ctrl+Alt+N on Windows | Pins the island open, or lets it go, from anywhere. Needs ⌘, ⌥ or ⌃ (Ctrl or Alt); Delete or Backspace turns it off. `RegisterEventHotKey` on macOS, `RegisterHotKey` on Windows: no permission, and an event only on the press. If another app holds the keys, macOS settings say so |
 | Pages | AI Usage | On | Off removes its tab and swipe stop. Home is always there |
 | Pages | Tasks | On | Off removes its tab, swipe stop, checks and alerts |
 | Pages | Open on | The page used last | Or always Home, AI Usage or Tasks |
@@ -517,6 +532,19 @@ and released on close, and only the page on screen has controls. macOS uses AppK
 because [the first SwiftUI window](tech-stack.md#swiftui) would use most of the footprint budget for
 good. Sidebar badges are drawn from paths rather than SF Symbols for the same reason.
 
+## Pinning
+
+The header has a pin left of settings, and a shortcut does the same from anywhere (⌃⌥N on macOS,
+Ctrl+Alt+N on Windows, set in General). Pinned, leaving the island doesn't close it, and neither
+does a slider drag that ends outside; pinning a closed island opens it on the usual page. Letting go
+closes it, unless the pointer is over it, in which case leaving closes it as usual. The shortcut is
+`RegisterEventHotKey` on macOS and `RegisterHotKey` on Windows: public, no permission, and nothing
+runs until the keys are pressed.
+
+Pinned is not at rest: the page on screen runs as it does whenever the island is open (Home's
+one-shot timers and now playing, Usage's minute, Tasks' minute), until it is let go. The window
+covers its expanded area for as long as it stays pinned.
+
 ## Shared behavior
 
 The spec both apps follow. Change it here and in both apps together.
@@ -541,6 +569,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |
+| Pin | A pin in the header left of settings, and the pin shortcut. Pinned, the island stays open when the pointer leaves; pinning a closed island opens it. Letting go closes it unless the pointer is over it. The pin shows as a white disc. Not kept across launches. See [Pinning](#pinning) |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
 | Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; a wash of the artwork's colour rising from the bottom. See [Lyrics stage](#lyrics-stage) |

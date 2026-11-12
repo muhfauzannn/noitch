@@ -16,6 +16,8 @@ enum IslandPage: Int, CaseIterable {
 /// Something in the header that every page shares.
 enum HeaderControl: Hashable {
     case tab(IslandPage)
+    /// Keeps the island open until pressed again.
+    case pin
     case settings
 }
 
@@ -40,11 +42,13 @@ struct HeaderLayout: Equatable {
             return CGRect(x: Self.sidePadding + slot * (Self.button + Self.gap), y: y, width: Self.button, height: Self.button)
         case .settings:
             return CGRect(x: size.width - Self.sidePadding - Self.button, y: y, width: Self.button, height: Self.button)
+        case .pin:
+            return CGRect(x: size.width - Self.sidePadding - Self.button * 2 - Self.gap, y: y, width: Self.button, height: Self.button)
         }
     }
 
     func control(at point: CGPoint) -> HeaderControl? {
-        let controls = pages.map(HeaderControl.tab) + [.settings]
+        let controls = pages.map(HeaderControl.tab) + [.pin, .settings]
         return controls.first { frame(of: $0).contains(point) }
     }
 }

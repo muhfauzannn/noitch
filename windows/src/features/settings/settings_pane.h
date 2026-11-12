@@ -15,7 +15,8 @@ namespace noitch {
 
 struct SettingsRow {
     // Account is the Moodle sign-in block, which the window builds itself (see TasksSettingsPane).
-    enum class Kind { Toggle, Choice, LaunchAtLogin, Text, Account };
+    // Hotkey is a shortcut field, the system's hotkey control; `value` and `setValue` carry it.
+    enum class Kind { Toggle, Choice, LaunchAtLogin, Text, Account, Hotkey };
 
     Kind kind = Kind::Toggle;
     std::wstring title;

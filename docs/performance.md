@@ -15,6 +15,14 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the pin and its shortcut, Usage's marks, the calendar's day tiles and the lyric fix
+(2026-11-12, same M5): 9.83, 9.89 and 9.89 MB, 1.33 to 2.33 ms/min, 0.13 to 0.17 wakeups/s, 4.31 and
+4.67 ms per transition, all 23 hover checks passing on two runs; the binary is 1576 KB. Before the fix
+below, the first two hover checks failed on every run, here and on main: the first opening took 92 ms
+of main thread, against the check's 80, because attaching the calendar drew it at once (51 ms of a
+Debug build's 86). It now draws at its first look, 0.2 s in, as the docs always said. The commit
+before the three-day calendar passed; the one with it did not.
+
 With the tasks page's day bars and indigo palette, Home's three-day calendar with deadlines and the
 site choice (2026-11-12, same M5), signed out: 9.74 and 9.74 MB, 1.72 and 2.62 ms/min, 0.13 wakeups/s;
 the binary is 1524 KB. A first run read 9.89 MB, 18.21 ms/min and 0.47 wakeups/s, close to the

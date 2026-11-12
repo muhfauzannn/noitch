@@ -16,6 +16,9 @@ final class IslandController: NSObject {
     private var settingsWindow: SettingsWindowController?
     /// A one-shot wait while the pointer rests in the notch, when a hover delay is set.
     private var hoverTimer: Timer?
+    /// Pinned, the island stays open when the pointer leaves, until unpinned.
+    private var isPinned = false
+    private let hotKey = HotKey()
 
     override init() {
         geometry = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
@@ -38,6 +41,9 @@ final class IslandController: NSObject {
         taskAlert.setUnviewed(!watch.unviewed.isEmpty)
         pages.onSceneCreated = { [unowned self] layer in view.setContent(layer, size: geometry.expandedSize) }
         pages.onOpenSettings = { [unowned self] in openSettings() }
+        pages.onTogglePin = { [unowned self] in togglePin() }
+        hotKey.onPress = { [unowned self] in togglePin() }
+        hotKey.register(settings.general.pinShortcut)
         view.onHorizontalScroll = { [unowned self] delta, time in if state == .expanded { pages.scrolled(by: delta, at: time) } }
         view.onVerticalScroll = { [unowned self] delta in if state == .expanded { pages.scrolledVertically(by: delta) } }
         view.onPointerMoved = { [unowned self] point in if state == .expanded { pages.pointerMoved(to: point) } }
@@ -54,14 +60,14 @@ final class IslandController: NSObject {
             guard state == .expanded else { return }
             pages.pointerUp(at: point)
             // A slider drag can end outside the island, where no exit event will follow.
-            if !panel.frame.contains(NSEvent.mouseLocation) { transition(to: .collapsed) }
+            if !isPinned, !panel.frame.contains(NSEvent.mouseLocation) { transition(to: .collapsed) }
         }
         view.onHoverChange = { [unowned self] isInside, eventLocation in
             if isInside {
                 if geometry.panelFrame(for: .collapsed).contains(eventLocation) { openIfPointerInNotch() }
             } else {
                 cancelHoverTimer()
-                if !pages.isInteracting { transition(to: .collapsed) }
+                if !pages.isInteracting, !isPinned { transition(to: .collapsed) }
             }
         }
         view.onSecondaryClick = { [unowned self] event in showMenu(for: event) }
@@ -88,6 +94,18 @@ final class IslandController: NSObject {
         // `--open` opens the island at launch, for screenshots without moving the cursor.
         if ProcessInfo.processInfo.arguments.contains("--open") { transition(to: .expanded) }
         #endif
+    }
+
+    /// From the header's pin or the shortcut. Pinning opens the island if it is closed; letting go
+    /// closes it unless the pointer is over it, as leaving would have.
+    private func togglePin() {
+        isPinned.toggle()
+        pages.setPinned(isPinned)
+        if isPinned {
+            transition(to: .expanded)
+        } else if state == .expanded, !panel.frame.contains(NSEvent.mouseLocation), !pages.isInteracting {
+            transition(to: .collapsed)
+        }
     }
 
     private func openIfPointerInNotch() {
@@ -225,6 +243,9 @@ final class IslandController: NSObject {
                 watch.apply(updated.tasks, pageOn: updated.pages.showTasks)
                 taskAlert.setEnabled(updated.pages.showTasks && updated.tasks.alerts)
                 if updated.general.display != old.general.display { screenParametersChanged() }
+                if updated.general.pinShortcut != old.general.pinShortcut {
+                    HotKey.refused = !hotKey.register(updated.general.pinShortcut)
+                }
             }
             window.onClose = { [unowned self] in settingsWindow = nil }
             settingsWindow = window

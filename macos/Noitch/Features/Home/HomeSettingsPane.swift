@@ -2,7 +2,7 @@ import AppKit
 
 /// Home's page in the settings window.
 enum HomeSettingsPane {
-    static let pane = SettingsPane(title: "Home", glyph: .icon(.music), color: .systemPink) { form in
+    static let pane = SettingsPane(title: "Home", glyph: .icon(.home), color: .systemPink) { form in
         form.section("Closed island", footer: "Needs the now playing helper to run while a music app or browser is open.") {
             form.toggle("Show what's playing", caption: "Artwork and level bars beside the notch.", \.home.showLive)
             form.toggle("Show the lyric line", caption: "The line being sung, small, under the notch. Needs Show lyrics.", \.home.showLiveLyrics, enabledBy: \.home.showLive)

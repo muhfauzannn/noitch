@@ -16,6 +16,8 @@ enum HomeIcon {
     case lyrics
     /// A house, for Home's tab.
     case home
+    /// A pushpin, for pinning the island open.
+    case pin
     /// A list on a card, for the tasks page's tab.
     case tasks
     /// A page with a folded corner.
@@ -23,7 +25,7 @@ enum HomeIcon {
     /// A tick cut out of a disc.
     case quiz
 
-    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .home, .tasks, .assignment, .quiz]
+    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .home, .pin, .tasks, .assignment, .quiz]
 
     /// Only the gear and the lyrics bubble rely on the even-odd rule. Others have overlapping parts
     /// that it would punch out.
@@ -84,6 +86,12 @@ enum HomeIcon {
             path.addRoundedRect(in: CGRect(x: 16, y: 9, width: 4, height: 11), cornerWidth: 1, cornerHeight: 1)
         case .lyrics:
             Self.addBubble(to: path)
+        case .pin:
+            path.addRoundedRect(in: CGRect(x: 8, y: 2.5, width: 8, height: 3.5), cornerWidth: 1.2, cornerHeight: 1.2)
+            path.addLines(between: [CGPoint(x: 9.2, y: 6), CGPoint(x: 14.8, y: 6), CGPoint(x: 16.2, y: 12.5), CGPoint(x: 7.8, y: 12.5)])
+            path.closeSubpath()
+            path.addRoundedRect(in: CGRect(x: 5.5, y: 12, width: 13, height: 2.6), cornerWidth: 1.3, cornerHeight: 1.3)
+            path.addRoundedRect(in: CGRect(x: 11.15, y: 14, width: 1.7, height: 7.5), cornerWidth: 0.85, cornerHeight: 0.85)
         case .home:
             // A roof over a body with a door cut out, in one outline so the eaves have no seam.
             path.move(to: CGPoint(x: 12, y: 2.5))

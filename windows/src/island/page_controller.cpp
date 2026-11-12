@@ -132,7 +132,7 @@ void PageController::HideFeature(IslandPage page) {
 }
 
 void PageController::PaintHeader() {
-    header_.Paint(page_, hovered_, pressed_ != HeaderControl::None);
+    header_.Paint(page_, hovered_, pressed_ != HeaderControl::None, pinned_);
 }
 
 // The old page slides a little toward where it lives in tab order and fades; the new one comes from
@@ -233,6 +233,8 @@ void PageController::PointerUp(float x, float y) {
         if (hovered_ == control) {
             if (control == HeaderControl::Settings) {
                 if (onOpenSettings) onOpenSettings(onOpenSettingsContext);
+            } else if (control == HeaderControl::Pin) {
+                if (onTogglePin) onTogglePin(onOpenSettingsContext);
             } else {
                 Select(control == HeaderControl::HomeTab    ? IslandPage::Home
                        : control == HeaderControl::UsageTab ? IslandPage::Usage

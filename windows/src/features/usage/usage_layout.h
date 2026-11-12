@@ -29,7 +29,10 @@ public:
     HomeRect Gauge(int column) const { return Px({X(column), BodyTop() + (BodyHeight() - kGauge) / 2, kGauge, kGauge}); }
     HomeRect Center(int column) const { return Px({X(column), GaugeMidY() - 14, kGauge, 22}); }
     HomeRect Caption(int column) const { return Px({X(column), GaugeMidY() + 7, kGauge, 12}); }
-    HomeRect Name(int column) const { return Px({TextX(column), TextTop(), TextWidth(), 16}); }
+    // The tool's mark, before its name.
+    static constexpr float kLogo = 14;
+    HomeRect Logo(int column) const { return Px({TextX(column), TextTop() + 1, kLogo, kLogo}); }
+    HomeRect Name(int column) const { return Px({TextX(column) + kLogo + 5, TextTop(), TextWidth() - kLogo - 5, 16}); }
     HomeRect Today(int column) const { return Px({TextX(column), TextTop() + 17, TextWidth(), 14}); }
     // Row 0 is five hours, row 1 the week.
     HomeRect RowLabel(int column, int row) const { return Px({TextX(column), RowY(row), 34, 15}); }

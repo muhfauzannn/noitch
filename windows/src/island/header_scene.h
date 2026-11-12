@@ -19,7 +19,8 @@ public:
     const HeaderLayout& Layout() const { return layout_; }
 
     // Commits, so animations set on other layers just before start on the same frame.
-    HRESULT Paint(IslandPage page, HeaderControl hovered, bool isPressed);
+    // `pinned` fills the pin's disc, so the island shows that it will stay open.
+    HRESULT Paint(IslandPage page, HeaderControl hovered, bool isPressed, bool pinned);
 
 private:
     Compositor* compositor_ = nullptr;

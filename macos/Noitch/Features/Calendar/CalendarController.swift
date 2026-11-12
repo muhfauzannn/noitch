@@ -35,7 +35,9 @@ final class CalendarController: NSObject {
     func attach(_ scene: CalendarScene, layout: HomeLayout) {
         self.scene = scene
         self.layout = layout
-        render()
+        // A new scene comes with an opening, and its first text waits for the first look like the
+        // read does: drawn here it cost about 50 ms of the opening's first frame, enough to open late.
+        if isShown, timer == nil { render() }
     }
 
     func pageWillShow() {

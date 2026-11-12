@@ -52,6 +52,8 @@ struct CalendarModel: Equatable {
 
     var days: [Day] = []
     var selected = 0
+    /// Days from 2001 to the first day shown, so the scene can tell which way the strip moved.
+    var rangeIndex = 0
     var heading = ""
     var rows: [Row] = []
     /// "+2 more", or nil.
@@ -68,7 +70,8 @@ struct CalendarModel: Equatable {
     init(events: [CalendarEvent], deadlines: [CalendarDeadline] = [], rangeStart: Date, selected: Int, now: Date, calendar: Calendar,
          access: CalendarAccess, clock: (Date) -> String, dayName: (Date) -> String) {
         self.selected = selected
-        let letters = calendar.veryShortWeekdaySymbols
+        rangeIndex = Int((rangeStart.timeIntervalSinceReferenceDate / 86400).rounded(.down))
+        let letters = calendar.shortWeekdaySymbols.map { $0.uppercased() }
         let today = calendar.startOfDay(for: now)
         let starts = (0..<Self.dayCount).compactMap { calendar.date(byAdding: .day, value: $0, to: rangeStart) }
         days = starts.map { start in

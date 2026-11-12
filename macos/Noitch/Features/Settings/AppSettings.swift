@@ -32,6 +32,8 @@ struct GeneralSettings: Equatable {
     var display = DisplayChoice.notch
     /// A tap on the trackpad as the island opens. Only felt on a Force Touch trackpad.
     var haptics = false
+    /// Pins the island open, and lets it go, from anywhere. Nil when turned off.
+    var pinShortcut: Shortcut? = .pinDefault
 
     static let hoverDelays = [0.0, 0.15, 0.3, 0.5]
 
@@ -42,6 +44,14 @@ struct GeneralSettings: Equatable {
         store.read("display", into: &settings.display)
         store.read("haptics", into: &settings.haptics)
         settings.hoverDelay = min(max(settings.hoverDelay, 0), 1)
+        // A value written as a 32-bit float reads back a hair off its choice, and would match none.
+        if let near = hoverDelays.first(where: { abs($0 - settings.hoverDelay) < 0.001 }) { settings.hoverDelay = near }
+        var key = Double(Shortcut.pinDefault.keyCode)
+        var modifiers = Shortcut.pinDefault.storedModifiers
+        store.read("pinKeyCode", into: &key)
+        store.read("pinModifiers", into: &modifiers)
+        // -1 is "none"; anything else unreadable falls back to the default.
+        settings.pinShortcut = key < 0 ? nil : Shortcut(storedKey: key, modifiers: modifiers) ?? .pinDefault
         return settings
     }
 
@@ -50,6 +60,8 @@ struct GeneralSettings: Equatable {
         store.write("hoverDelay", hoverDelay)
         store.write("display", display)
         store.write("haptics", haptics)
+        store.write("pinKeyCode", pinShortcut.map { Double($0.keyCode) } ?? -1)
+        store.write("pinModifiers", pinShortcut?.storedModifiers ?? 0)
     }
 }
 

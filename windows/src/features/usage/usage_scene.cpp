@@ -88,6 +88,10 @@ void UsageScene::PaintTool(int index, UsageTool kind, const UsageModel::Tool& to
 
     painter_->Text(tool.center, centerFormat_.Get(), layout_.Center(index), White(1));
     painter_->Text(tool.caption, captionFormat_.Get(), layout_.Caption(index), White(0.5f));
+    // Parsed once: the marks never change.
+    static const std::vector<LogoCommand> claude = ParseLogo(kClaudeLogo);
+    static const std::vector<LogoCommand> openAI = ParseLogo(kOpenAILogo);
+    painter_->Shape(kind == UsageTool::Claude ? claude : openAI, layout_.Logo(index), kind == UsageTool::Claude ? kAccents[0] : White(1));
     painter_->Text(tool.name, nameFormat_.Get(), layout_.Name(index), White(1));
     painter_->Text(tool.today, smallFormat_.Get(), layout_.Today(index), White(0.45f));
     for (int row = 0; row < 2; ++row) {

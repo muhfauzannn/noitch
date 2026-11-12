@@ -42,7 +42,10 @@ struct UsageLayout: Equatable {
         let gauge = gauge(column)
         return CGRect(x: gauge.minX, y: gauge.midY + 7, width: gauge.width, height: 12)
     }
-    func name(_ column: Int) -> CGRect { CGRect(x: textX(column), y: textTop, width: textWidth, height: 16) }
+    /// The tool's mark, before its name.
+    static let logo: CGFloat = 14
+    func logo(_ column: Int) -> CGRect { CGRect(x: textX(column), y: textTop + 1, width: Self.logo, height: Self.logo) }
+    func name(_ column: Int) -> CGRect { CGRect(x: textX(column) + Self.logo + 5, y: textTop, width: textWidth - Self.logo - 5, height: 16) }
     func today(_ column: Int) -> CGRect { CGRect(x: textX(column), y: textTop + 17, width: textWidth, height: 14) }
 
     /// Row 0 is five hours, row 1 the week.

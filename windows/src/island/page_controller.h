@@ -53,6 +53,12 @@ public:
     // Set by the island, which owns the settings window.
     void (*onOpenSettings)(void* context) = nullptr;
     void* onOpenSettingsContext = nullptr;
+    // The header's pin was pressed; the island owns the pin. Shares onOpenSettingsContext.
+    void (*onTogglePin)(void* context) = nullptr;
+    void SetPinned(bool pinned) {
+        pinned_ = pinned;
+        PaintHeader();
+    }
 
 private:
     void Select(IslandPage next);
@@ -90,6 +96,7 @@ private:
     HeaderControl pressed_ = HeaderControl::None;
     // True while a press that began on the page, not the header, is held.
     bool pageHasPointer_ = false;
+    bool pinned_ = false;
 };
 
 }  // namespace noitch

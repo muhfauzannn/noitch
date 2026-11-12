@@ -55,7 +55,7 @@ inline bool NeighborPage(IslandPage page, int step, VisiblePages visible, Island
 // The compositor layer that holds a page. Layer 0 is the header.
 inline constexpr int PageLayer(IslandPage page) { return 1 + static_cast<int>(page); }
 
-enum class HeaderControl { None, HomeTab, UsageTab, TasksTab, Settings };
+enum class HeaderControl { None, HomeTab, UsageTab, TasksTab, Pin, Settings };
 
 inline constexpr HeaderControl TabFor(IslandPage page) {
     return page == IslandPage::Home ? HeaderControl::HomeTab : page == IslandPage::Usage ? HeaderControl::UsageTab : HeaderControl::TasksTab;
@@ -82,12 +82,14 @@ public:
             case HeaderControl::UsageTab: return tab(IslandPage::Usage);
             case HeaderControl::TasksTab: return tab(IslandPage::Tasks);
             case HeaderControl::Settings: return Px({width_ - kSidePadding - kButton, y, kButton, kButton});
+            // Keeps the island open until pressed again.
+            case HeaderControl::Pin: return Px({width_ - kSidePadding - kButton * 2 - kGap, y, kButton, kButton});
             default: return {};
         }
     }
 
     HeaderControl ControlAt(float x, float y) const {
-        for (const HeaderControl control : {HeaderControl::HomeTab, HeaderControl::UsageTab, HeaderControl::TasksTab, HeaderControl::Settings}) {
+        for (const HeaderControl control : {HeaderControl::HomeTab, HeaderControl::UsageTab, HeaderControl::TasksTab, HeaderControl::Pin, HeaderControl::Settings}) {
             if (Frame(control).Contains(x, y)) return control;
         }
         return HeaderControl::None;

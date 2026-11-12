@@ -7,7 +7,8 @@ import QuartzCore
 final class PagerScene {
     /// How far a page slides while it crossfades. Small, so the move reads as direction, not travel.
     static let pageShift: CGFloat = 24
-    private static let hiddenScale: CGFloat = 0.94
+    /// The page's size while hidden; it grows from here on opening.
+    static let hiddenScale: CGFloat = 0.94
     private static let idleTabOpacity: Float = 0.45
 
     /// Pinned to the pill's top edge by the view.
@@ -17,6 +18,8 @@ final class PagerScene {
     private let header = CALayer()
     private let selection = CALayer()
     private let hoverPlate = CALayer()
+    /// Behind the pin while the island is pinned open.
+    private let pinPlate = CALayer()
     private var icons: [HeaderControl: CAShapeLayer] = [:]
     private var pages: [IslandPage: CALayer] = [:]
 
@@ -47,7 +50,12 @@ final class PagerScene {
             case .tasks: (.tab(.tasks), .tasks)
             }
         }
-        for (control, icon) in tabs + [(.settings, .settings)] {
+        pinPlate.frame = layout.frame(of: .pin)
+        pinPlate.cornerRadius = pinPlate.frame.height / 2
+        pinPlate.backgroundColor = NSColor.white.cgColor
+        pinPlate.opacity = 0
+        header.addSublayer(pinPlate)
+        for (control, icon) in tabs + [(.pin, .pin), (.settings, .settings)] {
             let frame = layout.frame(of: control)
             let inset = frame.width * 0.22
             let layer = CAShapeLayer()
@@ -172,6 +180,25 @@ final class PagerScene {
         Motion.ease(root, "transform.scale", from: (presentation?.value(forKeyPath: "transform.scale") as? CGFloat) ?? 1, to: Self.hiddenScale, duration: 0.2, begin: now)
         root.opacity = 0
         root.transform = CATransform3DMakeScale(Self.hiddenScale, Self.hiddenScale, 1)
+        CATransaction.commit()
+    }
+
+    /// The pin turns into a white disc with a dark pin while the island is pinned.
+    func setPinned(_ pinned: Bool, animated: Bool) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let now = CACurrentMediaTime()
+        let target: Float = pinned ? 1 : 0
+        if animated {
+            Motion.ease(pinPlate, "opacity", from: pinPlate.presentation()?.opacity ?? pinPlate.opacity, to: target, duration: 0.2, begin: now)
+        }
+        pinPlate.opacity = target
+        if let icon = icons[.pin] {
+            let color = (pinned ? NSColor.black : NSColor.white).cgColor
+            if animated { Motion.ease(icon, "fillColor", from: icon.presentation()?.fillColor ?? icon.fillColor as Any, to: color, duration: 0.2, begin: now) }
+            icon.fillColor = color
+            icon.opacity = pinned ? 1 : Self.idleTabOpacity
+        }
         CATransaction.commit()
     }
 

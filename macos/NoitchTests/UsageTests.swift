@@ -268,4 +268,17 @@ struct UsageTests {
         let calm = UsageModel(claude: limits, codex: .failed(.noData), summary: summary, now: 0) { _ in "" }
         #expect(warned.claude.rows[0].severity == .watch && calm.claude.rows[0].severity == .calm)
     }
+
+    @Test func `the brand marks parse into their 24-point grid`() {
+        for logo in [BrandLogo.claude, .openAI] {
+            let commands = BrandLogo.parse(logo.commands)
+            #expect(commands.first?.0 == "M")
+            for (command, values) in commands {
+                #expect(values.count == (command == "C" ? 6 : command == "Z" ? 0 : 2))
+                #expect(values.allSatisfy { $0 > -1.5 && $0 < 25.5 })
+            }
+            let box = logo.path(side: 14).boundingBoxOfPath
+            #expect(box.width > 12 && box.width < 15.5 && box.height > 12 && box.height < 15.5)
+        }
+    }
 }

@@ -105,6 +105,7 @@ Keep this honest and up to date.
 | Builds; 64 unit tests | Passing |
 | Home glow fading out before the top bends | Checked by window screenshots (`--demo-media --open`, Debug only, with a coloured demo cover) |
 | Calendar in Home: three-day strip with arrows, deadline rings, rows, narrower music column | Checked by a window screenshot with `--demo-tasks --demo-media --open` (sample events and tasks, no EventKit); the arrows by click, a deadline row, the access prompt, real calendars, change notifications and the timers **not checked on screen** |
+| Pin in the header, General's shortcut field, Usage's marks, calendar dates (type with an underline) | Checked by window screenshots (`--demo-media --open --settings`); pinning by click or shortcut, recording a shortcut, the days' push, the underline's spring and the lyric fix during opening **not checked on screen** |
 | Tasks page (day bars, indigo palette, overdue toggle, all clear) and the closed-island slip and dot | Checked by window screenshots with `--demo-tasks`, `--demo-all-clear` and `--open`; clicks, scrolling, hover and the bars' reveal **not checked on screen** |
 | Tasks against a real Moodle site, sign-in, Keychain, the 30-minute check, reminders | **Not run**: needs a signed-in account |
 | Closed island with music (wings, six moving bars) | Checked by window screenshots with `--demo-media`; real playback, artwork, pause timing and the player-app watching **not checked on screen** |

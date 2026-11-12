@@ -20,6 +20,7 @@
 #include "features/usage/ai_usage.h"
 #include "features/usage/usage_layout.h"
 #include "features/usage/usage_model.h"
+#include "features/usage/brand_logo.h"
 #include "island/flare.h"
 #include "island/island_geometry.h"
 #include "island/island_page.h"
@@ -943,6 +944,31 @@ void TestOverdueWorkStaysHiddenUntilAskedFor() {
     assert(model.overdueToggle.empty());
 }
 
+void TestPinSitsLeftOfSettingsAndItsShortcutNeedsAModifier() {
+    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1);
+    const HomeRect pin = header.Frame(HeaderControl::Pin);
+    assert(pin.Right() < header.Frame(HeaderControl::Settings).x);
+    assert(header.ControlAt(pin.x + 1, pin.y + 1) == HeaderControl::Pin);
+    assert(!pin.Intersects(header.Frame(HeaderControl::TasksTab)));
+    assert(PinHotkeyUsable(kDefaultPinHotkey) && PinHotkeyModifiers(kDefaultPinHotkey) == (1u | 2u));
+    assert(!PinHotkeyUsable('N' | (kHotkeyShift << 8)) && !PinHotkeyUsable(0));
+    assert(PinHotkeyModifiers('N' | ((kHotkeyShift | kHotkeyControl) << 8)) == (2u | 4u));
+}
+
+void TestBrandLogosParseInsideTheirGrid() {
+    for (const char* logo : {kClaudeLogo, kOpenAILogo}) {
+        const std::vector<LogoCommand> commands = ParseLogo(logo);
+        assert(!commands.empty() && commands.front().kind == 'M');
+        for (const LogoCommand& command : commands) {
+            const size_t expected = command.kind == 'C' ? 6 : command.kind == 'Z' ? 0 : 2;
+            assert(command.values.size() == expected);
+            for (const float value : command.values) assert(value > -1.5f && value < 25.5f);
+        }
+    }
+    const std::vector<LogoCommand> small = ParseLogo("M 1 2 L 3.5 4 Z");
+    assert(small.size() == 3 && small[1].values[0] == 3.5f && small[2].kind == 'Z');
+}
+
 void TestTaskAlertShapesThePill() {
     const LiveLayout live(180, 32);
     float width = 0, height = 0;
@@ -1045,6 +1071,8 @@ int main() {
     TestTaskCacheRoundTrips();
     TestTasksPageSaysWhatToDo();
     TestOverdueWorkStaysHiddenUntilAskedFor();
+    TestPinSitsLeftOfSettingsAndItsShortcutNeedsAModifier();
+    TestBrandLogosParseInsideTheirGrid();
     TestTaskAlertShapesThePill();
     TestTasksPageFitsAndSitesNormalize();
     std::puts("island_tests: all passed");

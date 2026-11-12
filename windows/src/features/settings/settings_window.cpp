@@ -1,5 +1,6 @@
 #include "settings_window.h"
 
+#include <commctrl.h>
 #include <windowsx.h>
 
 #include <memory>
@@ -176,6 +177,19 @@ void SettingsWindow::ShowPage(int index) {
                 case SettingsRow::Kind::Account:
                     y = BuildAccount(left, width, y) - kRowHeight - 2;
                     break;
+                case SettingsRow::Kind::Hotkey: {
+                    static const bool loaded = [] {
+                        INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_HOTKEY_CLASS};
+                        return InitCommonControlsEx(&controls) != FALSE;
+                    }();
+                    (void)loaded;
+                    add(L"STATIC", row.title, SS_CENTERIMAGE, 0, left + 4, y, width - kChoiceWidth - 16, kRowHeight, font_);
+                    control = add(HOTKEY_CLASSW, L"", WS_TABSTOP | WS_BORDER, id, left + width - kChoiceWidth, y, kChoiceWidth, kRowHeight, font_);
+                    // A shortcut needs Ctrl or Alt; Shift alone or nothing becomes Ctrl+Alt.
+                    SendMessageW(control, HKM_SETRULES, HKCOMB_NONE | HKCOMB_S, MAKELPARAM(HOTKEYF_CONTROL | HOTKEYF_ALT, 0));
+                    SendMessageW(control, HKM_SETHOTKEY, static_cast<WPARAM>(row.value(settings_)), 0);
+                    break;
+                }
             }
             rows_.push_back(&row);
             rowControls_.push_back(control);
@@ -362,6 +376,12 @@ void SettingsWindow::Changed(int index, HWND control) {
             row.setValue(settings_, row.options[static_cast<size_t>(selected)].second);
             break;
         }
+        case SettingsRow::Kind::Hotkey: {
+            const auto hotkey = static_cast<unsigned>(LOWORD(SendMessageW(control, HKM_GETHOTKEY, 0, 0)));
+            if (hotkey != 0 && !PinHotkeyUsable(hotkey)) return;
+            row.setValue(settings_, hotkey);
+            break;
+        }
         case SettingsRow::Kind::Text:
         case SettingsRow::Kind::Account:
             return;
@@ -405,7 +425,8 @@ LRESULT SettingsWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wparam, LP
                 SignOut();
                 return 0;
             }
-            if (id >= kFirstRowId && (code == BN_CLICKED || code == CBN_SELCHANGE)) Changed(id - kFirstRowId, reinterpret_cast<HWND>(lparam));
+            // The hotkey control reports a change as EN_CHANGE.
+            if (id >= kFirstRowId && (code == BN_CLICKED || code == CBN_SELCHANGE || code == EN_CHANGE)) Changed(id - kFirstRowId, reinterpret_cast<HWND>(lparam));
             return 0;
         }
         case MoodleSource::kMessage:

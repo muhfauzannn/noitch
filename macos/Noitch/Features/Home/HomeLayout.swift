@@ -60,7 +60,7 @@ struct HomeLayout: Equatable {
 
     // MARK: Calendar
 
-    static let calendarWidth: CGFloat = 150
+    static let calendarWidth: CGFloat = 172
     /// Each side of the divider between music and calendar.
     static let calendarGap: CGFloat = 14
     static let calendarRowHeight: CGFloat = 18
@@ -71,19 +71,28 @@ struct HomeLayout: Equatable {
     var calendarDivider: CGRect { CGRect(x: calendarPanel.minX - Self.calendarGap, y: bodyTop, width: 1, height: calendarPanel.height - 2) }
 
     /// A weekday letter over its date, one of seven across the panel.
-    /// Each arrow beside the strip of days.
-    static let calendarArrow: CGFloat = 20
+    /// The chevrons either side of the days.
+    static let calendarArrow: CGFloat = 16
+    static let calendarTileGap: CGFloat = 6
+    /// A day: the chosen day's line, its weekday, its date, then markers for events and deadlines.
+    static let calendarTileHeight: CGFloat = 44
+    /// One day's column, set in type with no box.
     func calendarDay(_ index: Int) -> CGRect {
-        let width = (Self.calendarWidth - Self.calendarArrow * 2) / CGFloat(CalendarModel.dayCount)
-        return CGRect(x: calendarPanel.minX + Self.calendarArrow + CGFloat(index) * width, y: calendarPanel.minY, width: width, height: 34)
+        let count = CGFloat(CalendarModel.dayCount)
+        let inner = Self.calendarWidth - (Self.calendarArrow + Self.calendarTileGap) * 2
+        let width = (inner - Self.calendarTileGap * (count - 1)) / count
+        let x = calendarPanel.minX + Self.calendarArrow + Self.calendarTileGap + CGFloat(index) * (width + Self.calendarTileGap)
+        return CGRect(x: x, y: calendarPanel.minY, width: width, height: Self.calendarTileHeight)
     }
     func calendarDayIndex(at point: CGPoint) -> Int? {
         (0..<CalendarModel.dayCount).first { calendarDay($0).contains(point) }
     }
-    /// The arrows sit level with the dates, which the plates mark.
-    var calendarPrevious: CGRect { CGRect(x: calendarPanel.minX, y: calendarPanel.minY + 12, width: Self.calendarArrow, height: 20) }
-    var calendarNext: CGRect { CGRect(x: calendarPanel.maxX - Self.calendarArrow, y: calendarPanel.minY + 12, width: Self.calendarArrow, height: 20) }
-    var calendarHeading: CGRect { CGRect(x: calendarPanel.minX, y: calendarPanel.minY + 38, width: Self.calendarWidth, height: 14) }
+    /// Level with the dates.
+    var calendarPrevious: CGRect {
+        CGRect(x: calendarPanel.minX, y: calendarPanel.minY + 18, width: Self.calendarArrow, height: 20)
+    }
+    var calendarNext: CGRect { calendarPrevious.offsetBy(dx: Self.calendarWidth - Self.calendarArrow, dy: 0) }
+    var calendarHeading: CGRect { CGRect(x: calendarPanel.minX, y: calendarPanel.minY + Self.calendarTileHeight + 5, width: Self.calendarWidth, height: 14) }
     func calendarRow(_ index: Int) -> CGRect {
         CGRect(x: calendarPanel.minX, y: calendarHeading.maxY + 3 + CGFloat(index) * Self.calendarRowHeight, width: Self.calendarWidth, height: Self.calendarRowHeight)
     }

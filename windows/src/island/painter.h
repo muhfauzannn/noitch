@@ -8,7 +8,10 @@
 
 #include <string_view>
 
+#include <vector>
+
 #include "features/home/home_layout.h"
+#include "features/usage/brand_logo.h"
 
 namespace noitch {
 
@@ -33,6 +36,8 @@ public:
     // A ring stroke filled from the top clockwise up to `fraction` of the circle, with round ends.
     void Arc(D2D1_POINT_2F center, float radius, float width, double fraction, D2D1_COLOR_F color);
     void Dot(D2D1_POINT_2F center, float radius, D2D1_COLOR_F color);
+    // A logo's commands on its 24 x 24 grid, scaled into `rect` and filled with the nonzero rule.
+    void Shape(const std::vector<LogoCommand>& commands, const HomeRect& rect, D2D1_COLOR_F color);
 
 private:
     Microsoft::WRL::ComPtr<ID2D1Factory1> factory_;

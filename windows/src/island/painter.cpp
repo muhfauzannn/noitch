@@ -129,4 +129,33 @@ void Painter::Dot(D2D1_POINT_2F center, float radius, D2D1_COLOR_F color) {
     context_->FillEllipse(D2D1::Ellipse(center, radius, radius), brush_.Get());
 }
 
+void Painter::Shape(const std::vector<LogoCommand>& commands, const HomeRect& rect, D2D1_COLOR_F color) {
+    Microsoft::WRL::ComPtr<ID2D1PathGeometry> geometry;
+    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(factory_->CreatePathGeometry(&geometry)) || FAILED(geometry->Open(&sink))) return;
+    sink->SetFillMode(D2D1_FILL_MODE_WINDING);
+    const float sx = rect.width / 24;
+    const float sy = rect.height / 24;
+    const auto at = [&](const std::vector<float>& v, size_t i) { return D2D1::Point2F(rect.x + v[i] * sx, rect.y + v[i + 1] * sy); };
+    bool open = false;
+    for (const LogoCommand& command : commands) {
+        if (command.kind == 'M' && command.values.size() >= 2) {
+            if (open) sink->EndFigure(D2D1_FIGURE_END_OPEN);
+            sink->BeginFigure(at(command.values, 0), D2D1_FIGURE_BEGIN_FILLED);
+            open = true;
+        } else if (command.kind == 'L' && open && command.values.size() >= 2) {
+            sink->AddLine(at(command.values, 0));
+        } else if (command.kind == 'C' && open && command.values.size() >= 6) {
+            sink->AddBezier(D2D1::BezierSegment(at(command.values, 0), at(command.values, 2), at(command.values, 4)));
+        } else if (command.kind == 'Z' && open) {
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            open = false;
+        }
+    }
+    if (open) sink->EndFigure(D2D1_FIGURE_END_OPEN);
+    if (FAILED(sink->Close())) return;
+    brush_->SetColor(color);
+    context_->FillGeometry(geometry.Get(), brush_.Get());
+}
+
 }  // namespace noitch
