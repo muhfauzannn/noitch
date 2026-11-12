@@ -167,6 +167,31 @@ it was started without the normal ten-second settle. A repeat after settling rec
 per transition but still failed the assertion that the window remains large during collapse.
 Windows budgets remain unmeasured.
 
+## Spike investigation with hover prevented (2026-11-12)
+
+The preceding before/after measurements did not record playback state or confirm that the island
+remained collapsed; they cannot establish that paired lyric animation caused the CPU spike.
+A follow-up used `-openOnHover NO` as a process-only override, ten seconds to settle, then a
+20-second counter interval (CPU normalized to one minute). No saved preference was changed.
+
+| Run | Footprint MB | CPU ms/min | Wakeups/s |
+| --- | --- | --- | --- |
+| Current, live music and closed lyrics enabled | 14.27 | 17.97 | 0.70 |
+| Current, closed lyrics disabled | 10.30 | 8.97 | 0.20 |
+| Current, closed music disabled | 9.11 | 1.29 | 0.10 |
+| Before romanization (`f95010c`), live and lyrics explicitly enabled | 10.52 | 1.26 | 0.15 |
+| Current repeat (`3755f85`), live and lyrics explicitly enabled | 11.77 | 1.77 | 0.10 |
+
+Each process was restarted between runs. Three-second, 10 ms CPU samples after the counter intervals
+showed the main thread waiting in the event loop, without an observed romanization or animation
+hot loop. The large CPU spike did not recur. The 1.25 MB difference in the final build comparison
+is an observation from one pair, not a proven allocation attributable entirely to romanization:
+real playback and network/cache state were not frozen. Closed music and closed lyric paths have
+measurable costs, but these results do not identify the historical spike's exact cause or prove
+all budgets in all playback states. Repeat under a fixed track and capture a profile during a
+reproduced spike before attributing it to a particular feature. These are diagnostic 20-second
+intervals, not replacements for the normal 30-second budget checks or after-use measurements.
+
 ## Measuring
 
 ```sh
