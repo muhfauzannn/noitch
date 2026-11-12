@@ -7,6 +7,11 @@ A native island for your music, tasks, files, and clipboard.
 [![macOS CI](https://github.com/muhfauzannn/noitch/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/muhfauzannn/noitch/actions/workflows/macos.yml)
 [![Windows CI](https://github.com/muhfauzannn/noitch/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/muhfauzannn/noitch/actions/workflows/windows.yml)
 
+[![Download for macOS](https://img.shields.io/badge/Download-macOS_arm64-111827?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/muhfauzannn/noitch/releases)
+[![Download for Windows](https://img.shields.io/badge/Download-Windows_x64-0078D4?style=for-the-badge)](https://github.com/muhfauzannn/noitch/releases)
+
+Release downloads are pending. These buttons open the Releases page.
+
 [Features](#features) · [Get started](#get-started) · [Documentation](#documentation) · [Contributing](#contributing)
 
 </div>
