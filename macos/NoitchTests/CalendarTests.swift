@@ -110,4 +110,13 @@ struct CalendarTests {
         }
     }
 
+
+    @Test func `every opening is centred on today`() {
+        let start = CalendarModel.centredStart(on: now, calendar: calendar)
+        let clock = DateFormatter()
+        let strip = CalendarModel(events: [], rangeStart: start, selected: CalendarModel.dayCount / 2, now: now, calendar: calendar, access: .granted,
+                                  clock: { clock.string(from: $0) }, dayName: { _ in "" })
+        #expect(strip.days.map(\.number) == ["10", "11", "12"])
+        #expect(strip.days[strip.selected].isToday && strip.heading == "Today")
+    }
 }

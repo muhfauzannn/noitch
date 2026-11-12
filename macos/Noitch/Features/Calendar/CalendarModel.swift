@@ -130,6 +130,12 @@ struct CalendarModel: Equatable {
         if all.isEmpty { message = hadAny ? "Nothing else today" : "Nothing planned" }
     }
 
+    /// The first day of a strip with `date` in the middle.
+    static func centredStart(on date: Date, calendar: Calendar) -> Date {
+        let day = calendar.startOfDay(for: date)
+        return calendar.date(byAdding: .day, value: -(dayCount / 2), to: day) ?? day
+    }
+
     /// The strip moved `pages` times its length from `start`.
     static func rangeStart(_ start: Date, moved pages: Int, calendar: Calendar) -> Date {
         calendar.date(byAdding: .day, value: pages * dayCount, to: start) ?? start

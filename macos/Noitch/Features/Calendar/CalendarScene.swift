@@ -19,6 +19,9 @@ final class CalendarScene {
     private let underline = CALayer()
     /// The days' type, which slides when the strip moves.
     private let strip = CALayer()
+    /// Clips the slide to the days' row. A push transition moves the layer it is on, clip and all,
+    /// so the clip has to be the layer around it.
+    private let stripClip = CALayer()
     private let letters: [CATextLayer]
     private let numbers: [CATextLayer]
     private let dots: [CALayer]
@@ -47,15 +50,17 @@ final class CalendarScene {
         // Clipped to the days' row, so sliding dates don't show past the chevrons.
         let first = layout.calendarDay(0)
         let last = layout.calendarDay(count - 1)
-        strip.frame = CGRect(x: first.minX, y: first.minY, width: last.maxX - first.minX, height: first.height)
-        strip.masksToBounds = true
-        root.addSublayer(strip)
+        stripClip.frame = CGRect(x: first.minX, y: first.minY, width: last.maxX - first.minX, height: first.height)
+        stripClip.masksToBounds = true
+        root.addSublayer(stripClip)
+        strip.frame = stripClip.bounds
+        stripClip.addSublayer(strip)
         letters = (0..<count).map { _ in Self.makeText(size: 9, weight: .semibold, opacity: 1, alignment: .center) }
         numbers = (0..<count).map { _ in Self.makeText(size: 20, weight: .semibold, opacity: 1, alignment: .center) }
         dots = (0..<count).map { _ in CALayer() }
         rings = (0..<count).map { _ in CALayer() }
         for index in 0..<count {
-            let day = layout.calendarDay(index).offsetBy(dx: -strip.frame.minX, dy: -strip.frame.minY)
+            let day = layout.calendarDay(index).offsetBy(dx: -stripClip.frame.minX, dy: -stripClip.frame.minY)
             letters[index].frame = CGRect(x: day.minX, y: day.minY + 6, width: day.width, height: 11)
             numbers[index].frame = CGRect(x: day.minX, y: day.minY + 16, width: day.width, height: 24)
             dots[index].bounds = CGRect(x: 0, y: 0, width: 4, height: 4)
@@ -164,7 +169,7 @@ final class CalendarScene {
             numbers[index].opacity = selected ? 1 : 0.5
             letters[index].opacity = selected ? 0.9 : 0.4
             // Markers sit under the date.
-            let cell = layout.calendarDay(index).offsetBy(dx: -strip.frame.minX, dy: -strip.frame.minY)
+            let cell = layout.calendarDay(index).offsetBy(dx: -stripClip.frame.minX, dy: -stripClip.frame.minY)
             let both = day.hasEvents && day.hasDeadline
             dots[index].position = CGPoint(x: cell.midX - (both ? 4 : 0), y: cell.maxY - 2.5)
             rings[index].position = CGPoint(x: cell.midX + (both ? 4 : 0), y: cell.maxY - 2.5)

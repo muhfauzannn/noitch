@@ -265,13 +265,15 @@ With "Show calendar" on, Home gains a 172 pt panel on the right, past a thin div
 column narrows to make room (numbers in `HomeLayout`). The island stays 580 pt wide: a 720 pt island
 was tried and found too long.
 
-- **Days.** Three days set in type between two thin chevrons, starting on today, with no boxes: the
+- **Days.** Three days set in type between two thin chevrons, centred on today (yesterday, today,
+  tomorrow, with today chosen), with no boxes: the
   weekday ("THU") over a 20 pt date, then a dot for events and an indigo ring for a Moodle deadline.
   Everything is white: the chosen day bright, the others at half, and the heading under them says
   "Today" (today was red at first; the owner asked for neutral white). A short white line over the
   chosen day springs to a clicked day (it sat under the date first; the owner moved
   it up). Hovering a day lifts it toward bright. The
-  chevrons move three days, and the new days push in from the side they point to. Before this the
+  chevrons move three days, and the new days push in from the side they point to, clipped to the
+  days' row so they never slide past the chevrons. Before this the
   owner picked it from four mockups (2026-11-12), after seven days in a row (too many for the 150 pt the panel had then),
   three bare dates between text arrows (untidy) and three filled tiles (disliked). The panel then
   grew to 172 pt with hairlines between the days, so the three read as a grid.
@@ -291,7 +293,7 @@ was tried and found too long.
   drawing it on attach took about 50 ms of the opening and made the hover check's first opening late. A first hover run without this was slow
   enough to fail the hover check.
 - **Events.** `EKEventStoreChanged` notifications reload the three days; one one-shot timer fires at
-  the next start, end, deadline or midnight so rows change on time. A change in the task list redraws. Nothing polls. Each opening starts on today.
+  the next start, end, deadline or midnight so rows change on time. A change in the task list redraws. Nothing polls. Each opening is centred on today.
 - **Windows.** Not supported: Windows' calendar API (`AppointmentStore`) is only available to packaged
   (MSIX) apps, and the Windows app isn't packaged.
 

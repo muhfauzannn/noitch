@@ -43,10 +43,10 @@ final class CalendarController: NSObject {
     func pageWillShow() {
         isShown = true
         NotificationCenter.default.addObserver(self, selector: #selector(accessChanged), name: CalendarSource.accessChanged, object: nil)
-        // Every opening starts on today, as the first of the three days.
+        // Every opening is centred on today: yesterday, today, tomorrow, with today chosen.
         calendar = Calendar.current
-        rangeStart = calendar.startOfDay(for: Date())
-        selected = 0
+        rangeStart = CalendarModel.centredStart(on: Date(), calendar: calendar)
+        selected = CalendarModel.dayCount / 2
         // The store, the read and the first text all wait until the island has opened: the panel
         // reveals last anyway, and the opening should cost nothing extra.
         timer?.invalidate()
@@ -185,10 +185,10 @@ final class CalendarController: NSObject {
     @objc private func nextChange() {
         timer = nil
         let now = Date()
-        // Past midnight a strip that started on yesterday moves on to the new today.
-        let today = calendar.startOfDay(for: now)
-        if let yesterday = calendar.date(byAdding: .day, value: -1, to: today), rangeStart == yesterday, selected == 0 {
-            rangeStart = today
+        // Past midnight a strip still centred on yesterday, with it chosen, moves on to the new today.
+        let centred = CalendarModel.centredStart(on: now, calendar: calendar)
+        if let before = calendar.date(byAdding: .day, value: -1, to: centred), rangeStart == before, selected == CalendarModel.dayCount / 2 {
+            rangeStart = centred
             reload()
         } else {
             render()
