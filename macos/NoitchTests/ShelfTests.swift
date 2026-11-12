@@ -22,17 +22,43 @@ struct ShelfTests {
         let pinned = values.map { value in var value = value; value.pinned = true; return value }
         #expect(ShelfCollection.inserting(item("extra"), into: pinned) == pinned)
     }
-    @Test func layoutSeparatesCardsControlsAndFooter() {
+    @Test func layoutKeepsTilesCardsAndControlsApart() {
         for header in [CGFloat(24), 32, 38] {
             let layout = ShelfLayout(size: CGSize(width: 580, height: 180), headerHeight: header)
-            for slot in 0..<3 {
-                #expect(layout.card(slot).minY >= header)
-                #expect(layout.card(slot).maxY < layout.footer.minY)
-                for button in 0..<6 { #expect(!layout.card(slot).intersects(layout.button(button))) }
+            let pill = CGRect(x: 0, y: 0, width: 580, height: 180)
+            for clipboard in [false, true] {
+                let count = ShelfLayout.perPage(clipboard: clipboard)
+                for slot in 0..<count {
+                    let card = layout.card(slot, clipboard: clipboard)
+                    #expect(card.minY >= header && pill.contains(card))
+                    #expect(layout.slot(at: CGPoint(x: card.midX, y: card.midY), clipboard: clipboard) == slot)
+                    if slot + 1 < count { #expect(card.maxX < layout.card(slot + 1, clipboard: clipboard).minX) }
+                    for button in 0..<6 { #expect(!card.intersects(layout.button(button))) }
+                    let pin = layout.pinBubble(slot, clipboard: clipboard), remove = layout.removeBubble(slot, clipboard: clipboard)
+                    #expect(card.contains(pin) && card.contains(remove) && !pin.intersects(remove))
+                }
+                #expect(layout.card(count - 1, clipboard: clipboard).maxX <= 580 - ShelfLayout.sidePadding + 0.01)
+            }
+            for slot in 0..<ShelfLayout.perPage(clipboard: false) {
+                let tile = layout.card(slot, clipboard: false)
+                #expect(tile.contains(layout.glyph(slot)) && tile.contains(layout.name(slot)))
+                #expect(layout.glyph(slot).maxY <= layout.name(slot).minY)
             }
             for button in 0..<5 { #expect(layout.button(button).maxX <= layout.button(button + 1).minX) }
+            #expect(layout.status.minX >= layout.button(1).maxX && layout.status.maxX <= layout.button(2).minX)
         }
     }
+
+    @Test func fileTypesFollowTheExtension() {
+        #expect(ShelfFileType.of(path: "/a/Notes.PDF") == .pdf)
+        #expect(ShelfFileType.of(path: "/a/photo.heic") == .image)
+        #expect(ShelfFileType.of(path: "/a/data.csv") == .sheet)
+        #expect(ShelfFileType.of(path: "/a/Folder") == .folder)
+        #expect(ShelfFileType.of(path: "/a/thing.xyz") == .other)
+        #expect(ShelfFileType.label(path: "/a/deck.pptx") == "PPTX")
+        #expect(ShelfFileType.label(path: "/a/archive.tar.gz") == "GZ")
+    }
+
     @Test func isolatedClipboardRoundTripAndSecretExclusion() throws {
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }

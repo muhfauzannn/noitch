@@ -45,6 +45,7 @@ final class ShelfController {
         #endif
     }
 
+    private var perPage: Int { ShelfLayout.perPage(clipboard: clipboard) }
     private var items: [ShelfItem] { (clipboard ? collection.clipboard : collection.files).sorted { $0.pinned && !$1.pinned } }
     var sceneRoot: CALayer? { scene?.root }
     func stop() { source.stop() }
@@ -78,14 +79,24 @@ final class ShelfController {
 
     private func refresh() {
         guard isOpen, let scene else { return }
-        offset = min(max(offset, 0), max(items.count - 1, 0) / 3 * 3)
-        let visible = Array(items.dropFirst(offset).prefix(3))
+        offset = min(max(offset, 0), max(items.count - 1, 0) / perPage * perPage)
+        let visible = Array(items.dropFirst(offset).prefix(perPage))
         let ids = Set(visible.map(\.id))
         thumbnails = thumbnails.filter { ids.contains($0.key) }
         let images: [CGImage?] = visible.map { item in
             if let cached = thumbnails[item.id] { return cached }
-            guard item.kind == .image, let data = source.data(for: item), let image = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-            let thumbnail = CGImageSourceCreateThumbnailAtIndex(image, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 128] as CFDictionary)
+            let options = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 128] as CFDictionary
+            let image: CGImageSource?
+            if item.kind == .image, let data = source.data(for: item) {
+                image = CGImageSourceCreateWithData(data as CFData, nil)
+            } else if item.kind == .files, item.files.count == 1, let path = item.files.first, ShelfFileType.of(path: path) == .image {
+                // A dropped picture shows itself, read from where it lies.
+                image = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil)
+            } else {
+                image = nil
+            }
+            guard let image else { return nil }
+            let thumbnail = CGImageSourceCreateThumbnailAtIndex(image, 0, options)
             thumbnails[item.id] = thumbnail
             return thumbnail
         }
@@ -103,7 +114,7 @@ final class ShelfController {
                 added = added || collection.files.contains { $0.id == item.id }
             }
         }
-        guard added else { message = "Shelf full. Unpin or remove an item first."; refresh(); return false }
+        guard added else { message = "Shelf full: unpin or remove something"; refresh(); return false }
         clipboard = false
         offset = 0
         message = "Added to shelf"
@@ -111,7 +122,8 @@ final class ShelfController {
         return true
     }
     func pointerMoved(to point: CGPoint) {
-        let next = (0..<3).first { scene?.layout.card($0).contains(point) == true }
+        let visible = max(min(items.count - offset, perPage), 0)
+        let next = scene?.layout.slot(at: point, clipboard: clipboard).flatMap { $0 < visible ? $0 : nil }
         if next != hover { hover = next; refresh() }
     }
     func pointerDown(at point: CGPoint) { pressed = point; message = "" }
@@ -126,17 +138,21 @@ final class ShelfController {
             case 3:
                 if clipboard { collection.clipboard.removeAll { !$0.pinned } } else { collection.files.removeAll { !$0.pinned } }
                 save()
-            case 4: offset = max(offset - 3, 0)
-            default: offset = min(offset + 3, max(items.count - 1, 0) / 3 * 3)
+            case 4: offset = max(offset - perPage, 0)
+            default: offset = min(offset + perPage, max(items.count - 1, 0) / perPage * perPage)
             }
             refresh(); return
         }
-        guard let slot = (0..<3).first(where: { layout.card($0).contains(point) && layout.card($0).contains(down) }), items.indices.contains(offset + slot) else { return }
+        guard let slot = layout.slot(at: point, clipboard: clipboard), layout.slot(at: down, clipboard: clipboard) == slot,
+              items.indices.contains(offset + slot) else { return }
         let item = items[offset + slot]
-        let card = layout.card(slot)
-        if point.y < card.minY + 25 && point.x >= card.maxX - 53 {
-            mutate(item.id, remove: point.x >= card.maxX - 28)
-        } else { message = source.copy(item) ? "Copied. Ready to paste." : "This item is no longer available." }
+        // The bubbles only show on hover, but a press there always means them.
+        let hitArea = { (frame: CGRect) in frame.insetBy(dx: -3, dy: -3).contains(point) }
+        if hitArea(layout.removeBubble(slot, clipboard: clipboard)) {
+            mutate(item.id, remove: true)
+        } else if hitArea(layout.pinBubble(slot, clipboard: clipboard)) {
+            mutate(item.id, remove: false)
+        } else { message = source.copy(item) ? "Copied" : "No longer available" }
         refresh()
     }
     private func mutate(_ id: String, remove: Bool) {
@@ -147,14 +163,14 @@ final class ShelfController {
         save()
     }
     func dragItems(at point: CGPoint) -> [NSDraggingItem] {
-        guard let layout = scene?.layout, let slot = (0..<3).first(where: { layout.card($0).contains(point) }), items.indices.contains(offset + slot) else { return [] }
+        guard let layout = scene?.layout, let slot = layout.slot(at: point, clipboard: clipboard), items.indices.contains(offset + slot) else { return [] }
         pressed = nil
         return source.draggingItems(items[offset + slot])
     }
     func setDragging(_ value: Bool) { isDragging = value }
     func scrolled(_ delta: Double) {
         guard abs(delta) > 1 else { return }
-        offset += delta > 0 ? -3 : 3
+        offset += delta > 0 ? -perPage : perPage
         refresh()
     }
 }

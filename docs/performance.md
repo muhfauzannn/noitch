@@ -15,6 +15,13 @@ one needs an explicit decision, not a quiet increase.
 | Per-frame work in our process | None | By design | By design |
 | Third-party dependencies | 1, approved: MediaRemoteAdapter | See left | 0 |
 
+With the shelf redesign (2026-11-12, same M5, Spotify running): 11.94 MB, 11.88 ms/min and 1.50
+wakeups/s, against 11.92 MB, 10.58 ms/min and 1.63 wakeups/s for `main` just before it on the same
+machine, so the same within noise. The wakeups were already over budget on `main`, from the
+approved one-second clipboard check and the closed island's lyric line. The hover check, run on its
+own with Hover delay at None, passed all 23 at 5.06 ms per transition. The binary grew from 1763 KB
+to 1793 KB. Showing the Shelf page itself was not timed.
+
 With the pin and its shortcut, Usage's marks, the calendar's day tiles and the lyric fix
 (2026-11-12, same M5): 9.83, 9.89 and 9.89 MB, 1.33 to 2.33 ms/min, 0.13 to 0.17 wakeups/s, 4.31 and
 4.67 ms per transition, all 23 hover checks passing on two runs; the binary is 1576 KB. Before the fix

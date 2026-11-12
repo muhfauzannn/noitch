@@ -34,6 +34,8 @@ public:
     void Glyph(const wchar_t* glyph, IDWriteTextFormat* format, const HomeRect& rect, D2D1_COLOR_F color);
     void Bitmap(const uint32_t* pixels, UINT width, UINT height, const HomeRect& rect);
     void Fill(const HomeRect& rect, float radius, D2D1_COLOR_F color);
+    // A rounded rectangle's edge, `width` pixels wide, dashed when `dash` is above zero.
+    void Outline(const HomeRect& rect, float radius, float width, D2D1_COLOR_F color, float dash = 0);
     // A ring stroke filled from the top clockwise up to `fraction` of the circle, with round ends.
     void Arc(D2D1_POINT_2F center, float radius, float width, double fraction, D2D1_COLOR_F color);
     void Dot(D2D1_POINT_2F center, float radius, D2D1_COLOR_F color);

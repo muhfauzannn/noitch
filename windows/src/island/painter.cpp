@@ -102,6 +102,21 @@ void Painter::Fill(const HomeRect& rect, float radius, D2D1_COLOR_F color) {
     context_->FillRoundedRectangle(D2D1::RoundedRect(ToD2D(rect), radius, radius), brush_.Get());
 }
 
+void Painter::Outline(const HomeRect& rect, float radius, float width, D2D1_COLOR_F color, float dash) {
+    brush_->SetColor(color);
+    ComPtr<ID2D1StrokeStyle> style;
+    if (dash > 0) {
+        // Dashes are measured in stroke widths.
+        const float dashes[] = {dash / width, dash * 0.8f / width};
+        const D2D1_STROKE_STYLE_PROPERTIES properties = D2D1::StrokeStyleProperties(
+            D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_LINE_JOIN_ROUND, 10, D2D1_DASH_STYLE_CUSTOM, 0);
+        factory_->CreateStrokeStyle(properties, dashes, 2, &style);
+    }
+    const float inset = width / 2;
+    const D2D1_RECT_F edge = D2D1::RectF(rect.x + inset, rect.y + inset, rect.Right() - inset, rect.Bottom() - inset);
+    context_->DrawRoundedRectangle(D2D1::RoundedRect(edge, radius, radius), brush_.Get(), width, style.Get());
+}
+
 void Painter::Arc(D2D1_POINT_2F center, float radius, float width, double fraction, D2D1_COLOR_F color) {
     if (fraction <= 0) return;
     brush_->SetColor(color);

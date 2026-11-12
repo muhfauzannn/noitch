@@ -146,10 +146,34 @@ of it (`HeaderLayout` and `island_page.h`, tested against Home's controls).
 
 ## Shelf and clipboard
 
-Shelf is the fourth page, containing Files and Clipboard modes. It keeps the native 580 × 180
-island: mode buttons beneath the header, three cards, and paging arrows plus a footer. Cards use
-quiet white surfaces, blue file-type labels and a blue hover outline; hovering reveals pin and
-remove controls. Empty Files invites a drop. Clipboard has Pause/Resume; Clear preserves pins.
+Shelf is the fourth page, containing Files and Clipboard modes, inside the native 580 × 180 island.
+The look takes its cue from Boring Notch's shelf, a tray of big file icons, in Noitch's own style.
+Numbers are in `ShelfLayout` (macOS) and `shelf_model.h` (Windows).
+
+- **Toolbar.** A 24 pt row under the header: one segmented control, Files and Clipboard, at the
+  left; round icon buttons at the right (pause or resume in Clipboard, clear, back, forward), with
+  a disabled button dimmed. Between them a status line: the page ("1–7 of 12"), "Paused", or a
+  short message ("Copied", "Added to shelf") in blue. There is no footer.
+- **Files.** Seven tiles a page. Each is a 40 × 46 pt glyph with the name under it on two lines: a
+  page with a folded corner in the file type's colour and its extension printed on it, a folder
+  shape for a path with no extension, or a stack of pages with a count for several files. Colours
+  come from `ShelfFileType`: images purple, PDF red, documents blue, sheets green, slides orange,
+  archives yellow, code teal, audio and video pink, folders slate, the rest grey. A picture file
+  shows its own 128 px thumbnail on macOS, read from where it lies.
+- **Clipboard.** Four cards a page: text as up to four lines, a link as its site over its address,
+  an image filling the card, files as a small glyph and name. The kind ("Text", "Link", "Image")
+  sits at the bottom-left.
+- **Hover.** A soft plate, and two round bubbles: pin and remove. A tile has them at its top
+  corners, clear of the glyph; a card at its bottom-right, clear of the text. A pinned item wears a
+  small blue pin. Clicking anywhere else copies the item.
+- **Empty and dropping.** A dashed tray with one line ("Drop files here, or onto the notch",
+  "Copy something and it lands here"); while files are dragged over it turns solid blue with
+  "Release to drop it here".
+- **Windows** draws the same layout into one surface. Its icons are Segoe MDL2 glyphs, its file
+  glyphs the same shapes through `Painter::Shape`, and picture files show the type glyph, not a
+  thumbnail: only clipboard images are decoded there.
+
+Clipboard has Pause/Resume; Clear preserves pins.
 Settings can hide Shelf or choose it as the opening page. Explicit pager routing remains adequate
 for four pages; no registry or shared platform layer was introduced.
 
@@ -629,7 +653,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Pin | A pin in the header left of settings, and the pin shortcut. Pinned, the island stays open when the pointer leaves; pinning a closed island opens it. Letting go closes it unless the pointer is over it. The pin shows as a white disc. Not kept across launches. See [Pinning](#pinning) |
 | Settings | Pages, values and defaults in [Settings](#settings); both apps keep the same pages and rows |
 | Home layout | Numbers in `HomeLayout` (macOS) and `home_layout.h` (Windows), which must match |
-| Shelf | Files / Clipboard modes, three 77 pt cards, 50 items per mode, pin/remove/copy/drag, local payload storage; see [Shelf and clipboard](#shelf-and-clipboard) |
+| Shelf | Files / Clipboard modes; seven file tiles or four clipboard cards a page, coloured type glyphs, pin and remove bubbles on hover, 50 items per mode, pin/remove/copy/drag, local payload storage; see [Shelf and clipboard](#shelf-and-clipboard) |
 | Lyrics stage | 22 pt button at the title row's end, moving to the top-right corner on the stage; four centred lines with a smaller Latin reading beneath the sung non-Latin line, the sung one 20 pt bold, others 70% at 30%, 55%, 26%; click a line to seek; a wash of the artwork's colour rising from the bottom. See [Lyrics stage](#lyrics-stage) |
 | Release after closing | 10 s |
 

@@ -25,14 +25,21 @@ enum HomeIcon {
     case assignment
     /// A tick cut out of a disc.
     case quiz
+    /// A bin with two slits, for clearing the shelf.
+    case trash
+    /// Chevrons, for paging.
+    case back
+    case forward
+    /// A cross, for removing one item.
+    case close
 
-    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .home, .pin, .tasks, .shelf, .assignment, .quiz]
+    static let all: [HomeIcon] = [.play, .pause, .previous, .next, .shuffle, .repeatAll, .repeatOne, .settings, .music, .usage, .lyrics, .home, .pin, .tasks, .shelf, .assignment, .quiz, .trash, .back, .forward, .close]
 
     /// Only the gear and the lyrics bubble rely on the even-odd rule. Others have overlapping parts
     /// that it would punch out.
     var hasHole: Bool {
         switch self {
-        case .settings, .lyrics, .home, .tasks, .shelf, .assignment, .quiz: true
+        case .settings, .lyrics, .home, .tasks, .shelf, .assignment, .quiz, .trash: true
         default: false
         }
     }
@@ -40,7 +47,7 @@ enum HomeIcon {
     /// Outlines are drawn with a stroke, and everything else is filled.
     var isOutline: Bool {
         switch self {
-        case .shuffle, .repeatAll, .repeatOne: true
+        case .shuffle, .repeatAll, .repeatOne, .back, .forward, .close: true
         default: false
         }
     }
@@ -87,6 +94,19 @@ enum HomeIcon {
             path.addRoundedRect(in: CGRect(x: 16, y: 9, width: 4, height: 11), cornerWidth: 1, cornerHeight: 1)
         case .lyrics:
             Self.addBubble(to: path)
+        case .trash:
+            path.addRoundedRect(in: CGRect(x: 4, y: 5, width: 16, height: 2.6), cornerWidth: 1.3, cornerHeight: 1.3)
+            path.addRoundedRect(in: CGRect(x: 9.5, y: 2.5, width: 5, height: 2.5), cornerWidth: 1.2, cornerHeight: 1.2)
+            path.addRoundedRect(in: CGRect(x: 5.8, y: 8.6, width: 12.4, height: 12.9), cornerWidth: 2, cornerHeight: 2)
+            path.addRoundedRect(in: CGRect(x: 9, y: 11.5, width: 1.6, height: 7), cornerWidth: 0.8, cornerHeight: 0.8)
+            path.addRoundedRect(in: CGRect(x: 13.4, y: 11.5, width: 1.6, height: 7), cornerWidth: 0.8, cornerHeight: 0.8)
+        case .back:
+            path.addLines(between: [CGPoint(x: 16, y: 4.5), CGPoint(x: 7, y: 12), CGPoint(x: 16, y: 19.5)])
+        case .forward:
+            path.addLines(between: [CGPoint(x: 8, y: 4.5), CGPoint(x: 17, y: 12), CGPoint(x: 8, y: 19.5)])
+        case .close:
+            path.move(to: CGPoint(x: 6, y: 6)); path.addLine(to: CGPoint(x: 18, y: 18))
+            path.move(to: CGPoint(x: 18, y: 6)); path.addLine(to: CGPoint(x: 6, y: 18))
         case .pin:
             path.addRoundedRect(in: CGRect(x: 8, y: 2.5, width: 8, height: 3.5), cornerWidth: 1.2, cornerHeight: 1.2)
             path.addLines(between: [CGPoint(x: 9.2, y: 6), CGPoint(x: 14.8, y: 6), CGPoint(x: 16.2, y: 12.5), CGPoint(x: 7.8, y: 12.5)])

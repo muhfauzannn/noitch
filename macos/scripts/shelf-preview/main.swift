@@ -8,15 +8,21 @@ let scene = ShelfScene(layout: layout, scale: 2)
 let mode = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "files"
 let clipboard = mode == "clipboard"
 let items: [ShelfItem] = mode == "empty" ? [] : clipboard ? [
-    ShelfItem(id: "1", kind: .text, title: "Text", preview: "A place for the things you want to use again."),
+    ShelfItem(id: "1", kind: .text, title: "Text", preview: "A place for the things you want to use again, as many lines as fit."),
     ShelfItem(id: "2", kind: .link, title: "developer.apple.com", preview: "https://developer.apple.com/documentation/", pinned: true),
-    ShelfItem(id: "3", kind: .text, title: "Text", preview: "君の名前を教えて · What's your name?")
+    ShelfItem(id: "3", kind: .text, title: "Text", preview: "君の名前を教えて · What's your name?"),
+    ShelfItem(id: "4", kind: .files, title: "Report.pdf", preview: "", files: ["/tmp/Report.pdf"]),
 ] : [
-    ShelfItem(id: "1", kind: .files, title: "Launch notes.pdf", preview: "PDF document · ready to share", files: ["/tmp/Launch notes.pdf"]),
-    ShelfItem(id: "2", kind: .files, title: "Cover artwork.png", preview: "Image · picked up from Finder", files: ["/tmp/Cover artwork.png"], pinned: true),
-    ShelfItem(id: "3", kind: .files, title: "Experiment results.csv", preview: "Spreadsheet · kept in place", files: ["/tmp/Experiment results.csv"])
+    ShelfItem(id: "1", kind: .files, title: "Launch notes.pdf", preview: "", files: ["/tmp/Launch notes.pdf"]),
+    ShelfItem(id: "2", kind: .files, title: "Cover artwork.png", preview: "", files: ["/tmp/Cover artwork.png"], pinned: true),
+    ShelfItem(id: "3", kind: .files, title: "Experiment results.csv", preview: "", files: ["/tmp/Experiment results.csv"]),
+    ShelfItem(id: "4", kind: .files, title: "Thesis draft.docx", preview: "", files: ["/tmp/Thesis draft.docx"]),
+    ShelfItem(id: "5", kind: .files, title: "Assets", preview: "", files: ["/tmp/Assets"]),
+    ShelfItem(id: "6", kind: .files, title: "3 files", preview: "", files: ["/tmp/a.swift", "/tmp/b.swift", "/tmp/c.swift"]),
+    ShelfItem(id: "7", kind: .files, title: "Backup.zip", preview: "", files: ["/tmp/Backup.zip"]),
 ]
-scene.apply(items: items, images: [], clipboard: clipboard, recording: true, offset: 0, total: items.count, hover: 1, message: "", dropping: false)
+let dropping = mode == "dropping"
+scene.apply(items: items, images: [], clipboard: clipboard, recording: true, offset: 0, total: clipboard || items.isEmpty ? items.count : 12, hover: 1, message: "", dropping: dropping)
 let page = CALayer()
 page.frame = CGRect(origin: .zero, size: size)
 page.isGeometryFlipped = true

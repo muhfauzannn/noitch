@@ -16,7 +16,7 @@ void ShelfController::Initialize(HWND window, Compositor* compositor) {
         for (auto path = paths.rbegin(); path != paths.rend(); ++path) added = InsertShelfItem(files_, source_.Files({*path})) || added;
         if (added) {
             clipboard_ = false; offset_ = 0; message_ = "Added to shelf"; Save(); Render();
-        } else { message_ = "Shelf full. Unpin or remove an item first."; Render(); }
+        } else { message_ = "Shelf full: unpin or remove something"; Render(); }
         return added;
     };
     registeredDrop_ = SUCCEEDED(RegisterDragDrop(window, drop_.Get()));
@@ -53,10 +53,11 @@ void ShelfController::PageWillHide() {
 void ShelfController::Render() {
     if (!shown_ || !scene_.Exists()) return;
     auto items = Items();
-    offset_ = std::min(offset_, (items.empty() ? 0 : (items.size() - 1) / 3 * 3));
+    const size_t page = static_cast<size_t>(ShelfLayout::PerPage(clipboard_));
+    offset_ = std::min(offset_, (items.empty() ? 0 : (items.size() - 1) / page * page));
     const size_t total = items.size();
     items.erase(items.begin(), items.begin() + offset_);
-    if (items.size() > 3) items.resize(3);
+    if (items.size() > page) items.resize(page);
     std::vector<ShelfThumbnail> previews;
     std::vector<std::pair<std::string, ShelfThumbnail>> next;
     for (const auto& item : items) {
@@ -84,8 +85,8 @@ void ShelfController::PointerMoved(float x, float y) {
     if (!scene_.Exists()) return;
     if (pressed_ && std::hypot(x - pressX_, y - pressY_) > 6 * scene_.Layout().Scale()) {
         const auto items = Items();
-        for (int slot = 0; slot < 3; ++slot) {
-            if (scene_.Layout().Card(slot).Contains(pressX_, pressY_) && offset_ + slot < items.size()) {
+        for (int slot = 0; slot < ShelfLayout::PerPage(clipboard_); ++slot) {
+            if (scene_.Layout().Card(slot, clipboard_).Contains(pressX_, pressY_) && offset_ + slot < items.size()) {
                 const auto item = items[offset_ + slot];
                 pressed_ = false; dragging_ = true;
                 if (GetCapture() == window_) ReleaseCapture();
@@ -96,8 +97,8 @@ void ShelfController::PointerMoved(float x, float y) {
             }
         }
     }
-    int next = -1;
-    for (int i = 0; i < 3; ++i) if (scene_.Layout().Card(i).Contains(x, y)) next = i;
+    int next = scene_.Layout().SlotAt(x, y, clipboard_);
+    if (next >= 0 && offset_ + static_cast<size_t>(next) >= Items().size()) next = -1;
     if (next != hover_) { hover_ = next; Render(); }
 }
 void ShelfController::PointerDown(float x, float y) { pressed_ = true; pressX_ = x; pressY_ = y; message_.clear(); }
@@ -106,6 +107,7 @@ void ShelfController::PointerUp(float x, float y) {
     pressed_ = false;
     const auto& layout = scene_.Layout();
     if (std::hypot(x - pressX_, y - pressY_) >= 6 * layout.Scale()) return;
+    const size_t page = static_cast<size_t>(ShelfLayout::PerPage(clipboard_));
     for (int i = 0; i < 6; ++i) if ((i != 2 || clipboard_) && layout.Button(i).Contains(x, y) && layout.Button(i).Contains(pressX_, pressY_)) {
         auto& collection = clipboard_ ? clipboardItems_ : files_;
         switch (i) {
@@ -118,32 +120,35 @@ void ShelfController::PointerUp(float x, float y) {
             }
             case 2: wantsRecording_ = !wantsRecording_; source_.SetRecording(wantsRecording_ && enabled_); break;
             case 3: collection.erase(std::remove_if(collection.begin(), collection.end(), [](const auto& item) { return !item.pinned; }), collection.end()); Save(); break;
-            case 4: offset_ = offset_ >= 3 ? offset_ - 3 : 0; break;
-            case 5: if (offset_ + 3 < collection.size()) offset_ += 3; break;
+            case 4: offset_ = offset_ >= page ? offset_ - page : 0; break;
+            case 5: if (offset_ + page < collection.size()) offset_ += page; break;
         }
         Render(); return;
     }
     const auto items = Items();
-    for (int i = 0; i < 3; ++i) {
-        const auto card = layout.Card(i);
-        if (!card.Contains(x, y) || !card.Contains(pressX_, pressY_) || offset_ + i >= items.size()) continue;
-        const auto item = items[offset_ + i];
-        if (y < card.y + 25 * layout.Scale() && x >= card.Right() - 53 * layout.Scale()) {
-            auto& values = clipboard_ ? clipboardItems_ : files_;
-            const auto found = std::find_if(values.begin(), values.end(), [&](const auto& value) { return value.id == item.id; });
-            if (found != values.end()) {
-                if (x >= card.Right() - 28 * layout.Scale()) values.erase(found);
-                else found->pinned = !found->pinned;
-                Save();
-            }
-        } else message_ = source_.Copy(item) ? "Copied. Ready to paste." : "This item is no longer available.";
-        Render(); return;
-    }
+    const int slot = layout.SlotAt(x, y, clipboard_);
+    if (slot < 0 || layout.SlotAt(pressX_, pressY_, clipboard_) != slot || offset_ + slot >= items.size()) return;
+    const auto item = items[offset_ + slot];
+    // The bubbles only show on hover, but a press there always means them.
+    const float slack = 3 * layout.Scale();
+    const auto hit = [&](HomeRect r) { return HomeRect{r.x - slack, r.y - slack, r.width + slack * 2, r.height + slack * 2}.Contains(x, y); };
+    const bool remove = hit(layout.RemoveBubble(slot, clipboard_));
+    if (remove || hit(layout.PinBubble(slot, clipboard_))) {
+        auto& values = clipboard_ ? clipboardItems_ : files_;
+        const auto found = std::find_if(values.begin(), values.end(), [&](const auto& value) { return value.id == item.id; });
+        if (found != values.end()) {
+            if (remove) values.erase(found);
+            else found->pinned = !found->pinned;
+            Save();
+        }
+    } else message_ = source_.Copy(item) ? "Copied" : "No longer available";
+    Render();
 }
 void ShelfController::Scrolled(double delta) {
     if (std::abs(delta) <= 1) return;
-    if (delta > 0) offset_ = offset_ >= 3 ? offset_ - 3 : 0;
-    else if (offset_ + 3 < Items().size()) offset_ += 3;
+    const size_t page = static_cast<size_t>(ShelfLayout::PerPage(clipboard_));
+    if (delta > 0) offset_ = offset_ >= page ? offset_ - page : 0;
+    else if (offset_ + page < Items().size()) offset_ += page;
     Render();
 }
 }

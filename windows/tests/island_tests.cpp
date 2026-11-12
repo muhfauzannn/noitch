@@ -1028,12 +1028,28 @@ void TestShelfHistoryAndLayout() {
     assert(!InsertShelfItem(values, fresh) && values == old);
     for (float scale : {1.0f, 1.5f, 2.0f}) for (float header : {24.0f, 32.0f, 38.0f}) {
         ShelfLayout layout(580, 180, header, scale);
-        for (int slot = 0; slot < 3; ++slot) {
-            assert(layout.Card(slot).Bottom() < layout.Footer().y);
-            for (int button = 0; button < 6; ++button) assert(!layout.Card(slot).Intersects(layout.Button(button)));
+        for (bool clipboard : {false, true}) {
+            const int count = ShelfLayout::PerPage(clipboard);
+            for (int slot = 0; slot < count; ++slot) {
+                const HomeRect card = layout.Card(slot, clipboard);
+                assert(card.y >= header * scale && card.Bottom() <= layout.Height() && card.Right() <= layout.Width() - 22 * scale + 0.01f);
+                assert(layout.SlotAt(card.x + card.width / 2, card.y + card.height / 2, clipboard) == slot);
+                if (slot + 1 < count) assert(card.Right() < layout.Card(slot + 1, clipboard).x);
+                for (int button = 0; button < 6; ++button) assert(!card.Intersects(layout.Button(button)));
+                const HomeRect pin = layout.PinBubble(slot, clipboard), remove = layout.RemoveBubble(slot, clipboard);
+                assert(!pin.Intersects(remove) && pin.x >= card.x && remove.Right() <= card.Right() + 0.01f && remove.Bottom() <= card.Bottom() + 0.01f);
+            }
         }
+        for (int slot = 0; slot < ShelfLayout::PerPage(false); ++slot) assert(layout.Glyph(slot).Bottom() <= layout.Name(slot).y);
         for (int i = 0; i < 5; ++i) assert(layout.Button(i).Right() <= layout.Button(i + 1).x);
+        assert(layout.Status().x >= layout.Button(1).Right() && layout.Status().Right() <= layout.Button(2).x);
     }
+    assert(ShelfFileTypeOf("C:\\a\\Notes.PDF") == ShelfFileType::Pdf);
+    assert(ShelfFileTypeOf("/a/photo.heic") == ShelfFileType::Image);
+    assert(ShelfFileTypeOf("C:\\a\\Folder") == ShelfFileType::Folder);
+    assert(ShelfFileTypeOf("C:\\a.b\\Folder") == ShelfFileType::Folder);
+    assert(ShelfFileTypeOf("/a/thing.xyz") == ShelfFileType::Other);
+    assert(ShelfTypeLabel("/a/deck.pptx") == "PPTX" && ShelfTypeLabel("/a/archive.tar.gz") == "GZ");
     std::vector<uint8_t> dib(44, 0);
     dib[0] = 40; dib[4] = 1; dib[8] = 1; dib[12] = 1; dib[14] = 24;
     dib[40] = 5; dib[41] = 10; dib[42] = 250;

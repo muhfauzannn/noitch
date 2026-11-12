@@ -7,6 +7,6 @@ swiftc -swift-version 6 -default-isolation MainActor -O \
   Noitch/Features/Home/HomeIcon.swift Noitch/Island/IslandPage.swift \
   Noitch/Island/Motion.swift scripts/shelf-preview/main.swift \
   -o build/render-shelf
-for mode in files clipboard empty; do
+for mode in files clipboard empty dropping; do
   build/render-shelf "build/shelf-$mode.png" "$mode"
 done
