@@ -39,7 +39,7 @@ jobs:
           python3 - <<'PY'
           import json, os, subprocess, sys
           sys.path.insert(0, '.github/scripts')
-          from release import version, tag_commit, require_main_commit, validate_run
+          from release import version, tag_commit, require_main_commit, validate_run, mode_at_commit
           tag = os.environ['RELEASE_TAG']
           version(tag)
           run_id = os.environ['BUILD_RUN_ID']
@@ -47,10 +47,11 @@ jobs:
               raise ValueError('Expected a numeric run ID')
           commit = tag_commit(tag)
           require_main_commit(commit)
+          mode = mode_at_commit(commit)
           run = json.loads(subprocess.check_output(['gh', 'api', f'repos/{os.environ["GH_REPO"]}/actions/runs/{run_id}']))
           validate_run(run, commit)
           with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write(f'RELEASE_COMMIT={commit}\n')
+              f.write(f'RELEASE_COMMIT={commit}\nRELEASE_MODE={mode}\n')
           PY
           test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -62,7 +63,15 @@ jobs:
           path: assets
       - name: Compare draft against verified build and publish
         run: |
-          python3 .github/scripts/release.py verify --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --folder assets
+          python3 .github/scripts/release.py verify --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --mode "$RELEASE_MODE" --folder assets
           gh release download "$RELEASE_TAG" --dir downloaded
-          python3 .github/scripts/release.py compare --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --folder assets --other downloaded
+          python3 .github/scripts/release.py compare --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --mode "$RELEASE_MODE" --folder assets --other downloaded
+          gh release view "$RELEASE_TAG" --json body --jq .body > "$RUNNER_TEMP/release-body.txt"
+          python3 - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, '.github/scripts')
+          from release import verify_notes
+          verify_notes(Path(os.environ['RUNNER_TEMP'], 'release-body.txt').read_text(), os.environ['RELEASE_MODE'])
+          PY
           gh release edit "$RELEASE_TAG" --draft=false

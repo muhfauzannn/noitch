@@ -1,11 +1,23 @@
 #!/bin/bash
 set -euo pipefail
-: "${RELEASE_VERSION:?}" "${MACOS_BUNDLE_ID:?}" "${MACOS_TEAM_ID:?}"
+: "${RELEASE_MODE:?}" "${RELEASE_VERSION:?}" "${MACOS_BUNDLE_ID:?}"
+case "$RELEASE_MODE" in
+    signed) : "${MACOS_TEAM_ID:?}" ;;
+    unsigned) ;;
+    *) echo 'RELEASE_MODE must be signed or unsigned' >&2; exit 1 ;;
+esac
+verify_signature() {
+    codesign --verify --strict --verbose=2 "$1"
+    if [[ $RELEASE_MODE == signed ]]; then
+        codesign -dvv "$1" 2>&1 | grep -Fx "TeamIdentifier=$MACOS_TEAM_ID"
+    else
+        codesign -dvv "$1" 2>&1 | grep -Fx 'Signature=adhoc'
+    fi
+}
 dmg=$1
 hdiutil verify "$dmg"
-codesign --verify --strict --verbose=2 "$dmg"
-codesign -dvv "$dmg" 2>&1 | grep -Fx "TeamIdentifier=$MACOS_TEAM_ID"
-xcrun stapler validate "$dmg"
+verify_signature "$dmg"
+if [[ $RELEASE_MODE == signed ]]; then xcrun stapler validate "$dmg"; fi
 mount=$(mktemp -d)
 trap 'hdiutil detach "$mount" >/dev/null 2>&1 || true; rmdir "$mount"' EXIT
 hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
@@ -17,10 +29,12 @@ test -L "$mount/Applications"
 [[ $(readlink "$mount/Applications") == /Applications ]]
 test -s "$app/Contents/Resources/MediaRemoteAdapter-LICENSE.txt"
 test -s "$app/Contents/Resources/mediaremote-adapter.pl"
-for code in "$app/Contents/Frameworks/MediaRemoteAdapter.framework" "$app"; do
-    codesign --verify --strict --verbose=2 "$code"
-    codesign -dvv "$code" 2>&1 | grep -Fx "TeamIdentifier=$MACOS_TEAM_ID"
-done
+verify_signature "$app/Contents/Frameworks/MediaRemoteAdapter.framework"
+verify_signature "$app"
 lipo -verify_arch arm64 "$app/Contents/Frameworks/MediaRemoteAdapter.framework/MediaRemoteAdapter"
-xcrun stapler validate "$app"
-spctl --assess --type execute --verbose=2 "$app"
+if [[ $RELEASE_MODE == signed ]]; then
+    xcrun stapler validate "$app"
+    spctl --assess --type execute --verbose=2 "$app"
+else
+    echo 'Ad-hoc signed, not notarized. Publisher identity and Gatekeeper acceptance are not verified.'
+fi

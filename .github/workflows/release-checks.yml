@@ -2,6 +2,7 @@ name: Release contract
 on:
   pull_request:
     paths:
+      - .github/release.json
       - .github/scripts/**
       - .github/workflows/*release*.yml
       - macos/scripts/*release*.sh
@@ -9,6 +10,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .github/release.json
       - .github/scripts/**
       - .github/workflows/*release*.yml
       - macos/scripts/*release*.sh

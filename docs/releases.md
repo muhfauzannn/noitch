@@ -1,146 +1,197 @@
 # Releases
 
-Noitch ships a macOS arm64 DMG and a Windows x64 **portable executable**, not an installer.
-Stable tags use `vMAJOR.MINOR.PATCH` (no leading zeroes; each component at most 65535).
-Both products receive the tag's version at build time; Windows also embeds VERSIONINFO and a
-matching assembly version. Local builds keep the default development version.
+Noitch produces a macOS arm64 DMG and a Windows x64 **portable executable**, not an installer.
+A stable tag `vMAJOR.MINOR.PATCH` starts the Release workflow. Each numeric component must be at
+most 65535, with no leading zeroes. Both products receive that version at build time.
 
-## One-time repository setup
+## Explicit release mode
 
-Create these GitHub environments **before pushing release tags**:
+The **tagged commit's** `.github/release.json` selects the mode:
 
-- `release-signing`: restrict deployment to protected `v*` tags; add required reviewers if desired.
-- `release-publish`: restrict deployment to `main`, require a release reviewer, and prevent self-review.
+```json
+{
+  "mode": "unsigned"
+}
+```
+
+| Mode | macOS | Windows | Certificate secrets |
+| --- | --- | --- | --- |
+| `unsigned` (current) | Ad-hoc signed, not notarized | Unsigned | None |
+| `signed` | Developer ID signed and notarized | Authenticode signed with timestamp | Required |
+
+Missing or unknown modes stop validation. Signed builds never fall back to unsigned when a secret,
+signing step or notarization fails. To switch modes, review and commit the configuration change
+before creating the next tag. Publication reads the mode from that tagged commit, even if `main`
+has since selected a different mode.
+
+For example, `v0.1.0` in unsigned mode produces:
+
+- `Noitch-0.1.0-macos-arm64-adhoc.dmg`
+- `Noitch-0.1.0-windows-x64-unsigned.exe`
+- `macos-arm64.json`, `windows-x64.json`, and `SHA256SUMS`
+
+Signed-mode filenames omit `-adhoc` / `-unsigned`. Metadata includes the mode and platform signing
+status. Certificate-free drafts have a marked title and release notes stating **macOS: Ad-hoc signed,
+not notarized. Windows: Unsigned.** The publisher requires the signing disclosure to remain present.
+
+Unsigned-mode verification proves package/signature integrity, versions and architecture; it does
+not establish a publisher identity, notarization, or OS reputation acceptance. Checksums establish
+consistency with the downloaded metadata/build artifacts, not an independently trusted publisher.
+
+macOS Gatekeeper may block first launch. If a user trusts the source, Apple's
+[opening guidance](https://support.apple.com/en-us/102445) describes the per-app Open Anyway option
+where available. Windows SmartScreen can warn, and Smart App Control or managed-device policy may
+block an unsigned EXE entirely; see [Microsoft's guidance](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation).
+Do not ask users to disable system-wide protections or promise that an override is always available.
+
+## Repository setup
+
+Protect `main` with required CI and review. Add a `v*` tag ruleset restricting tag creation, updates
+and deletion to release maintainers. Only trusted, reviewed commits reachable from `main` may be
+released. Review changes to workflows, packaging scripts and `.github/release.json` together.
+
+Configure these environments:
+
+- `release-unsigned`: certificate-free build jobs; restrict deployments to protected `v*` tags.
+  No secrets are required. GitHub can create this environment on first use; set its restrictions
+  before relying on them.
+- `release-publish`: restrict to `main`, require a release reviewer, and prevent self-review.
   The reviewer checks native smoke-test and performance evidence before approval.
+- `release-signing`: needed only for `signed` mode; restrict to protected `v*` tags and store the
+  signing secrets below. Add required reviewers as appropriate.
 
-Protect `main` with required CI checks and review. Add a tag ruleset for `v*` restricting creation,
-updates and deletion to release maintainers. Do not allow untrusted branches to use either environment.
-Only trusted, reviewed code reachable from `main` may run the signing jobs.
-Draft inspection/verification jobs need `contents: write` because GitHub restricts draft visibility
-to callers with push access; signing jobs themselves retain `contents: read`. Protect changes to release
-workflows and scripts with review as well. The signing/publication workflows have no PR trigger and never expose signing
-secrets to fork PRs. A separate release-contract CI runs credential-free checks on PRs. Environment protections and certificates require owner configuration; YAML alone
-cannot enforce repository settings.
+Unsigned steps do not receive signing secrets or use the signing environment. Signing/publication
+workflows do not run on pull requests; separate credential-free CI checks the release contract and
+script syntax. Environment protections are repository settings; YAML cannot configure them itself.
+Draft inspection/verification jobs need `contents: write` for draft visibility; the build jobs use
+`contents: read`.
 
-Set the following **repository variables** (verification jobs need them without signing access):
+In unsigned mode, `MACOS_BUNDLE_ID` is optional and defaults to the project's `app.noitch.mac`.
+Choose a permanent reverse-DNS identifier you control before signing/distributing under your own
+identity. Changing it later changes preferences, Keychain access and login registration identity;
+this pipeline does not migrate that data.
+
+## Signed-mode credentials (optional)
+
+Only set these up when changing the committed mode to `signed`.
+
+Repository variables:
 
 | Variable | Value |
 | --- | --- |
-| `MACOS_BUNDLE_ID` | Permanent reverse-DNS distribution identifier you control; `app.noitch.mac` is rejected |
+| `MACOS_BUNDLE_ID` | Permanent distribution identifier; signed mode rejects `app.noitch.mac` |
 | `MACOS_TEAM_ID` | Apple Developer team ID |
 | `WINDOWS_SIGNING_THUMBPRINT` | Expected Authenticode leaf certificate thumbprint |
-| `WINDOWS_TIMESTAMP_URL` | Your certificate provider's RFC 3161 timestamp URL |
+| `WINDOWS_TIMESTAMP_URL` | Certificate provider's RFC 3161 timestamp URL |
 
-Changing the macOS bundle identifier changes application identity, including preferences, Keychain
-access and login registration. Choose it before the first public release. No migration is included.
-
-Set these **secrets in `release-signing`**, never in source or workflow inputs:
+Secrets in **`release-signing`**, never source or workflow inputs:
 
 | Secret | Value |
 | --- | --- |
 | `MACOS_SIGN_IDENTITY` | Full `Developer ID Application: … (TEAMID)` identity |
-| `MACOS_CERTIFICATE_BASE64` | Base64 PKCS#12 containing Developer ID Application certificate and private key |
+| `MACOS_CERTIFICATE_BASE64` | Base64 PKCS#12 with Developer ID Application certificate/private key |
 | `MACOS_CERTIFICATE_PASSWORD` | PKCS#12 password |
 | `APPLE_API_KEY_BASE64` | Base64 App Store Connect API private `.p8` key authorized for notarization |
 | `APPLE_API_KEY_ID` | API key ID |
-| `APPLE_API_ISSUER` | API issuer UUID (team API key) |
-| `WINDOWS_CERTIFICATE_BASE64` | Base64 PKCS#12 with a trusted Authenticode certificate and private key |
+| `APPLE_API_ISSUER` | Team API issuer UUID |
+| `WINDOWS_CERTIFICATE_BASE64` | Base64 PKCS#12 with trusted Authenticode certificate/private key |
 | `WINDOWS_CERTIFICATE_PASSWORD` | PKCS#12 password |
 
-Windows signing here supports an **existing exportable PFX**. Many current public code-signing
-certificates require hardware or a managed signing service and cannot be exported. A hardware-only
-certificate cannot use this path: agree on an approved provider/integration before changing it.
-This implementation adds no signing service or dependency. Never substitute a self-signed certificate
-for public distribution. Valid signing does not guarantee that SmartScreen reputation warnings disappear.
+Windows signing supports an **existing exportable PFX**. Many public code-signing certificates
+require hardware or a managed service and cannot use this path. Agree on an approved integration
+before changing it. No signing service or dependency is added. Self-signed certificates do not
+replace a publicly trusted publisher identity; valid signing also does not guarantee SmartScreen
+reputation.
 
-macOS imports keys into a temporary keychain; Windows imports the configured PFX into the ephemeral
-hosted runner's user store. Scripts remove temporary files and imported keys in cleanup. Hosted runners
-are discarded even after cancellation. Never use these scripts on persistent self-hosted runners
-without a separate key-management review. Missing credentials or failed signing/notarization abort
-release creation; there is no unsigned fallback.
+Signed macOS jobs import keys into a temporary keychain; Windows imports the PFX into the hosted
+runner's user store. Scripts clean up keys and temporary files, and ephemeral hosted runners are
+discarded after cancellation. Do not use these scripts on persistent self-hosted runners without
+a separate key-management review.
 
-## Create a draft
+## Create and verify a draft
 
-After reviewing the exact commit and CI results, a maintainer pushes its `vX.Y.Z` tag. Do not move
-release tags. `.github/workflows/release.yml` then:
+1. Push reviewed changes to `main`, then wait for CI and resolve the required SonarQube reviews.
+2. Create a new, unused version tag on the intended commit and push it. For example:
 
-1. Validates tag syntax, tagged checkout and ancestry on `main`; refuses any existing release,
-   including drafts. API errors stop the job rather than being treated as “not found”.
-2. Tests and builds both platforms from that commit on separate hosted runners, then signs them.
-   macOS signs the embedded framework before the app, keeps Hardened Runtime and existing
-   entitlements, includes the adapter's BSD license, notarizes/staples the app, creates the DMG,
-   then signs/notarizes/staples the DMG. It does not use `codesign --deep` for signing.
-3. Verifies final architecture, versions and signing identity. macOS checks package contents,
-   stapled tickets and Gatekeeper assessment; Windows checks Authenticode trust, timestamp,
-   signer thumbprint and PE architecture with PowerShell and SignTool.
-4. Uploads both final artifacts plus separate JSON metadata with source commit, tag, toolchain,
-   SHA-256 and run identity. The macOS metadata includes the vendored adapter binary's checksum.
-   CI artifacts may be replaced on a build retry; GitHub release assets are never overwritten.
-5. Creates a **draft** only after both platform jobs succeed. Uploads assets without overwrite,
-   downloads them again and compares their exact hashes with the build outputs.
-6. Downloads each native asset on a fresh corresponding OS runner and repeats package/signature
-   verification without signing secrets. This is package verification, not a GUI smoke test.
+   ```sh
+   git tag -a v0.1.0 -m "Release v0.1.0"
+   git push origin v0.1.0
+   ```
 
-A draft contains five assets: the DMG, EXE, two platform JSON files and `SHA256SUMS`. Checksums cover
-both final signed binaries and metadata. Metadata provides traceability; it is not a signed provenance
-attestation and the pipeline does not promise bit-for-bit reproducible signed/notarized builds.
+3. The **Release** workflow validates the mode/tag, checkout and ancestry on `main`. Existing
+   releases, including drafts, are refused; API failures stop the workflow.
+4. Both platforms test/build the exact commit. macOS embeds the adapter's BSD license and signs
+   the framework before the app. Unsigned mode uses ad-hoc signatures for the framework, app and
+   DMG without notarization. Signed mode additionally notarizes/staples the app and signed DMG.
+   Windows either verifies an unsigned EXE or applies/verifies timestamped Authenticode signing.
+5. Both native jobs verify version, architecture and the expected signing state. macOS also checks
+   image integrity, the Applications link and bundled resources; signed mode checks notarization
+   tickets and Gatekeeper assessment. Unsigned mode does not claim those checks passed.
+6. After both succeed, the workflow creates a **draft** with explicit signing notes, both products,
+   two platform JSON metadata files and `SHA256SUMS`. Metadata records commit, tag, mode, toolchain,
+   SHA-256 and run identity; macOS includes the vendored adapter binary's checksum. CI build artifacts
+   may be replaced on retry; GitHub release assets are never overwritten.
+7. It downloads all draft assets and compares their exact hashes with the original outputs. Fresh
+   OS jobs download the native packages again and repeat their mode-specific verification without
+   signing secrets. This is package verification, not an interactive GUI test.
 
-## Verify and publish
+Download the draft onto clean macOS/Windows installations. Check copy/install, launch, media,
+expand/collapse, click-through and quit. Test the minimum OS versions claimed for that release.
+Record local budget measurements on real hardware; shared GitHub runners are not performance evidence.
+Unsigned warnings or blocks on a downloaded/quarantined build must be reported honestly. Do not
+approve distribution with required native checks missing.
 
-Download the draft onto clean macOS and Windows installations. Confirm install/copy, launch, media
-adapter behavior, expand/collapse, click-through and quit. Check the minimum OS versions claimed for
-release; this workflow does not certify older OS versions. Run the documented local performance
-checks on real hardware and record configuration, before/after numbers and any accepted exceptions.
-GitHub shared runners are not performance evidence. Do not approve production distribution while
-required native checks are missing; Windows has no recorded native runtime validation yet.
+## Publish the existing verified draft
 
-Run **Publish verified release** from `main`, supplying the tag and the successful **Release** workflow
-run ID. The publisher checks that this was a successful tag-triggered run of the expected workflow
-for the exact tagged commit reachable from `main`. After environment approval, it retrieves that run's
-original artifacts, rechecks metadata and hashes, compares all downloaded draft assets against them,
-and publishes the existing draft. It never rebuilds or re-signs. Build artifacts expire after seven
-days; publish within that window. Do not use the GitHub UI's direct Publish button, which bypasses
-these checks. GitHub release editing permissions remain a trusted-maintainer boundary.
+In **Actions → Publish verified release → Run workflow**, select `main` and supply:
 
-The two workflows serialize on the same tag. Publication needs an explicit dispatch and environment
-approval; tag creation alone never publishes publicly. No repository settings, secrets, tags or
-releases are created by a local implementation of this change.
+- `tag`: the draft's version tag, such as `v0.1.0`.
+- `build_run_id`: the successful **Release** run's numeric ID from its URL.
+
+Approve the `release-publish` environment after checking the draft. The publisher validates that
+run's workflow, event, exact source commit and successful conclusion. It reads the tagged mode,
+retrieves the original build artifacts, checks metadata/mode/hashes, compares all draft assets, and
+requires the correct signing disclosure in the notes before publishing. It never rebuilds/re-signs.
+Build artifacts expire after seven days; publish within that window.
+
+Do not use the direct GitHub UI Publish button, which bypasses these checks. Release editing remains
+a trusted-maintainer boundary. Tag builds and publication serialize on the same tag. Pushing a tag
+alone does not publish publicly, and local implementation creates no remote environment, tag or release.
 
 ## Failures and retries
 
-- Invalid tag or non-main commit: rejected before signing. Use a new correct tag; do not move an
-  existing release tag.
-- Missing credentials or one platform fails: no draft is created. Correct configuration and rerun
-  the failed jobs. Full reruns are also possible while no release exists.
-- Draft creation/upload or native re-verification fails: the draft stays private. Rerun the failed
-  job where possible. Never use `--clobber`. If a partial upload prevents a retry, inspect the failure,
-  explicitly delete only the unpublished draft, then rerun the complete Release workflow. Do not delete
-  its tag. Partial drafts cannot pass the publish workflow's successful-run and checksum checks.
-- Existing release: a full Release rerun stops. Publish an existing verified draft using its original
-  successful run ID; a public release is never overwritten by these workflows.
-- Expired build artifacts: the publisher fails closed. Explicitly delete the unpublished draft and
-  rerun Release to obtain new verified assets. Never silently reuse an unverified downloaded binary.
-- A published release is bad: do not replace its files under the same version. Mark it clearly in
-  release notes and ship a new patch tag; users can download the previous known-good release.
+- Invalid mode/tag or non-main commit: rejected before build/signing. Use a correct new tag; never
+  move an existing release tag.
+- Missing signed credentials or one platform fails: no draft is created. Correct configuration and
+  rerun failed jobs. A full rerun is possible while no release exists. Unsigned mode needs no
+  certificate secrets; do not switch modes by deleting secrets.
+- Upload or native re-verification fails: the draft stays private. Rerun the failed job if possible;
+  never use `--clobber`. If a partial upload blocks retry, inspect it, explicitly delete only the
+  unpublished draft, then rerun Release completely. Do not delete its tag.
+- Existing release: full Release reruns stop. Publish a verified draft using its original successful
+  run ID. Published assets are never overwritten by these workflows.
+- Expired artifacts: publication stops. Explicitly delete the unpublished draft and rerun Release to
+  obtain newly verified assets; do not silently trust an unrelated downloaded binary.
+- Bad public release: mark its notes clearly and ship a new patch tag. Keep previous versions
+  available rather than replacing files under the same version.
 
-## Metadata helper boundaries
+## Helper and verification boundaries
 
-The helper runs from the repository root. Artifact directories are restricted to the workflow's
-known locations, and toolchain files are selected by platform rather than supplied through CLI
-paths. Symlink/traversal redirection is rejected before artifact reads and manifest writes.
-Git validation uses fixed commands with canonical version tags and full commit SHA checks.
+Run `.github/scripts/release.py` from the repository root. Commands that operate on assets require
+`--mode signed` or `--mode unsigned`; validation derives it from `.github/release.json`. Artifact
+folders are restricted to `macos/build/release`, `windows/build/release`, `assets`, and `downloaded`.
+Toolchain paths are fixed by platform; symlink/traversal redirection is rejected before reads or writes.
 
-## Local checks and current limits
+Local tests cover both modes' metadata/checksum round trips, mode mismatches, signing disclosures,
+invalid paths/arguments and failure with missing signed credentials. `bash -n` and workflow YAML
+parsing check syntax. PowerShell parsing is included in release-contract CI on Windows.
 
-`python3 .github/scripts/test_release.py` exercises invalid versions, mismatched commits, missing
-platform outputs, changed final bytes, tampered downloaded checksums, missing signing credentials,
-and unsuccessful or unrelated publication source runs. `bash -n macos/scripts/{release,verify-release}.sh` checks
-shell syntax. YAML parsing is only syntax validation, not execution of GitHub Actions.
-
-End-to-end signing, Apple notarization, draft uploads and publication require configured credentials
-and GitHub execution. They have not been exercised locally. Windows scripts and VERSIONINFO have
-not been built or run on Windows here. See `development.md` and `performance.md` for native evidence;
-no existing runtime or performance gaps are cleared by adding CD.
+The macOS unsigned pipeline was exercised locally: 117 tests passed, and an arm64 DMG was created,
+mounted and verified as ad-hoc signed for its image, app and adapter. Signed-mode verification rejected
+that ad-hoc DMG. This does not prove launch from a quarantined download or acceptance on another Mac.
+Native Windows scripts/build/runtime, credential-backed signing/notarization, and GitHub draft upload/
+publication have not been exercised here. See [development.md](development.md) and
+[performance.md](performance.md) for native and budget evidence.
 
 Official references: [GitHub secure use](https://docs.github.com/en/actions/reference/security/secure-use),
 [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow),

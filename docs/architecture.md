@@ -44,9 +44,12 @@ Why each technology was chosen, and the evidence, is in [tech-stack.md](tech-sta
 ## Distribution
 
 The apps retain separate native build and packaging scripts under their platform folders. GitHub
-Actions orchestrates a versioned release from one tagged commit, signs and verifies both products,
-then prepares a draft. A separate approved publication workflow compares the draft with the original
-verified build artifacts. See [releases.md](releases.md). This adds no application runtime service,
+Actions orchestrates a versioned release from one tagged commit and prepares a verified draft.
+The tagged `.github/release.json` explicitly selects `unsigned` (currently: macOS ad-hoc without
+notarization and Windows unsigned) or `signed` (Developer ID/notarization and Authenticode).
+Unsigned artifacts, metadata and release notes disclose their status; missing signed credentials
+never cause an automatic downgrade. A separate approved publication workflow compares the draft
+with the original verified build artifacts. See [releases.md](releases.md). This adds no application runtime service,
 auto-updater, dependency, polling or process.
 
 ## Repository layout

@@ -338,3 +338,20 @@ Memory and CPU are within budget in both runs. Wakeups exceed the 0.5/s baseline
 clipboard recording was not overridden and playback was not controlled. These samples do not
 establish a performance improvement or isolate the wakeup source. Budgets are unchanged. No window,
 hover or animation code changed, so hover was not rerun. Native Windows measurements remain unavailable.
+
+## Certificate-free release verification (2026-11-12)
+
+This change adds explicit packaging modes, with no runtime source or optimization-setting changes.
+A local unsigned pipeline run passed 117 tests and created/verified an ad-hoc arm64 DMG. Sequential
+`measure.sh` runs on the same M5, with the normal saved settings and no recording override, read:
+
+| Run | Footprint MB | CPU ms/min | Wakeups/s | Binary KB |
+| --- | --- | --- | --- | --- |
+| Before packaging-mode changes | 10.75 | 8.92 | 1.47 | 1786 |
+| After local packaging validation | 17.78 | 226.96 | 1.63 | 1786 |
+
+The baseline already exceeds the wakeup budget. The later run exceeds memory, CPU and wakeup budgets;
+it does not establish acceptable idle performance. Playback/hover state was not controlled or recorded,
+so these samples cannot isolate the source of the increased activity or attribute it to packaging.
+No budget has been raised and no improvement is claimed. Hover was not rerun because no window,
+hover or animation code changed. Windows native before/after measurements remain unavailable.

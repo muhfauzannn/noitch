@@ -203,14 +203,22 @@ Keychain access risk. No service-side issue status or quality gate has been chan
 
 ## Releases
 
-Tag-based CD builds signed macOS arm64 DMGs and Windows x64 portable executables into a private
-GitHub draft. Explicit publication verifies the original build artifacts again and uses a protected
+Tag-based CD builds macOS arm64 DMGs and Windows x64 portable executables into a private GitHub
+draft. The tagged `.github/release.json` selects `unsigned` or `signed`. Its current `unsigned`
+mode uses macOS ad-hoc signatures without notarization and leaves Windows executables unsigned;
+no certificate or signing secret is needed in that mode. Explicit publication verifies the original build artifacts again and uses a protected
 environment. See [releases.md](releases.md) for certificates, variables, secrets, approval and recovery.
 The workflow has not yet been run with production signing credentials. Local CD verification passed
 117 macOS tests, Windows pure-logic tests on macOS, five release-contract tests, shell syntax checks
 and YAML parsing. PowerShell/MSVC and end-to-end signing/publication have not been run. The two
 idle budget runs exceed CPU/wakeup limits; see performance.md. CD does not replace native smoke tests
 or local budgets.
+
+Certificate-free packaging was exercised locally on 2026-11-12: 117 macOS tests passed and the
+ad-hoc arm64 DMG, app and adapter signatures/contents verified after mounting. Signed verification
+rejected that DMG. Eleven release-contract tests cover both modes, disclosures and mode mismatch;
+Windows pure logic passes on macOS. PowerShell/MSVC execution and a real GitHub release remain
+unverified. The latest local post-packaging budget run exceeded all idle limits; see performance.md.
 
 ## Before distributing
 

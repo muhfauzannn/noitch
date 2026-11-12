@@ -49,9 +49,16 @@ unverified; the platforms also differ in some animations and image previews. See
 
 There are no published releases yet. Build from source below to try Noitch.
 
-The release pipeline prepares a macOS arm64 `.dmg` and a Windows x64 portable `.exe`, with signing
-and verification before publication. Release signing and native validation still need to be completed.
-Published builds will appear on the [Releases page](https://github.com/muhfauzannn/noitch/releases).
+The current release mode needs no signing certificates. It produces a macOS arm64
+`-adhoc.dmg` (**Ad-hoc signed, not notarized**) and a Windows x64 portable `-unsigned.exe`
+(**Unsigned**). These builds do not verify a publisher identity. macOS Gatekeeper and Windows
+SmartScreen/Smart App Control may warn or block launch; managed devices may prevent opening them.
+See [Apple's opening guidance](https://support.apple.com/en-us/102445) and
+[Microsoft's reputation guidance](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation).
+
+Both platforms still run build/tests, version and architecture checks, and checksum verification
+before publication. A certificate-backed mode remains available. Native release validation is still
+required. Published builds will appear on the [Releases page](https://github.com/muhfauzannn/noitch/releases).
 Maintainers can follow the [release guide](docs/releases.md).
 
 ### Build from source
