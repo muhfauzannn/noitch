@@ -1,51 +1,162 @@
+<div align="center">
+
 # Noitch
 
-A lightweight Dynamic Island style overlay for macOS and Windows. Two separate native apps, built for
-the lowest possible memory, CPU and battery use.
+A native island for your music, tasks, files, and clipboard.
 
-A black island at the top of the screen that expands on hover into Home: the current track, artwork,
-synced lyrics, a progress slider and playback controls. Other tabs show AI usage, Moodle tasks,
-and Shelf. Open settings from the gear or by right-clicking.
+[![macOS CI](https://github.com/muhfauzannn/noitch/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/muhfauzannn/noitch/actions/workflows/macos.yml)
+[![Windows CI](https://github.com/muhfauzannn/noitch/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/muhfauzannn/noitch/actions/workflows/windows.yml)
 
-Shelf keeps files between apps: drop onto the notch, click a card to copy, or drag it to another
-app. Its Clipboard mode remembers up to 50 text, link, image or file entries locally. Pin the ones
-you want to keep; Clear preserves pins. Pause stops recording. macOS recording checks once per
-second (an approved performance exception); Windows uses clipboard-change events.
+[Features](#features) · [Get started](#get-started) · [Documentation](#documentation) · [Contributing](#contributing)
 
-| | macOS | Windows |
-| --- | --- | --- |
-| Stack | Swift, AppKit, Core Animation | C++20, Win32, DirectComposition |
-| Memory at rest | About 10–11 MB in recent runs | Not measured |
-| CPU at rest | About 1–2 ms/min paused; 13 ms/min recording | Not measured |
-| App binary size | 1763 KB | Not measured |
-| Dependencies | MediaRemoteAdapter | None |
-| Status | Build and 116 tests pass; Shelf live drag/drop and current hover remain unverified | **Never run**; now playing never compiled |
+</div>
 
-## Quick start
+Noitch brings a Dynamic Island style overlay to macOS and Windows. Hover over the island at the top
+of your screen to see what's playing, follow lyrics, check AI usage, or pick up a file you left on
+Shelf. Move away to collapse it.
 
-**macOS** (Xcode 26+)
+Two separate native apps: Swift and AppKit on macOS, C++ and Win32 on Windows. Animations run in the
+OS compositor, with performance budgets tracked in the repository.
+
+> [!IMPORTANT]
+> Noitch is in early development. macOS has local build and test coverage, with known performance
+> and interaction gaps. The Windows app has not yet been run on Windows. CI badges show build/test
+> status; they do not establish runtime readiness. See the [verification status](docs/development.md#verification-status).
+
+## Features
+
+| | What you can do |
+| --- | --- |
+| **Music & lyrics** | See artwork, control playback, seek through a track, and open synced lyrics with romanization. |
+| **AI usage** | View Claude Code and Codex usage from local logs, with Claude account limits when authenticated. |
+| **Tasks** | Connect a Moodle site to see assignments, quizzes, deadlines, and reminders. |
+| **File shelf** | Drop files onto the island, then copy or drag them into another app. Pin items you want to keep. |
+| **Clipboard history** | Reuse up to 50 text, link, image, or file entries. Pause recording or clear unpinned history. |
+| **Calendar on macOS** | See upcoming calendar events beside your music. Calendar integration is not implemented on Windows. |
+
+These features are implemented in both codebases except where noted. Native Windows behavior remains
+unverified; the platforms also differ in some animations and image previews. See the
+[architecture](docs/architecture.md) for details.
+
+## Get started
+
+### Downloads
+
+There are no published releases yet. Build from source below to try Noitch.
+
+The release pipeline prepares a macOS arm64 `.dmg` and a Windows x64 portable `.exe`, with signing
+and verification before publication. Release signing and native validation still need to be completed.
+Published builds will appear on the [Releases page](https://github.com/muhfauzannn/noitch/releases).
+Maintainers can follow the [release guide](docs/releases.md).
+
+### Build from source
+
+Clone the repository first:
 
 ```sh
-xcodebuild -project macos/Noitch.xcodeproj -scheme Noitch -configuration Release -derivedDataPath macos/build build
+git clone https://github.com/muhfauzannn/noitch.git
+cd noitch
+```
+
+#### macOS
+
+Requires Xcode 26 or later. The deployment target is macOS 14+, but older supported OS versions and
+Intel Macs have not been validated. Local verification and release packaging target Apple silicon.
+
+```sh
+xcodebuild -project macos/Noitch.xcodeproj -scheme Noitch \
+  -configuration Release -destination 'platform=macOS,arch=arm64' \
+  -derivedDataPath macos/build CODE_SIGN_IDENTITY=- build
 open macos/build/Build/Products/Release/Noitch.app
 ```
 
-**Windows** (Visual Studio 2022+, CMake 3.25+)
+This creates a locally ad-hoc-signed build. It is not a notarized distribution build.
+
+#### Windows
+
+Requires Visual Studio 2022 or later with **Desktop development with C++**, and CMake 3.25+.
+Windows 10 version 1809+ is the intended minimum and remains untested.
 
 ```powershell
 cd windows
-cmake --preset default
+cmake --preset default -A x64
 cmake --build --preset release
-build\Release\Noitch.exe
+.\build\Release\Noitch.exe
 ```
 
-Hover over the island to expand it, and right-click it for Settings and Quit. Quit other notch apps first.
+The executable runs directly, without an installer. Local builds are unsigned.
+
+### First use
+
+1. Quit other notch overlays so they do not compete for the same screen area.
+2. Hover over the island to expand it. Use the tabs to switch between Home, Usage, Tasks, and Shelf.
+3. Open Settings with the gear button or the island's right-click menu. Connect Moodle or adjust
+   clipboard recording there as needed.
+4. Right-click the island and choose Quit to exit. On macOS, Noitch has no Dock or menu bar icon.
+
+## Privacy & integrations
+
+Clipboard history is stored locally and persists between launches. It is ordinary application data,
+not an encrypted vault; unmarked secrets can enter history. Pause stops recording, and Clear keeps
+pinned entries. Shelf references original file paths rather than moving your files.
+
+Lyrics lookup sends track information to LRCLIB. Moodle tasks contact the site you configure.
+AI usage totals are read from local logs; Claude limits contact Anthropic using your Claude Code
+login. Calendar access on macOS requires permission. Noitch does not require a separate Noitch account.
+
+macOS clipboard recording checks for changes once per second while enabled; Windows uses clipboard
+notifications. The macOS media integration uses a bundled MediaRemoteAdapter and undocumented system
+APIs, which an OS update may break. See [integration and storage details](docs/architecture.md).
+
+## Performance
+
+Noitch uses Core Animation on macOS and DirectComposition on Windows. The app hands animations to
+the compositor and builds feature content when needed. The two platforms share a behavior spec and
+keep their implementations independent.
+
+| Idle budget | macOS | Windows |
+| --- | --- | --- |
+| Memory | 12 MB | 30 MB, provisional |
+| CPU | 20 ms/min | 20 ms/min |
+| Wakeups | 0.5/second | 0.5/second |
+
+These are targets. The latest macOS CD verification measured 10.66 MB, 38.25 ms CPU/min, and 1.13
+wakeups/second, exceeding the CPU and wakeup budgets. Clipboard recording and playback affect the
+results. Windows has no runtime measurements yet. See the [measurement history and method](docs/performance.md)
+for configuration, exceptions, and outstanding checks.
+
+## Contributing
+
+Bug reports, documentation fixes, and native-platform testing are welcome. For a bug report,
+[open an issue](https://github.com/muhfauzannn/noitch/issues) with your OS version, CPU architecture,
+build or commit, steps to reproduce, and expected versus actual behavior. Redact credentials and
+clipboard contents from logs and screenshots.
+
+Before a substantial change, open an issue to discuss the scope. Read [AGENTS.md](AGENTS.md) and the
+[feature guide](docs/adding-features.md): feature changes normally apply to both platforms, runtime
+work must remain event-driven, and new dependencies require discussion. Include validation results
+and state which platform checks you could not run.
+
+Build and test commands are in the [development guide](docs/development.md). Changes to window,
+hover, or animation code also require the local interaction and performance checks described there.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md): how it works and why
-- [Tech stack](docs/tech-stack.md): the choices, with measurements
-- [Performance](docs/performance.md): budgets and how to measure
-- [Adding features](docs/adding-features.md): growing it without getting heavier
-- [Development](docs/development.md): building, testing, verification status
-- [AGENTS.md](AGENTS.md): rules for coding agents
+| Guide | Contents |
+| --- | --- |
+| [Development](docs/development.md) | Build, test, demo modes, and verification status |
+| [Architecture](docs/architecture.md) | Features, lifecycles, integrations, and shared behavior |
+| [Performance](docs/performance.md) | Budgets, measurements, and known failures |
+| [Tech stack](docs/tech-stack.md) | Native stack choices and measured tradeoffs |
+| [Adding features](docs/adding-features.md) | How to extend both apps within the performance constraints |
+| [Releases](docs/releases.md) | Signing, packaging, publication, and recovery |
+
+## Credits & license
+
+Noitch's macOS media integration includes
+[MediaRemoteAdapter](https://github.com/ungive/mediaremote-adapter), distributed under its
+[BSD 3-Clause license](macos/Vendor/MediaRemoteAdapter/LICENSE). Lyrics come from
+[LRCLIB](https://lrclib.net).
+
+A project-wide license for Noitch has not been selected yet. The adapter's license applies to that
+component; it does not license the rest of the repository.
