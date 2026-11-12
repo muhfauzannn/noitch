@@ -10,6 +10,7 @@
 #include <wrl/wrappers/corewrappers.h>
 
 #include <algorithm>
+#include <memory>
 #include <string>
 
 using ABI::Windows::Foundation::AsyncStatus;
@@ -111,8 +112,8 @@ std::shared_ptr<const Artwork> DecodeArtwork(IStream* stream, int size) {
 // Runs on a pool thread, where WinRT's completion arrives, and ends by posting to the main thread.
 void ReadThumbnail(IRandomAccessStreamReference* thumbnail, HWND notify, uint32_t generation, int size) {
     const auto post = [=](std::shared_ptr<const Artwork> artwork) {
-        auto* result = new ArtworkResult{generation, std::move(artwork)};
-        if (!PostMessageW(notify, MediaSessionSource::kMessage, kArtworkRead, reinterpret_cast<LPARAM>(result))) delete result;
+        auto result = std::make_unique<ArtworkResult>(ArtworkResult{generation, std::move(artwork)});
+        if (PostMessageW(notify, MediaSessionSource::kMessage, kArtworkRead, reinterpret_cast<LPARAM>(result.get()))) result.release();
     };
     if (!thumbnail) {
         post(nullptr);
@@ -266,12 +267,12 @@ void MediaSessionSource::RequestMediaProperties() {
         [window, generation, size](IAsyncOperation<GlobalSystemMediaTransportControlsSessionMediaProperties*>* operation, AsyncStatus status) -> HRESULT {
             ComPtr<IGlobalSystemMediaTransportControlsSessionMediaProperties> properties;
             if (status != AsyncStatus::Completed || FAILED(operation->GetResults(&properties)) || !properties) return S_OK;
-            auto* result = new MediaResult{generation, {}, {}, {}};
+            auto result = std::make_unique<MediaResult>(MediaResult{generation, {}, {}, {}});
             HString title, artist, album;
             if (SUCCEEDED(properties->get_Title(title.GetAddressOf()))) result->title = ToUtf8(title.Get());
             if (SUCCEEDED(properties->get_Artist(artist.GetAddressOf()))) result->artist = ToUtf8(artist.Get());
             if (SUCCEEDED(properties->get_AlbumTitle(album.GetAddressOf()))) result->album = ToUtf8(album.Get());
-            if (!PostMessageW(window, kMessage, kMediaRead, reinterpret_cast<LPARAM>(result))) delete result;
+            if (PostMessageW(window, kMessage, kMediaRead, reinterpret_cast<LPARAM>(result.get()))) result.release();
             ComPtr<IRandomAccessStreamReference> thumbnail;
             properties->get_Thumbnail(&thumbnail);
             ReadThumbnail(thumbnail.Get(), window, generation, size);

@@ -194,6 +194,13 @@ These repairs do not establish a successful MSVC build or native Windows runtime
 job was skipped or test disabled. A push containing the platform source changes will trigger both
 existing platform workflows. Release creation still requires a `v*` tag and configured signing.
 
+## SonarQube
+
+SonarQube Cloud runs through its GitHub app. The reported analysis failed Security and Reliability
+on new code; source repairs and the two specific review dispositions are recorded in
+[sonarqube.md](sonarqube.md). The owner chose to preserve unattended Moodle checks and document the
+Keychain access risk. No service-side issue status or quality gate has been changed locally.
+
 ## Releases
 
 Tag-based CD builds signed macOS arm64 DMGs and Windows x64 portable executables into a private

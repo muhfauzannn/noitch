@@ -39,14 +39,14 @@ jobs:
           python3 - <<'PY'
           import json, os, subprocess, sys
           sys.path.insert(0, '.github/scripts')
-          from release import version, git, validate_run
+          from release import version, tag_commit, require_main_commit, validate_run
           tag = os.environ['RELEASE_TAG']
           version(tag)
           run_id = os.environ['BUILD_RUN_ID']
           if not run_id.isdecimal():
               raise ValueError('Expected a numeric run ID')
-          commit = git('rev-parse', f'refs/tags/{tag}^{{commit}}')
-          subprocess.run(['git', 'merge-base', '--is-ancestor', commit, 'origin/main'], check=True)
+          commit = tag_commit(tag)
+          require_main_commit(commit)
           run = json.loads(subprocess.check_output(['gh', 'api', f'repos/{os.environ["GH_REPO"]}/actions/runs/{run_id}']))
           validate_run(run, commit)
           with open(os.environ['GITHUB_ENV'], 'a') as f:

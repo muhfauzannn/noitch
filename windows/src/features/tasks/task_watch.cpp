@@ -3,6 +3,7 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <bit>
 #include <memory>
 
 namespace noitch {
@@ -81,11 +82,14 @@ void TaskWatch::Start() {
     const HANDLE file = path.empty() ? INVALID_HANDLE_VALUE : CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file != INVALID_HANDLE_VALUE) {
         LARGE_INTEGER size{};
-        if (GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart < (1 << 20)) {
-            text.resize(static_cast<size_t>(size.QuadPart));
-            DWORD read = 0;
-            if (!ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &read, nullptr)) read = 0;
-            text.resize(read);
+        if (GetFileSizeEx(file, &size)) {
+            const auto byteCount = std::bit_cast<LONGLONG>(size);
+            if (byteCount > 0 && byteCount < (1 << 20)) {
+                text.resize(static_cast<size_t>(byteCount));
+                DWORD read = 0;
+                if (!ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &read, nullptr)) read = 0;
+                text.resize(read);
+            }
         }
         CloseHandle(file);
     }

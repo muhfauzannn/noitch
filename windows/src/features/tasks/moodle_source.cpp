@@ -94,7 +94,7 @@ void CheckKey(MoodleSource::Result& result, const std::string& site, std::string
 
 void CALLBACK Run(PTP_CALLBACK_INSTANCE, void* context) {
     const std::unique_ptr<Request> request(static_cast<Request*>(context));
-    auto* result = new MoodleSource::Result{};
+    auto result = std::make_unique<MoodleSource::Result>();
     result->kind = request->kind;
     std::string answer;
     switch (request->kind) {
@@ -124,7 +124,7 @@ void CALLBACK Run(PTP_CALLBACK_INSTANCE, void* context) {
             break;
         }
     }
-    if (!PostMessageW(request->notify, MoodleSource::kMessage, request->generation, reinterpret_cast<LPARAM>(result))) delete result;
+    if (PostMessageW(request->notify, MoodleSource::kMessage, request->generation, reinterpret_cast<LPARAM>(result.get()))) result.release();
 }
 
 void Submit(Request* request) {

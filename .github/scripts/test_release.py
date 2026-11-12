@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
@@ -7,13 +8,59 @@ import sys
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location('release', Path(__file__).with_name('release.py'))
+RELEASE_SCRIPT = Path(__file__).with_name('release.py').resolve()
+spec = importlib.util.spec_from_file_location('release', RELEASE_SCRIPT)
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 
 
+@contextmanager
+def isolated_workspace():
+    previous = Path.cwd()
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chdir(tmp)
+        try:
+            yield
+        finally:
+            os.chdir(previous)
+
+
 class ReleaseContractTests(unittest.TestCase):
+    def test_git_arguments_are_rejected_before_execution(self):
+        for value in ('--upload-pack=evil', 'v1.2.3^{tree}', 'v1.2.3/../../main', 'HEAD', 'v1.2.3\n'):
+            with self.subTest(value=value), patch.object(release.subprocess, 'check_output') as execute:
+                with self.assertRaises(ValueError):
+                    release.tag_commit(value)
+                execute.assert_not_called()
+        with patch.object(release.subprocess, 'run') as execute:
+            with self.assertRaises(ValueError):
+                release.require_main_commit('--config=evil')
+            execute.assert_not_called()
+
+    def test_cli_rejects_arbitrary_paths(self):
+        for option in ('--folder', '--other'):
+            result = subprocess.run([sys.executable, str(RELEASE_SCRIPT), 'verify', '--tag', 'v1.2.3',
+                                     option, '../../private'], capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b'invalid choice', result.stderr)
+
+    def test_workspace_rejects_symlink_reads_and_writes(self):
+        with isolated_workspace():
+            folder = Path('assets')
+            folder.mkdir()
+            Path('secret').write_text('do not overwrite')
+            link = folder / 'macos-arm64.json'
+            link.symlink_to('../secret')
+            with self.assertRaises(ValueError):
+                release.workspace_path(link)
+            with self.assertRaises(ValueError):
+                release.workspace_path(Path('../outside'))
+            with self.assertRaises(ValueError):
+                release.workspace_path(Path.cwd() / 'secret')
+            self.assertEqual(Path('secret').read_text(), 'do not overwrite')
+
     def test_publication_requires_successful_release_run(self):
         run = dict(path='.github/workflows/release.yml', event='push', head_sha='a' * 40, conclusion='success')
         release.validate_run(run, 'a' * 40)
@@ -33,19 +80,19 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn('Missing MACOS_CERTIFICATE_BASE64', result.stderr)
 
     def test_cli_round_trip_and_tampered_download(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            folder = Path(tmp) / 'assets'
+        with isolated_workspace():
+            folder = Path('assets')
             folder.mkdir()
-            toolchain = Path(tmp) / 'toolchain.txt'
-            toolchain.write_text('test toolchain')
-            cli = [sys.executable, str(Path(__file__).with_name('release.py'))]
+            cli = [sys.executable, str(RELEASE_SCRIPT)]
             common = ['--tag', 'v1.2.3', '--commit', 'a' * 40, '--folder', str(folder)]
             for platform, suffix in (('macos-arm64', 'dmg'), ('windows-x64', 'exe')):
                 (folder / f'Noitch-1.2.3-{platform}.{suffix}').write_bytes(b'test fixture')
-                subprocess.run(cli + ['metadata'] + common + ['--platform', platform,
-                               '--toolchain', str(toolchain)], check=True)
+                toolchain = release.TOOLCHAIN_FILES[platform]
+                toolchain.parent.mkdir(parents=True, exist_ok=True)
+                toolchain.write_text('test toolchain')
+                subprocess.run(cli + ['metadata'] + common + ['--platform', platform], check=True)
             subprocess.run(cli + ['verify'] + common, check=True)
-            other = Path(tmp) / 'download'
+            other = Path('downloaded')
             shutil.copytree(folder, other)
             subprocess.run(cli + ['compare'] + common + ['--other', str(other)], check=True)
             (other / 'SHA256SUMS').write_text('tampered checksum listing')
@@ -60,8 +107,9 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual(release.version('v1.2.3'), '1.2.3')
 
     def test_both_platforms_must_match_source_and_final_bytes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            folder = Path(tmp)
+        with isolated_workspace():
+            folder = Path('assets')
+            folder.mkdir()
             for platform, suffix in (('macos-arm64', 'dmg'), ('windows-x64', 'exe')):
                 name = f'Noitch-1.2.3-{platform}.{suffix}'
                 (folder / name).write_bytes(b'signed final bytes')

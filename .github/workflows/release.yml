@@ -78,7 +78,7 @@ jobs:
       - name: Record final asset provenance
         run: >-
           python3 .github/scripts/release.py metadata --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
-          --platform macos-arm64 --folder macos/build/release --toolchain macos/build/release-toolchain.txt
+          --platform macos-arm64 --folder macos/build/release
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-macos
@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: >-
           python .github/scripts/release.py metadata --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
-          --platform windows-x64 --folder windows/build/release --toolchain windows/build/release-toolchain.txt
+          --platform windows-x64 --folder windows/build/release
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-windows

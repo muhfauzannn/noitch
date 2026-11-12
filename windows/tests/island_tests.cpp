@@ -69,7 +69,7 @@ void TestSpringOvershootFitsTheWindowMargin() {
     for (const SpringParameters parameters : {kExpandSpring, kCollapseSpring}) {
         const ScalarSpring spring(0, 0, 130, parameters);  // The largest half-width travel, at scale 1.
         double peak = 0;
-        for (double t = 0; t < 1.5; t += 0.001) peak = std::fmax(peak, spring.Value(t));
+        for (int sample = 0; sample < 1500; ++sample) peak = std::fmax(peak, spring.Value(sample * 0.001));
         assert(peak > 130);
         assert(peak - 130 < 16);
     }
@@ -89,7 +89,8 @@ void TestContentFadeCurveMatchesItsValues() {
     assert(Near(fade.ValueAt(fade.End()), 0, 1e-9));
     const CubicSegment s = fade.Curve();
     assert(Near(s.offset, 0.06, 1e-9));
-    for (double t = 0; t <= 0.3; t += 0.01) {
+    for (int sample = 0; sample <= 30; ++sample) {
+        const double t = sample * 0.01;
         const double cubic = s.c0 + s.c1 * t + s.c2 * t * t + s.c3 * t * t * t;
         assert(Near(cubic, fade.ValueAt(2.06 + t), 1e-3));
     }
@@ -97,7 +98,8 @@ void TestContentFadeCurveMatchesItsValues() {
 
 void TestVelocityIsTheDerivativeOfValue() {
     const ScalarSpring spring(5, -40, 220);
-    for (double t = 0.01; t < 0.8; t += 0.05) {
+    for (int sample = 0; sample < 16; ++sample) {
+        const double t = 0.01 + sample * 0.05;
         const double h = 1e-6;
         const double numeric = (spring.Value(t + h) - spring.Value(t - h)) / (2 * h);
         assert(Near(spring.Velocity(t), numeric, 1e-3));

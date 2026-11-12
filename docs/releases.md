@@ -123,6 +123,13 @@ releases are created by a local implementation of this change.
 - A published release is bad: do not replace its files under the same version. Mark it clearly in
   release notes and ship a new patch tag; users can download the previous known-good release.
 
+## Metadata helper boundaries
+
+The helper runs from the repository root. Artifact directories are restricted to the workflow's
+known locations, and toolchain files are selected by platform rather than supplied through CLI
+paths. Symlink/traversal redirection is rejected before artifact reads and manifest writes.
+Git validation uses fixed commands with canonical version tags and full commit SHA checks.
+
 ## Local checks and current limits
 
 `python3 .github/scripts/test_release.py` exercises invalid versions, mismatched commits, missing

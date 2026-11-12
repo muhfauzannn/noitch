@@ -2,6 +2,7 @@
 
 #include <winhttp.h>
 
+#include <bit>
 #include <memory>
 #include <string>
 
@@ -45,11 +46,14 @@ std::string ReadSmallFile(const std::wstring& path) {
     if (file == INVALID_HANDLE_VALUE) return {};
     std::string text;
     LARGE_INTEGER size{};
-    if (GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart < 1 << 20) {
-        text.resize(static_cast<size_t>(size.QuadPart));
-        DWORD read = 0;
-        if (!::ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &read, nullptr)) read = 0;
-        text.resize(read);
+    if (GetFileSizeEx(file, &size)) {
+        const auto byteCount = std::bit_cast<LONGLONG>(size);
+        if (byteCount > 0 && byteCount < (1 << 20)) {
+            text.resize(static_cast<size_t>(byteCount));
+            DWORD read = 0;
+            if (!::ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &read, nullptr)) read = 0;
+            text.resize(read);
+        }
     }
     CloseHandle(file);
     return text;
@@ -96,8 +100,8 @@ ToolLimits FetchLimits(double now) {
 
 void CALLBACK Run(PTP_CALLBACK_INSTANCE, void* context) {
     const std::unique_ptr<Request> request(static_cast<Request*>(context));
-    auto* limits = new ToolLimits(FetchLimits(request->now));
-    if (!PostMessageW(request->notify, ClaudeLimitSource::kMessage, request->generation, reinterpret_cast<LPARAM>(limits))) delete limits;
+    auto limits = std::make_unique<ToolLimits>(FetchLimits(request->now));
+    if (PostMessageW(request->notify, ClaudeLimitSource::kMessage, request->generation, reinterpret_cast<LPARAM>(limits.get()))) limits.release();
 }
 
 }  // namespace
