@@ -28,6 +28,14 @@ def isolated_workspace():
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_windows_stage_does_not_alias_a_cmake_build_directory(self):
+        # Windows treats build/release and build/Release as the same directory.
+        stages = [path for path in release.RELEASE_FOLDERS.values() if path.parts[0] == 'windows']
+        self.assertEqual(len(stages), 1)
+        stage = stages[0].as_posix().casefold()
+        for config in ('Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel'):
+            self.assertNotEqual(stage, f'windows/build/{config}'.casefold())
+
     def test_mode_is_explicit_and_filenames_disclose_unsigned_builds(self):
         for value in (None, '', 'auto', 'Unsigned'):
             with self.subTest(value=value), self.assertRaises(ValueError):

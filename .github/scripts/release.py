@@ -9,7 +9,7 @@ import subprocess
 
 
 RELEASE_FOLDERS = {name: Path(name) for name in (
-    "macos/build/release", "windows/build/release", "assets", "downloaded")}
+    "macos/build/release", "windows/build/dist", "assets", "downloaded")}
 TOOLCHAIN_FILES = {
     "macos-arm64": Path("macos/build/release-toolchain.txt"),
     "windows-x64": Path("windows/build/release-toolchain.txt"),

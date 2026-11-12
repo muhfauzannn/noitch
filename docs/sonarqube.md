@@ -21,7 +21,7 @@ they do not add a worker, change message routing, or establish a Windows runtime
 
 Release metadata paths are now fixed relative to the repository working directory. Run the helper
 from the repository root. `--folder`/`--other` accept only `macos/build/release`,
-`windows/build/release`, `assets`, or `downloaded`. The toolchain path is selected internally from
+`windows/build/dist`, `assets`, or `downloaded`. The toolchain path is selected internally from
 the platform, with no `--toolchain` override. Hashing reads artifacts in bounded chunks.
 
 ## Review: HTTP text in clipboard history

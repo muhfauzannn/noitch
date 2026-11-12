@@ -32,9 +32,9 @@ try {
     Invoke-Native { cmake --build --preset debug }
     Invoke-Native { ctest --preset debug }
     Invoke-Native { cmake --build --preset release }
-    New-Item -ItemType Directory -Force build/release | Out-Null
+    New-Item -ItemType Directory -Force build/dist | Out-Null
     $label = if ($env:RELEASE_MODE -eq 'unsigned') { '-unsigned' } else { '' }
-    $asset = "build/release/Noitch-$env:RELEASE_VERSION-windows-x64$label.exe"
+    $asset = "build/dist/Noitch-$env:RELEASE_VERSION-windows-x64$label.exe"
     if (Test-Path -LiteralPath $asset) { throw 'Release asset already exists' }
     Copy-Item build/Release/Noitch.exe $asset
     if ($env:RELEASE_MODE -eq 'signed') {

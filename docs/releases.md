@@ -179,7 +179,7 @@ alone does not publish publicly, and local implementation creates no remote envi
 
 Run `.github/scripts/release.py` from the repository root. Commands that operate on assets require
 `--mode signed` or `--mode unsigned`; validation derives it from `.github/release.json`. Artifact
-folders are restricted to `macos/build/release`, `windows/build/release`, `assets`, and `downloaded`.
+folders are restricted to `macos/build/release`, `windows/build/dist`, `assets`, and `downloaded`.
 Toolchain paths are fixed by platform; symlink/traversal redirection is rejected before reads or writes.
 
 Local tests cover both modes' metadata/checksum round trips, mode mismatches, signing disclosures,
@@ -204,3 +204,10 @@ Xcode 26.6: `lipo -verify_arch arm64 <file>` treated the trailing file as anothe
 Verification now passes the input first (`lipo <file> -verify_arch arm64`), which works with both
 toolchains. The failed tag remains unchanged; the corrected workflow uses a new patch tag.
 This changes packaging verification only, with no application/runtime or performance-setting change.
+
+The next tag (`v0.1.1`) passed both native package jobs, but the draft contract rejected extra Windows
+executables. On Windows, staging in `build/release` aliases CMake's `build/Release` directory, so
+`Noitch.exe` and `island_tests.exe` were included alongside the named release asset. Windows now
+stages only distribution files in `build/dist`; the contract still rejects unexpected assets.
+A regression test checks that staging cannot alias any CMake configuration directory when paths
+are compared without case sensitivity. The release is retried under a new patch tag.
