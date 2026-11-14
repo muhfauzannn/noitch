@@ -223,7 +223,7 @@ void IslandWindow::ApplyLayout() {
     UINT dpiY = USER_DEFAULT_SCREEN_DPI;
     GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
 
-    geometry_ = IslandGeometry(static_cast<float>(dpiX) / USER_DEFAULT_SCREEN_DPI);
+    geometry_ = IslandGeometry(static_cast<float>(dpiX) / USER_DEFAULT_SCREEN_DPI, static_cast<float>(settings_.general.expandedWidth), static_cast<float>(settings_.general.expandedHeight));
     geometry_.SetLive(live_.IsActive());
     geometry_.SetLiveLyric(live_.ShowsLyric());
     geometry_.SetTaskAlert(taskAlert_.Shape());
@@ -291,6 +291,8 @@ void IslandWindow::RegisterPinHotkey() {
 
 void IslandWindow::TransitionTo(IslandState next) {
     if (next == state_) return;
+    if (next == IslandState::Expanded && (geometry_.ExpandedWidth() != static_cast<float>(settings_.general.expandedWidth) ||
+        geometry_.ExpandedHeight() != static_cast<float>(settings_.general.expandedHeight))) ApplyLayout();
     state_ = next;
     KillTimer(hwnd_, kHoverTimer);
     hoverPending_ = false;
@@ -303,7 +305,7 @@ void IslandWindow::TransitionTo(IslandState next) {
         const std::optional<IslandPage> preferred = taskAlert_.WantsTasksPage() ? std::optional<IslandPage>(IslandPage::Tasks) : std::nullopt;
         taskAlert_.IslandWillOpen();
         UpdateHitRegion();
-        pages_.IslandWillOpen(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(),
+        pages_.IslandWillOpen(geometry_.ExpandedWidth(), geometry_.ExpandedHeight(), IslandGeometry::CollapsedHeight(),
                               geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale(), preferred);
         watch_.IslandWillOpen();
         AnimateContent(true, now);

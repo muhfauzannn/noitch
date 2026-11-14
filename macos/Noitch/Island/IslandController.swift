@@ -21,7 +21,13 @@ final class IslandController: NSObject {
     private let hotKey = HotKey()
 
     override init() {
-        geometry = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay)
+        geometry = IslandGeometry(
+            display: Self.preferredScreen(settings.general.display).islandDisplay,
+            expandedSize: CGSize(
+                width: settings.general.expandedWidth,
+                height: settings.general.expandedHeight
+            )
+        )
         watch = TaskWatch(settings: settings.tasks, pageOn: settings.pages.showTasks)
         pages = PageController(settings: settings, monitor: monitor, watch: watch)
         live = LiveController(monitor: monitor, settings: settings.home)
@@ -149,6 +155,9 @@ final class IslandController: NSObject {
 
     private func transition(to newState: IslandState) {
         guard newState != state else { return }
+        if newState == .expanded {
+            geometry.expandedSize = CGSize(width: settings.general.expandedWidth, height: settings.general.expandedHeight)
+        }
         state = newState
         latestTransition += 1
         let transition = latestTransition
@@ -225,8 +234,17 @@ final class IslandController: NSObject {
     }
 
     @objc private func screenParametersChanged() {
-        let updated = IslandGeometry(display: Self.preferredScreen(settings.general.display).islandDisplay, isLive: live.isActive,
-                                     showsLiveLyric: live.showsLyric, taskAlert: taskAlert.shape)
+        let updated = IslandGeometry(
+            display: Self.preferredScreen(settings.general.display).islandDisplay,
+            expandedSize: CGSize(
+                width: settings.general.expandedWidth,
+                height: settings.general.expandedHeight
+            ),
+            isLive: live.isActive,
+            showsLiveLyric: live.showsLyric,
+            taskAlert: taskAlert.shape
+        )
+
         guard updated != geometry else { return }
         geometry = updated
         live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)

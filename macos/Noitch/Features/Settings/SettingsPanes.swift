@@ -18,6 +18,10 @@ enum SettingsPanes {
         form.section("Display") {
             form.choice("Show the island on", \.general.display, options: DisplayChoice.allCases.map { ($0.title, $0) })
         }
+        form.section("Island size", footer: "Changes apply the next time the island opens.") {
+            form.slider("Width", \.general.expandedWidth, range: GeneralSettings.expandedWidthRange)
+            form.slider("Height", \.general.expandedHeight, range: GeneralSettings.expandedHeightRange)
+        }
         form.section("Pin", footer: "Pinned, the island stays open when the pointer leaves. Pin it from the header, or from anywhere with the shortcut.") {
             pinShortcutRow(in: form)
         }

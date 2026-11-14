@@ -38,6 +38,7 @@ struct IslandGeometry: Equatable {
     }
 
     let display: Display
+    var expandedSize: CGSize
     /// Music is playing and the closed pill has wings for it, see `LiveLayout`.
     var isLive = false
     /// The live pill also shows the line being sung, under the notch.
@@ -46,14 +47,20 @@ struct IslandGeometry: Equatable {
     /// A task alert on the closed pill, see `TaskAlertLayout`.
     var taskAlert = TaskAlertShape.none
 
-    init(display: Display, isLive: Bool = false, showsLiveLyric: Bool = false, taskAlert: TaskAlertShape = .none) {
+    init(
+        display: Display,
+        expandedSize: CGSize = Self.expandedSize,
+        isLive: Bool = false,
+        showsLiveLyric: Bool = false,
+        taskAlert: TaskAlertShape = .none
+    ) {
         self.display = display
+        self.expandedSize = expandedSize
         self.isLive = isLive
         self.showsLiveLyric = showsLiveLyric
         self.taskAlert = taskAlert
     }
 
-    var expandedSize: CGSize { Self.expandedSize }
 
     /// The notch, or the virtual one: the closed pill without wings.
     var collapsedSize: CGSize {

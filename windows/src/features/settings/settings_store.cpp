@@ -68,6 +68,8 @@ AppSettings LoadSettings() {
     AppSettings settings;
     Read(L"OpenOnHover", settings.general.openOnHover);
     Read(L"HoverDelay", settings.general.hoverDelay, 0, 1);
+    Read(L"ExpandedWidth", settings.general.expandedWidth, 580, 900);
+    Read(L"ExpandedHeight", settings.general.expandedHeight, 180, 300);
     DWORD hotkey = 0;
     if (ReadDword(L"PinHotkey", hotkey)) settings.general.pinHotkey = hotkey == 0 || PinHotkeyUsable(hotkey) ? hotkey : kDefaultPinHotkey;
     Read(L"ShowUsagePage", settings.pages.showUsage);
@@ -105,6 +107,8 @@ void SaveSettings(const AppSettings& settings) {
     if (RegCreateKeyExW(HKEY_CURRENT_USER, kSettingsKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) return;
     Write(key, L"OpenOnHover", settings.general.openOnHover);
     Write(key, L"HoverDelay", settings.general.hoverDelay);
+    Write(key, L"ExpandedWidth", settings.general.expandedWidth);
+    Write(key, L"ExpandedHeight", settings.general.expandedHeight);
     Write(key, L"PinHotkey", static_cast<DWORD>(settings.general.pinHotkey));
     Write(key, L"ShowUsagePage", settings.pages.showUsage);
     Write(key, L"OpenOn", static_cast<DWORD>(settings.pages.openOn));

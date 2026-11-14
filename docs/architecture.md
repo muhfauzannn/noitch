@@ -645,7 +645,7 @@ The spec both apps follow. Change it here and in both apps together.
 
 | Property | Value |
 | --- | --- |
-| Expanded size | 580 × 180 pt |
+| Expanded size | Default 580 × 180 pt; width 580–900 and height 180–300 configurable in Settings, applied next opening |
 | Collapsed size | Physical notch if present, otherwise 180 pt wide |
 | Collapsed height without a notch | macOS: menu bar height. Windows: 32 |
 | Corner radius | 10 collapsed, 24 expanded, bottom corners only |
