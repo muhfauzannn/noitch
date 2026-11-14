@@ -49,6 +49,7 @@ final class HomeScene {
     private let music = CALayer()
     /// Home's own two lyric lines, apart from the title so they can rise in from below.
     private let lyricGroup = CALayer()
+    private var extraLyrics: [CATextLayer] = []
     private let buttonGroup = CALayer()
     private let lyricsButton = CALayer()
     /// A white disc behind the icon while the stage shows, the way a pressed-in switch looks.
@@ -165,6 +166,13 @@ final class HomeScene {
         place(lyricLayers[bright], slot: 0)
         place(lyricLayers[dim], slot: 1)
         place(lyricLayers[spare], slot: 2)
+        extraLyrics = (2..<max(2, min(layout.lyricVisibleRows, 9))).map { index in
+            let layer = Self.makeText(size: 12, weight: .semibold, opacity: 0.5)
+            layer.frame = layout.lyric.offsetBy(dx: 0, dy: CGFloat(index) * HomeLayout.lyricStep)
+            layer.contentsScale = scale
+            lyricGroup.addSublayer(layer)
+            return layer
+        }
 
         for (layer, frame) in [(elapsed, layout.elapsedTime), (remaining, layout.remainingTime)] {
             layer.frame = frame
@@ -246,6 +254,12 @@ final class HomeScene {
     /// place, and the following line rises in below. Any other change crossfades. Only position,
     /// scale and opacity move, so no text is redrawn during the motion.
     private func showLyrics(_ model: HomeModel, previous: HomeModel?, now: CFTimeInterval) {
+        if previous?.followingLyrics != model.followingLyrics {
+            for (index, layer) in extraLyrics.enumerated() {
+                let next = index + 1
+                layer.string = model.followingLyrics.indices.contains(next) ? model.followingLyrics[next] : ""
+            }
+        }
         let current = lyricLayers[bright]
         let below = lyricLayers[dim]
         let currentText = current.string as? String ?? ""

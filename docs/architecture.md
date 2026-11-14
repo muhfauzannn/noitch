@@ -222,6 +222,13 @@ for four pages; no registry or shared platform layer was introduced.
   with the existing pager compositor and are released after its outgoing fade. Thumbnails are
   released on hide. No per-frame work, new helpers, dependencies or private APIs were added.
 
+## Resizable content
+
+A taller expanded island fits more task rows and upcoming Home lyric lines. The task list computes
+its capacity from the available height, and scrolling, hit targets and the remaining-count label use
+that same capacity. On macOS the Home calendar also fits more event and deadline rows. Additional
+lyric text and rows are built only while their page is shown; updates remain event-driven.
+
 ## Home
 
 Home is the first page: large artwork on the left, and beside it the title and artist with the lyrics

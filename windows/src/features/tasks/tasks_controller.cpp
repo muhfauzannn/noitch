@@ -48,7 +48,7 @@ void TasksController::Render() {
     if (!isShown_ || !scene_.Exists()) return;
     const double now = TaskNow();
     model_ = TasksPageModel::Make(watch_->Tasks(), newOnShow_, watch_->Settings().IsSignedIn(), watch_->IsChecking(), watch_->Problem(), watch_->AsOf(), now,
-                                  offset_, LocalUtcOffset(), showOverdue_, TasksSiteName(watch_->Settings().site));
+                                  offset_, LocalUtcOffset(), showOverdue_, TasksSiteName(watch_->Settings().site), scene_.Layout().VisibleRows());
     scene_.Paint(model_, hoveredRow_);
     // One shot at the next minute while shown: the countdown and due times are in minutes.
     const double delay = 60 - std::fmod(now, 60) + 0.2;
@@ -99,7 +99,7 @@ void TasksController::ScrolledVertically(double delta) {
     const int step = static_cast<int>(scrolled_ / TasksLayout::kRowHeight);
     if (step == 0) return;
     scrolled_ -= step * TasksLayout::kRowHeight;
-    const int next = std::clamp(offset_ - step, 0, std::max(model_.listCount - TaskRule::kVisibleRows, 0));
+    const int next = std::clamp(offset_ - step, 0, std::max(model_.listCount - scene_.Layout().VisibleRows(), 0));
     if (next == offset_) return;
     offset_ = next;
     Render();

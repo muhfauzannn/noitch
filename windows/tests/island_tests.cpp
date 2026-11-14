@@ -926,6 +926,17 @@ void TestTaskCacheRoundTrips() {
     assert(mac && mac->tasks.size() == 1 && mac->tasks[0].due == 1794589500 && mac->unviewed.empty());
 }
 
+void TestExpandedContentCapacity() {
+    const TasksLayout normal(580, 180, 38, 1);
+    const TasksLayout tall(800, 300, 38, 1);
+    assert(normal.VisibleRows() == 3);
+    assert(tall.VisibleRows() > normal.VisibleRows());
+    assert(tall.More().Bottom() <= tall.Height() - 8);
+    const HomeLayout homeNormal(580, 180, 38, 1);
+    const HomeLayout homeTall(800, 300, 38, 1);
+    assert(homeTall.LyricVisibleRows() > homeNormal.LyricVisibleRows());
+}
+
 void TestTasksPageSaysWhatToDo() {
     TasksPageModel model = TasksPageModel::Make({}, {}, false, false, MoodleProblem::None, std::nullopt, kTaskNow, 0, kJakarta);
     assert(model.isMessage && model.title == "See your Scele tasks here" && !model.button.empty());
@@ -1145,6 +1156,7 @@ int main() {
     TestDueTimesReadAsPeopleSayThem();
     TestRemindersFallOnceEach();
     TestTaskCacheRoundTrips();
+    TestExpandedContentCapacity();
     TestTasksPageSaysWhatToDo();
     TestOverdueWorkStaysHiddenUntilAskedFor();
     TestPinSitsLeftOfSettingsAndItsShortcutNeedsAModifier();

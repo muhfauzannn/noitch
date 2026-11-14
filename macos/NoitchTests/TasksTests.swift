@@ -20,6 +20,20 @@ struct TasksTests {
         MoodleTask(id: id, title: "Task \(id)", course: "PBP", module: module, due: due, url: "https://scele.cs.ui.ac.id/mod/assign/view.php?id=\(id)")
     }
 
+    @Test func `taller layouts show more tasks and keep the footer inside`() {
+        let compact = TasksLayout(size: CGSize(width: 580, height: 180), headerHeight: 38)
+        let tall = TasksLayout(size: CGSize(width: 800, height: 300), headerHeight: 38)
+        #expect(compact.visibleRows == 3)
+        #expect(tall.visibleRows > compact.visibleRows)
+        #expect(tall.more.maxY <= tall.size.height - 8)
+        let tasks = (1...12).map { Self.task($0, due: Self.now + Double($0) * 3600) }
+        let model = TasksPageModel.make(tasks: tasks, unviewed: [], signedIn: true, checking: false, problem: nil,
+                                        asOf: Self.now, now: Self.now, offset: 99, calendar: Self.calendar, visibleRows: tall.visibleRows)
+        guard case let .list(_, _, rows, _) = model.content else { Issue.record("Expected task list"); return }
+        #expect(rows.count == tall.visibleRows)
+        #expect(rows.last?.id == 12)
+    }
+
     // MARK: Format
 
     @Test func `a token answer gives the token`() {
