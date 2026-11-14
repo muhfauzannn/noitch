@@ -2,7 +2,29 @@
 
 #include "features/home/home_model.h"
 
+#include <dwrite.h>
+
 namespace noitch {
+
+namespace {
+float MeasureLyric(const std::string& text, float scale) {
+    if (text.empty()) return 0;
+    const int count = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    if (count <= 0) return 0;
+    std::wstring wide(static_cast<size_t>(count), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), count);
+    Microsoft::WRL::ComPtr<IDWriteFactory> factory;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
+    if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(factory.GetAddressOf()))) ||
+        FAILED(factory->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
+                                        DWRITE_FONT_STRETCH_NORMAL, LiveLayout::kLyricFontSize * scale, L"", &format)) ||
+        FAILED(factory->CreateTextLayout(wide.data(), static_cast<UINT32>(wide.size()), format.Get(), 100000, 100000, &layout))) return 0;
+    DWRITE_TEXT_METRICS metrics{};
+    return SUCCEEDED(layout->GetMetrics(&metrics)) ? metrics.widthIncludingTrailingWhitespace / scale : 0;
+}
+}  // namespace
+
 
 void LiveController::Initialize(HWND window, Compositor* compositor, NowPlayingMonitor* monitor, double (*now)(), const HomeSettings& settings) {
     window_ = window;
@@ -46,7 +68,9 @@ void LiveController::SetGeometry(float collapsedWidth, float collapsedHeight, in
     hasLayout_ = true;
     layout_ = layout;
     windowWidth_ = windowWidth;
+    measuredLyric_.clear();
     scale_ = scale;
+    maxLyricWidth_ = std::max(layout_.Width(), std::min(static_cast<float>(windowWidth_) / scale_ - 32, static_cast<float>(GetSystemMetrics(SM_CXSCREEN)) / scale_ - 16));
     monitor_->SetArtworkPixels(NowPlayingMonitor::kLive, static_cast<int>(layout.ArtSide() * scale + 0.5f));
     if (scene_.Exists()) {
         ReleaseScene();
@@ -129,6 +153,16 @@ void LiveController::UpdateLyric() {
     KillTimer(window_, kLyricTimer);
     std::string line;
     if (!showsLyric_ || lyricHeld_ || !CurrentLyric(&line)) line.clear();
+    if (line != measuredLyric_) {
+        measuredLyric_ = line;
+        const float maxWidth = maxLyricWidth_;
+        const float measured = line.empty() ? 0 : MeasureLyric(line, scale_);
+        const float width = LiveLayout::WidthForLyric(measured, layout_.Width(), maxWidth);
+        if (width != lyricWidth_) {
+            lyricWidth_ = width;
+            if (onActiveChange) onActiveChange(context, active_);
+        }
+    }
     scene_.SetLyric(line);
     if (!showsLyric_ || lyricHeld_ || islandOpen_ || !nowPlaying_.isPlaying || !lyrics_) return;
     const double position = nowPlaying_.Position(now_());
@@ -172,7 +206,7 @@ void LiveController::Evaluate() {
 void LiveController::BuildScene() {
     const float liveWidth = layout_.Width() * scale_;
     const float left = (static_cast<float>(windowWidth_) - liveWidth) / 2;
-    if (FAILED(scene_.Create(*compositor_, layout_, left, scale_))) {
+    if (FAILED(scene_.Create(*compositor_, layout_, left, scale_, maxLyricWidth_))) {
         scene_.Release();
         return;
     }

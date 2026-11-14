@@ -11,6 +11,8 @@ final class LiveController {
     private(set) var isActive = false
     /// The pill also shows the line being sung, under the notch.
     private(set) var showsLyric = false
+    private(set) var lyricWidth: CGFloat = 0
+    private var maxLyricWidth: CGFloat = 580
     private let monitor: NowPlayingMonitor
     private var enabled: Bool
     private var tintBars: Bool
@@ -65,11 +67,12 @@ final class LiveController {
     }
 
     /// The closed pill without wings, for laying the wings out beside it.
-    func setCollapsedSize(_ size: CGSize, scale: CGFloat) {
+    func setCollapsedSize(_ size: CGSize, scale: CGFloat, maxLyricWidth: CGFloat) {
         let layout = LiveLayout(collapsed: size)
-        guard layout != self.layout || scale != self.scale else { return }
+        guard layout != self.layout || scale != self.scale || maxLyricWidth != self.maxLyricWidth else { return }
         self.layout = layout
         self.scale = scale
+        self.maxLyricWidth = max(layout.size.width, maxLyricWidth)
         scene?.root.removeFromSuperlayer()
         scene = nil
         if isActive {
@@ -80,6 +83,8 @@ final class LiveController {
     }
 
     var size: CGSize? { layout?.size }
+
+    func setPillWidth(_ width: CGFloat, animated: Bool) { scene?.setPillWidth(width, animated: animated) }
 
     /// While a task alert has the strip, the line steps aside; it comes back when the alert ends.
     func setLyricHeld(_ held: Bool) {
@@ -159,7 +164,15 @@ final class LiveController {
     private func updateLyric(animated: Bool) {
         lyricTimer?.invalidate()
         lyricTimer = nil
-        scene?.setLyric(showsLyric && !lyricHeld ? currentLyric : nil, animated: animated)
+        let line = showsLyric && !lyricHeld ? currentLyric : nil
+        let measured = line.map { ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: LiveLayout.lyricFontSize, weight: .semibold)]).width } ?? 0
+        let baseWidth = layout?.size.width ?? 0
+        let width = line == nil ? baseWidth : LiveLayout.widthForLyric(textWidth: measured, baseWidth: baseWidth, maximum: maxLyricWidth)
+        if lyricWidth != width {
+            lyricWidth = width
+            onShapeChange?()
+        }
+        scene?.setLyric(line, animated: animated)
         guard showsLyric, !lyricHeld, !isIslandOpen, nowPlaying.isPlaying, let lyrics else { return }
         let position = nowPlaying.position(at: Date())
         guard let next = lyrics.nextChange(after: position + lyricsOffset) else { return }
@@ -207,7 +220,7 @@ final class LiveController {
 
     private func buildScene() {
         guard let layout else { return }
-        let scene = LiveScene(layout: layout, scale: scale)
+        let scene = LiveScene(layout: layout, scale: scale, lyricWidth: maxLyricWidth)
         self.scene = scene
         shownArtwork = nil
         onSceneCreated?(scene.root)

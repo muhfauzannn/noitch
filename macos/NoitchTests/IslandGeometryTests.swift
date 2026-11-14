@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import Noitch
 
@@ -15,6 +16,29 @@ struct IslandGeometryTests {
         notchWidth: 0,
         menuBarHeight: 25
     ))
+
+    @Test func `custom size persists and out of range values are clamped`() throws {
+        let name = "noitch-size-test-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var settings = AppSettings()
+        settings.general.expandedWidth = 720
+        settings.general.expandedHeight = 230
+        settings.save(to: defaults)
+        let loaded = AppSettings.load(from: defaults)
+        #expect(loaded.general.expandedWidth == 720)
+        #expect(loaded.general.expandedHeight == 230)
+        defaults.set(9999.0, forKey: "expandedWidth")
+        #expect(AppSettings.load(from: defaults).general.expandedWidth == 900)
+    }
+
+    @Test func `custom expanded size leaves the closed pill unchanged`() {
+        var custom = notched
+        custom.expandedSize = CGSize(width: 720, height: 230)
+        #expect(custom.pillSize(for: .expanded) == CGSize(width: 720, height: 230))
+        #expect(custom.pillSize(for: .collapsed) == notched.pillSize(for: .collapsed))
+        #expect(custom.panelFrame(for: .expanded).width == 752)
+    }
 
     @Test func `collapsed pill exactly covers the notch`() {
         #expect(notched.pillSize(for: .collapsed) == CGSize(width: 200, height: 38))

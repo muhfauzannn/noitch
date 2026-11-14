@@ -16,11 +16,13 @@ constexpr uint32_t kPlaceholder = 0x1F1F1F1F;
 
 }  // namespace
 
-HRESULT LiveScene::Create(Compositor& compositor, const LiveLayout& layout, float left, float scale) {
+HRESULT LiveScene::Create(Compositor& compositor, const LiveLayout& layout, float left, float scale, float maxLyricWidth) {
     Release();
     compositor_ = &compositor;
     layout_ = layout;
     scale_ = scale;
+    left_ = left;
+    maxLyricWidth_ = maxLyricWidth;
     IDCompositionDevice* device = compositor.Device();
     if (!device) return E_UNEXPECTED;
     HRESULT hr;
@@ -148,11 +150,38 @@ HRESULT LiveScene::SetPlaying(bool playing) {
     return compositor_->Commit();
 }
 
+HRESULT LiveScene::SetPillWidth(float width) {
+    if (!root_) return S_OK;
+    HRESULT hr = art_->SetOffsetX(layout_.ArtworkForWidth(width).x * scale_);
+    if (FAILED(hr)) return hr;
+    for (int i = 0; i < LiveLayout::kBarCount; ++i) {
+        if (FAILED(hr = bars_[i]->SetOffsetX(layout_.BarForWidth(i, width).x * scale_))) return hr;
+    }
+    return S_OK;
+}
+
+HRESULT LiveScene::AnimateEdges(const PillMotion& motion) {
+    if (!root_) return S_OK;
+    ComPtr<IDCompositionAnimation> artwork;
+    HRESULT hr = compositor_->BuildAnimation(motion, 0, layout_.Artwork().x * scale_ - left_, &artwork);
+    if (FAILED(hr)) return hr;
+    if (FAILED(hr = art_->SetOffsetX(artwork.Get()))) return hr;
+    for (int i = 0; i < LiveLayout::kBarCount; ++i) {
+        ComPtr<IDCompositionAnimation> bar;
+        const float bias = (layout_.Bar(i).x - layout_.Width()) * scale_ - left_;
+        if (FAILED(hr = compositor_->BuildAnimation(motion, 1, bias, &bar))) return hr;
+        if (FAILED(hr = bars_[i]->SetOffsetX(bar.Get()))) return hr;
+    }
+    return S_OK;
+}
+
 HRESULT LiveScene::SetLyric(const std::string& text) {
     if (!root_ || text == shownLyric_) return S_OK;
     shownLyric_ = text;
     HRESULT hr;
-    const HomeRect area = layout_.Lyric();
+    HomeRect area = layout_.Lyric();
+    area.x -= (maxLyricWidth_ - layout_.Width()) / 2;
+    area.width = maxLyricWidth_ - (LiveLayout::kOuterPadding + 3) * 2;
     const float width = static_cast<float>(Px(area.width, scale_));
     const float height = static_cast<float>(Px(area.height, scale_));
     if (!lyric_) {
@@ -163,7 +192,7 @@ HRESULT LiveScene::SetLyric(const std::string& text) {
         if (FAILED(hr = device->CreateSurface(static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED, &lyricSurface_))) return hr;
         if (FAILED(hr = device->CreateVisual(&lyric_))) return hr;
         if (FAILED(hr = lyric_->SetContent(lyricSurface_.Get()))) return hr;
-        if (FAILED(hr = lyric_->SetOffsetX(static_cast<float>(Px(area.x, scale_))))) return hr;
+        if (FAILED(hr = lyric_->SetOffsetX(area.x * scale_))) return hr;
         if (FAILED(hr = lyric_->SetOffsetY(static_cast<float>(Px(area.y, scale_))))) return hr;
         if (FAILED(hr = root_->AddVisual(lyric_.Get(), TRUE, nullptr))) return hr;
     }

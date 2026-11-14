@@ -7,6 +7,7 @@ struct HomeModel: Equatable {
     /// The line being sung, bright, and the one after it, dim. A status message takes the first slot.
     var lyric = ""
     var nextLyric = ""
+    var followingLyrics: [String] = []
     /// The synced line's index, so the scene can tell a step forward (a slide) from a jump (a fade).
     var lyricIndex: Int?
     var lyricIsStatus = false
@@ -66,6 +67,12 @@ struct HomeModel: Equatable {
             lyric = current.isEmpty ? "♪" : current
             let next = (index ?? -1) + 1
             nextLyric = settings.showNextLyric && lyrics.synced.indices.contains(next) ? lyrics.synced[next].text : ""
+            if settings.showNextLyric {
+                followingLyrics = (0..<8).map { step in
+                    let line = next + step
+                    return lyrics.synced.indices.contains(line) ? lyrics.synced[line].text : ""
+                }
+            }
             stageRomanizations = (-1...2).map { step in
                 let line = (index ?? -1) + step
                 return lyrics.synced.indices.contains(line) ? lyrics.synced[line].romanization : ""

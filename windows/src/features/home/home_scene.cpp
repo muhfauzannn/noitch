@@ -294,6 +294,8 @@ HRESULT HomeScene::Paint(const HomeModel& model, HomeControl hovered, bool isPre
     PaintText(model.artist, artistFormat_.Get(), layout_.Artist(), 0.6f * heading);
     PaintText(model.lyric, lyricFormat_.Get(), layout_.Lyric(), model.lyricIsStatus ? 0.5f : 1.0f);
     PaintText(model.nextLyric, nextLyricFormat_.Get(), layout_.NextLyric(), kNextLyricOpacity);
+    for (int row = 2; row < layout_.LyricVisibleRows() && row - 1 < static_cast<int>(model.followingLyrics.size()); ++row)
+        PaintText(model.followingLyrics[static_cast<size_t>(row - 1)], nextLyricFormat_.Get(), layout_.LyricLine(row), kNextLyricOpacity);
     PaintText(model.elapsedText, timeFormat_.Get(), layout_.ElapsedTime(), 0.6f);
     PaintText(model.remainingText, remainingFormat_.Get(), layout_.RemainingTime(), 0.6f);
 

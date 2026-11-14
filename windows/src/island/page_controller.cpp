@@ -64,7 +64,7 @@ void PageController::Jump(IslandPage page) {
 void PageController::IslandWillOpen(float width, float height, float headerHeight, float left, float scale, std::optional<IslandPage> preferred) {
     KillTimer(window_, kReleaseTimer);
     isOpen_ = true;
-    if (scale != scale_ || left != left_ || headerHeight != headerHeight_) {
+    if (scale != scale_ || left != left_ || headerHeight != headerHeight_ || width != width_ || height != height_) {
         header_.Release();
         usage_.DeviceLost();
         tasks_.DeviceLost();

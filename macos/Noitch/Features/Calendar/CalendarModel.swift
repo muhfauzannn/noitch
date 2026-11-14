@@ -68,7 +68,7 @@ struct CalendarModel: Equatable {
     /// `rangeStart` is the first day shown; `selected` counts from it. `clock` gives "14:00" and
     /// `dayName` gives "Wed 12" for a date. Deadlines show whether or not the calendar may be read.
     init(events: [CalendarEvent], deadlines: [CalendarDeadline] = [], rangeStart: Date, selected: Int, now: Date, calendar: Calendar,
-         access: CalendarAccess, clock: (Date) -> String, dayName: (Date) -> String) {
+         access: CalendarAccess, maxRows: Int = CalendarModel.maxRows, clock: (Date) -> String, dayName: (Date) -> String) {
         self.selected = selected
         rangeIndex = Int((rangeStart.timeIntervalSinceReferenceDate / 86400).rounded(.down))
         let letters = calendar.shortWeekdaySymbols.map { $0.uppercased() }
@@ -104,7 +104,7 @@ struct CalendarModel: Equatable {
         guard access == .granted else {
             // Without the calendar, a day with deadlines still lists them; the others offer access.
             guard deadlineRows.isEmpty else {
-                fill(deadlineRows.sorted { $0.sortKey < $1.sortKey }.map(\.row), hadAny: hadDeadlines)
+                fill(deadlineRows.sorted { $0.sortKey < $1.sortKey }.map(\.row), hadAny: hadDeadlines, limit: maxRows)
                 return
             }
             message = access == .notAsked ? "Show your calendar" : "Allow access in System Settings"
@@ -121,12 +121,13 @@ struct CalendarModel: Equatable {
             return (sortKey: (event.isAllDay ? 0 : 1, event.start, event.title),
                     row: Row(time: time, title: event.title.isEmpty ? "Untitled" : event.title, color: event.color, isNow: isNow))
         }
-        fill((eventRows + deadlineRows).sorted { $0.sortKey < $1.sortKey }.map(\.row), hadAny: hadAny)
+        fill((eventRows + deadlineRows).sorted { $0.sortKey < $1.sortKey }.map(\.row), hadAny: hadAny, limit: maxRows)
     }
 
-    private mutating func fill(_ all: [Row], hadAny: Bool) {
-        rows = Array(all.prefix(Self.maxRows))
-        if all.count > Self.maxRows { more = "+\(all.count - Self.maxRows) more" }
+    private mutating func fill(_ all: [Row], hadAny: Bool, limit: Int) {
+        let limit = max(1, limit)
+        rows = Array(all.prefix(limit))
+        if all.count > limit { more = "+\(all.count - limit) more" }
         if all.isEmpty { message = hadAny ? "Nothing else today" : "Nothing planned" }
     }
 

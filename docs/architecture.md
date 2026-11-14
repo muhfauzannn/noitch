@@ -222,6 +222,13 @@ for four pages; no registry or shared platform layer was introduced.
   with the existing pager compositor and are released after its outgoing fade. Thumbnails are
   released on hide. No per-frame work, new helpers, dependencies or private APIs were added.
 
+## Resizable content
+
+A taller expanded island fits more task rows and upcoming Home lyric lines. The task list computes
+its capacity from the available height, and scrolling, hit targets and the remaining-count label use
+that same capacity. On macOS the Home calendar also fits more event and deadline rows. Additional
+lyric text and rows are built only while their page is shown; updates remain event-driven.
+
 ## Home
 
 Home is the first page: large artwork on the left, and beside it the title and artist with the lyrics
@@ -645,7 +652,7 @@ The spec both apps follow. Change it here and in both apps together.
 
 | Property | Value |
 | --- | --- |
-| Expanded size | 580 × 180 pt |
+| Expanded size | Default 580 × 180 pt; width 580–900 and height 180–300 configurable in Settings, applied next opening |
 | Collapsed size | Physical notch if present, otherwise 180 pt wide |
 | Collapsed height without a notch | macOS: menu bar height. Windows: 32 |
 | Corner radius | 10 collapsed, 24 expanded, bottom corners only |
@@ -659,7 +666,7 @@ The spec both apps follow. Change it here and in both apps together.
 | Usage insight | Rules in `AILimits` (macOS) and `ai_limits.h` (Windows): pace ±10 points, recent pace over 30 min, warnings in yellow and red |
 | Tasks layout | Numbers in `TasksLayout` and `TaskAlertLayout` (macOS) and `tasks_layout.h` (Windows), which must match; seven day bars, three rows; one indigo accent, red for within a day |
 | Task rules | `TaskRule` (macOS) and `task_model.h` (Windows): amber within 3 days, red within 1; overdue kept a week and hidden until asked for; slip 8 s; reminders 1 day and 1 hour before; checks every 30 min at most |
-| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause; a 20 pt lyric strip under the notch, 12 pt text. See [Closed island while music plays](#closed-island-while-music-plays) |
+| Closed island with music | Wings of `artSide + 17` pt each side, artwork `notch height − 14` pt, six 1.5 pt bars shaded toward white in the middle; spring 0.42 s, bounce 0.16; 10 s after a pause; a 20 pt lyric strip under the notch, 12 pt text; its width follows the measured line, capped by the expanded island and display, with truncation beyond that limit; the artwork and bars track the widening edges on the same compositor spring. See [Closed island while music plays](#closed-island-while-music-plays) |
 | Content reveal | See [Home](#home): 0.06 s delay, 0.3 s fade, 8 pt drop over 0.42 s; 0.14 s fade out |
 | Expand / collapse | Expand when the pointer reaches the real notch, including at the screen top edge, at once or after the hover delay setting; collapse immediately on exit. The real notch can reopen during collapse; the former expanded area cannot |
 | Secondary click | Menu with Settings and Quit |
