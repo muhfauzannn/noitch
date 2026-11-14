@@ -18,7 +18,7 @@ namespace noitch {
 class LiveScene {
 public:
     // `left` is the widened pill's left edge in window pixels.
-    HRESULT Create(Compositor& compositor, const LiveLayout& layout, float left, float scale);
+    HRESULT Create(Compositor& compositor, const LiveLayout& layout, float left, float scale, float maxLyricWidth);
     void Release();
     bool Exists() const { return root_ != nullptr; }
 
@@ -31,6 +31,8 @@ public:
     // The line being sung under the notch, or empty for none. Redrawn in place, once per line; the
     // slide macOS does would need a visual per line. Direct2D loads only for the first line. Commits.
     HRESULT SetLyric(const std::string& text);
+    HRESULT AnimateEdges(const PillMotion& motion);
+    HRESULT SetPillWidth(float width);
 
 private:
     HRESULT PaintBars(uint32_t color);
@@ -38,6 +40,8 @@ private:
     Compositor* compositor_ = nullptr;
     LiveLayout layout_{0, 0};
     float scale_ = 1;
+    float maxLyricWidth_ = 0;
+    float left_ = 0;
     bool playing_ = false;
     uint32_t barColor_ = 0;
     ContentFade opacity_;

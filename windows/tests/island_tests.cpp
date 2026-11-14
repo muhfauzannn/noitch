@@ -50,6 +50,30 @@ void TestCustomExpandedSize() {
     assert(Near(closed.bottom, original.bottom, 0.01));
 }
 
+void TestLiveLyricWidth() {
+    const LiveLayout live(180, 32);
+    const float base = live.Width();
+    assert(LiveLayout::WidthForLyric(80, base, 580) == base);
+    assert(LiveLayout::WidthForLyric(400, base, 580) == 424);
+    const float edge = (424 - base) / 2;
+    assert(Near(live.ArtworkForWidth(424).x, live.Artwork().x - edge, 0.01));
+    assert(Near(live.BarForWidth(0, 424).x, live.Bar(0).x + edge, 0.01));
+    assert(LiveLayout::WidthForLyric(900, base, 580) == 580);
+    IslandGeometry geometry;
+    geometry.SetLive(true);
+    geometry.SetLiveLyric(true);
+    geometry.SetLiveLyricWidth(424);
+    auto pill = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(pill.right - pill.left, 424, 0.01));
+    geometry.SetTaskAlert(TaskAlertShape::Slip);
+    pill = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(pill.right - pill.left, base, 0.01));
+    geometry.SetTaskAlert(TaskAlertShape::Dot);
+    geometry.SetLiveLyricWidth(900);
+    pill = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(pill.right - pill.left, 580, 0.01));
+}
+
 void TestPillStaysCenteredAndInsideTheWindow() {
     for (float scale : {1.0f, 1.25f, 1.5f, 2.0f, 3.5f}) {
         const IslandGeometry geometry(scale);
@@ -1109,6 +1133,7 @@ int main() {
     TestHeaderControlsStayClearOfHomesControls();
     TestSwipeStepsOnePageHoweverLongItRuns();
     TestCustomExpandedSize();
+    TestLiveLyricWidth();
     TestPillStaysCenteredAndInsideTheWindow();
     TestSpringStartsWhereItWasAskedTo();
     TestSpringSettlesOnTarget();

@@ -7,6 +7,7 @@ final class IslandController: NSObject {
     private var geometry: IslandGeometry
     private var state = IslandState.collapsed
     private var latestTransition = 0
+    private var isChangingState = false
     private var settings = AppSettings.load()
     private let monitor = NowPlayingMonitor()
     private let pages: PageController
@@ -36,7 +37,7 @@ final class IslandController: NSObject {
         panel.contentView = view
         live.onSceneCreated = { [unowned self] layer in view.setLive(layer) }
         live.onShapeChange = { [unowned self] in liveChanged() }
-        live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
+        live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor, maxLyricWidth: min(geometry.expandedSize.width, geometry.display.frame.width - IslandGeometry.flareRadius * 2))
         taskAlert.onSceneCreated = { [unowned self] layer in view.setTaskAlert(layer) }
         taskAlert.onShapeChange = { [unowned self] in liveChanged() }
         taskAlert.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
@@ -155,10 +156,15 @@ final class IslandController: NSObject {
 
     private func transition(to newState: IslandState) {
         guard newState != state else { return }
+        isChangingState = true
         if newState == .expanded {
             geometry.expandedSize = CGSize(width: settings.general.expandedWidth, height: settings.general.expandedHeight)
         }
         state = newState
+        if newState == .expanded {
+            live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor,
+                                  maxLyricWidth: min(geometry.expandedSize.width, geometry.display.frame.width - IslandGeometry.flareRadius * 2))
+        }
         latestTransition += 1
         let transition = latestTransition
         // Grow before expanding and shrink after collapsing: the window changes size twice per
@@ -178,7 +184,9 @@ final class IslandController: NSObject {
         } else {
             pages.islandWillClose()
             taskAlert.islandWillClose()
+            live.setPillWidth(geometry.pillSize(for: .collapsed).width, animated: false)
         }
+        isChangingState = false
         view.animatePill(
             to: geometry.pillSize(for: newState),
             cornerRadius: geometry.cornerRadius(for: newState),
@@ -200,11 +208,13 @@ final class IslandController: NSObject {
         let before = geometry.pillSize(for: .collapsed)
         geometry.isLive = live.isActive
         geometry.showsLiveLyric = live.showsLyric
+        geometry.liveLyricWidth = live.lyricWidth
         geometry.taskAlert = taskAlert.shape
         taskAlert.setLiveShown(live.isActive)
         live.setLyricHeld(taskAlert.shape == .slip)
         let after = geometry.pillSize(for: .collapsed)
-        guard state == .collapsed, after != before else { return }
+        guard !isChangingState, state == .collapsed, after != before else { return }
+        live.setPillWidth(after.width, animated: true)
         latestTransition += 1
         let transition = latestTransition
         // Grows first in any direction it grows in; the completion trims it to the final size.
@@ -229,6 +239,7 @@ final class IslandController: NSObject {
     }
 
     private func applyLayout() {
+        live.setPillWidth(geometry.pillSize(for: .collapsed).width, animated: false)
         resizePanel(for: state)
         view.setPill(size: geometry.pillSize(for: state), cornerRadius: geometry.cornerRadius(for: state))
     }
@@ -247,7 +258,8 @@ final class IslandController: NSObject {
 
         guard updated != geometry else { return }
         geometry = updated
-        live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
+        geometry.liveLyricWidth = live.lyricWidth
+        live.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor, maxLyricWidth: min(geometry.expandedSize.width, geometry.display.frame.width - IslandGeometry.flareRadius * 2))
         taskAlert.setCollapsedSize(geometry.collapsedSize, scale: panel.backingScaleFactor)
         applyLayout()
         if geometry.panelFrame(for: .collapsed).contains(NSEvent.mouseLocation) { openIfPointerInNotch() }

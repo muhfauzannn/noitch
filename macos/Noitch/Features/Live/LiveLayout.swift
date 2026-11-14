@@ -28,6 +28,10 @@ struct LiveLayout: Equatable {
         CGSize(width: size.width, height: collapsed.height + (withLyric ? Self.lyricStrip : 0))
     }
 
+    static func widthForLyric(textWidth: CGFloat, baseWidth: CGFloat, maximum: CGFloat) -> CGFloat {
+        min(max(baseWidth, ceil(textWidth) + (outerPadding + 3) * 2), max(baseWidth, maximum))
+    }
+
     /// Under the notch, centred, clear of the pill's rounded bottom corners.
     var lyric: CGRect {
         let inset = Self.outerPadding + 3
@@ -36,6 +40,14 @@ struct LiveLayout: Equatable {
 
     var artwork: CGRect {
         CGRect(x: Self.outerPadding, y: (collapsed.height - artSide) / 2, width: artSide, height: artSide)
+    }
+
+    func artwork(forPillWidth width: CGFloat) -> CGRect {
+        artwork.offsetBy(dx: -max(0, width - size.width) / 2, dy: 0)
+    }
+
+    func bar(_ index: Int, forPillWidth width: CGFloat) -> CGRect {
+        bar(index).offsetBy(dx: max(0, width - size.width) / 2, dy: 0)
     }
 
     var barsWidth: CGFloat { CGFloat(Self.barCount) * Self.barWidth + CGFloat(Self.barCount - 1) * Self.barGap }

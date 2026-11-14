@@ -45,6 +45,29 @@ struct LiveTests {
         #expect(geometry.pillSize(for: .expanded) == IslandGeometry.expandedSize)
     }
 
+    @Test func `long live lyrics widen within the available area`() {
+        let base = LiveLayout(collapsed: notch).size.width
+        #expect(LiveLayout.widthForLyric(textWidth: 80, baseWidth: base, maximum: 580) == base)
+        #expect(LiveLayout.widthForLyric(textWidth: 400, baseWidth: base, maximum: 580) == 424)
+        let layout = LiveLayout(collapsed: notch)
+        let width: CGFloat = 424
+        let edge = (width - base) / 2
+        #expect(layout.artwork(forPillWidth: width).minX == layout.artwork.minX - edge)
+        #expect(layout.bar(0, forPillWidth: width).minX == layout.bar(0).minX + edge)
+        #expect(LiveLayout.widthForLyric(textWidth: 900, baseWidth: base, maximum: 580) == 580)
+        var geometry = IslandGeometry(display: .init(frame: CGRect(x: 0, y: 0, width: 1512, height: 982), notchHeight: 32, notchWidth: 185, menuBarHeight: 32), isLive: true, showsLiveLyric: true)
+        geometry.liveLyricWidth = 424
+        #expect(geometry.pillSize(for: .collapsed).width == 424)
+        geometry.taskAlert = .slip
+        #expect(geometry.pillSize(for: .collapsed).width == base)
+        geometry.taskAlert = .dot
+        geometry.liveLyricWidth = 900
+        #expect(geometry.pillSize(for: .collapsed).width == geometry.expandedSize.width)
+        geometry.showsLiveLyric = false
+        geometry.taskAlert = .none
+        #expect(geometry.pillSize(for: .collapsed).width == base)
+    }
+
     @Test func `the lyric line is the one being sung, or none without synced lyrics`() {
         let lyrics = Lyrics(synced: [.init(start: 2, text: "one"), .init(start: 4, text: ""), .init(start: 6, text: "three")])
         #expect(LiveRule.lyricLine(lyrics, position: 0, offset: 0) == "♪")
