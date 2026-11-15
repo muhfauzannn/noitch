@@ -284,15 +284,15 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
     /// Overdue work is hidden until `showOverdue`: the page is about what can still be done.
     static func make(tasks allTasks: [MoodleTask], unviewed: Set<Int>, signedIn: Bool, checking: Bool, problem: MoodleProblem?,
                      asOf: Double?, now: Double, offset: Int, calendar: Calendar, showOverdue: Bool = false,
-                     siteName site: String = "Scele") -> TasksPageModel {
+                     siteName site: String = "Scele", visibleRows: Int = TaskRule.visibleRows) -> TasksPageModel {
         var model = makeContent(tasks: allTasks, unviewed: unviewed, signedIn: signedIn, checking: checking, problem: problem, asOf: asOf, now: now,
-                                offset: offset, calendar: calendar, showOverdue: showOverdue, site: site)
+                                offset: offset, calendar: calendar, showOverdue: showOverdue, site: site, visibleRows: max(1, visibleRows))
         model.siteName = site
         return model
     }
 
     private static func makeContent(tasks allTasks: [MoodleTask], unviewed: Set<Int>, signedIn: Bool, checking: Bool, problem: MoodleProblem?,
-                                    asOf: Double?, now: Double, offset: Int, calendar: Calendar, showOverdue: Bool, site: String) -> TasksPageModel {
+                                    asOf: Double?, now: Double, offset: Int, calendar: Calendar, showOverdue: Bool, site: String, visibleRows: Int) -> TasksPageModel {
         func clock(_ time: Double) -> String {
             let parts = calendar.dateComponents([.hour, .minute], from: Date(timeIntervalSince1970: time))
             return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
@@ -351,17 +351,17 @@ nonisolated struct TasksPageModel: Equatable, Sendable {
         let total = counts.reduce(0, +)
         let busiestName = busiestDay == 0 ? "today" : busiestDay == 1 ? "tomorrow" : TaskRule.weekdays[(weekday - 1 + busiestDay) % 7]
         let caption = total == 0 ? ["Nothing due", "in the next 7 days"] : ["Busiest: \(busiestName) · \(busiest)", "\(total) due in 7 days"]
-        let start = min(max(offset, 0), max(tasks.count - TaskRule.visibleRows, 0))
-        let rows = tasks[start...].prefix(TaskRule.visibleRows).map { task in
+        let start = min(max(offset, 0), max(tasks.count - visibleRows, 0))
+        let rows = tasks[start...].prefix(visibleRows).map { task in
             Row(id: task.id, title: task.title, course: task.course, due: TaskRule.dueText(task.due, now: now, calendar: calendar),
                 severity: TaskRule.urgency(due: task.due, now: now), module: task.module, isNew: unviewed.contains(task.id), url: task.url,
                 day: loadDay(task))
         }
         let more: String
-        if tasks.count <= TaskRule.visibleRows {
+        if tasks.count <= visibleRows {
             more = ""
         } else if start == 0 {
-            more = "+\(tasks.count - TaskRule.visibleRows) more · scroll"
+            more = "+\(tasks.count - visibleRows) more · scroll"
         } else {
             more = "\(start + 1)–\(start + rows.count) of \(tasks.count)"
         }

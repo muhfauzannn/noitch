@@ -11,7 +11,9 @@ struct TasksLayout: Equatable {
     static let loadHeight: CGFloat = 36
     static let rowHeight: CGFloat = 24
     static let rowGap: CGFloat = 1
-    static let visibleRows = TaskRule.visibleRows
+    var visibleRows: Int {
+        max(1, Int((size.height - 8 - (bodyTop + Self.loadHeight + 4) - 14 + Self.rowGap) / (Self.rowHeight + Self.rowGap)))
+    }
 
     let size: CGSize
     let headerHeight: CGFloat
@@ -76,14 +78,14 @@ struct TasksLayout: Equatable {
     }
 
     var more: CGRect {
-        let last = row(Self.visibleRows - 1)
+        let last = row(visibleRows - 1)
         return CGRect(x: columnX + 6, y: last.maxY + 2, width: columnWidth - 12 - Self.overdueWidth, height: 12)
     }
 
     static let overdueWidth: CGFloat = 104
     /// "Show 2 overdue", at the right end of the line under the list.
     var overdueToggle: CGRect {
-        let last = row(Self.visibleRows - 1)
+        let last = row(visibleRows - 1)
         return CGRect(x: columnX + columnWidth - 6 - Self.overdueWidth, y: last.maxY + 2, width: Self.overdueWidth, height: 12)
     }
 

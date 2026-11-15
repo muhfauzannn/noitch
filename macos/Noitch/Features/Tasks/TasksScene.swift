@@ -56,7 +56,7 @@ final class TasksScene {
         root.bounds = CGRect(origin: .zero, size: layout.size)
         bars = (0..<TaskRule.loadDays).map { _ in CALayer() }
         barLetters = (0..<TaskRule.loadDays).map { _ in TasksScene.text(size: 8.5, weight: .medium, opacity: 0.4, alignment: .center) }
-        rows = (0..<TasksLayout.visibleRows).map { _ in
+        rows = (0..<layout.visibleRows).map { _ in
             (CALayer(), CAShapeLayer(), TasksScene.text(size: 11.5, weight: .medium), TasksScene.text(size: 10.5, weight: .regular, alignment: .right))
         }
         for group in [hero, week, list, message] {

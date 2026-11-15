@@ -16,8 +16,10 @@ namespace noitch {
 struct SettingsRow {
     // Account is the Moodle sign-in block, which the window builds itself (see TasksSettingsPane).
     // Hotkey is a shortcut field, the system's hotkey control; `value` and `setValue` carry it.
-    enum class Kind { Toggle, Choice, LaunchAtLogin, Text, Account, Hotkey };
+    enum class Kind { Toggle, Choice, Slider, LaunchAtLogin, Text, Account, Hotkey };
 
+    int minimum = 0;
+    int maximum = 0;
     Kind kind = Kind::Toggle;
     std::wstring title;
     std::wstring caption;
@@ -67,6 +69,17 @@ inline SettingsRow ChoiceRow(std::wstring title, std::wstring caption, std::vect
     row.value = value;
     row.setValue = setValue;
     row.enabled = enabled;
+    return row;
+}
+
+inline SettingsRow SliderRow(std::wstring title, int minimum, int maximum, double (*value)(const AppSettings&), void (*setValue)(AppSettings&, double)) {
+    SettingsRow row;
+    row.kind = SettingsRow::Kind::Slider;
+    row.title = std::move(title);
+    row.minimum = minimum;
+    row.maximum = maximum;
+    row.value = value;
+    row.setValue = setValue;
     return row;
 }
 

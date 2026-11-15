@@ -32,9 +32,12 @@ public:
     bool IsActive() const { return active_; }
     // The pill also shows the line being sung, under the notch.
     bool ShowsLyric() const { return showsLyric_; }
+    float LyricWidth() const { return lyricWidth_; }
 
     // While a task alert has the strip, the line steps aside; it comes back when the alert ends.
     void SetLyricHeld(bool held);
+    void AnimateEdges(const PillMotion& motion) { scene_.AnimateEdges(motion); }
+    void SetPillWidth(float width) { scene_.SetPillWidth(width); }
     void IslandWillOpen();
     void IslandWillClose();
     void DeviceLost();
@@ -78,6 +81,9 @@ private:
     bool lyricsEnabled_ = true;
     double lyricsOffset_ = 0;
     bool showsLyric_ = false;
+    float lyricWidth_ = 0;
+    float maxLyricWidth_ = 0;
+    std::string measuredLyric_;
     bool lyricHeld_ = false;
     std::unique_ptr<Lyrics> lyrics_;
     std::string lyricsKey_;

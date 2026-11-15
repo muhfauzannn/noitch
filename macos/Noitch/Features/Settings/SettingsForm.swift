@@ -137,6 +137,21 @@ final class SettingsForm {
         row(title, caption: caption, control: control, enabledBy: enabledBy)
     }
 
+    func slider(_ title: String, _ key: WritableKeyPath<AppSettings, Double>, range: ClosedRange<Double>) {
+        let control = NSSlider(value: read()[keyPath: key], minValue: range.lowerBound, maxValue: range.upperBound, target: nil, action: nil)
+        control.widthAnchor.constraint(equalToConstant: 140).isActive = true
+        let value = NSTextField(labelWithString: "\(Int(control.doubleValue))")
+        value.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        let group = NSStackView(views: [control, value])
+        group.orientation = .horizontal
+        bind(control) { [unowned self] sender in
+            let number = sender.doubleValue.rounded()
+            value.stringValue = "\(Int(number))"
+            update { $0[keyPath: key] = number }
+        }
+        row(title, control: group)
+    }
+
     /// A row whose control is managed by the pane itself, such as one backed by the system. Returns
     /// the caption's label, so the pane can change it later.
     @discardableResult

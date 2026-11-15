@@ -18,7 +18,7 @@ final class LiveScene {
     private var lyricIndex = 0
     private var shownLyric: String?
 
-    init(layout: LiveLayout, scale: CGFloat) {
+    init(layout: LiveLayout, scale: CGFloat, lyricWidth: CGFloat) {
         self.layout = layout
         // Tall enough for the lyric strip; the pill's clip shows it only while the pill has grown.
         root.bounds = CGRect(origin: .zero, size: layout.size(withLyric: true))
@@ -52,7 +52,10 @@ final class LiveScene {
 
         lyricLayers = (0..<2).map { _ in
             let text = CATextLayer()
-            text.frame = layout.lyric
+            var frame = layout.lyric
+            frame.origin.x -= (lyricWidth - layout.size.width) / 2
+            frame.size.width = lyricWidth - (LiveLayout.outerPadding + 3) * 2
+            text.frame = frame
             text.font = NSFont.systemFont(ofSize: LiveLayout.lyricFontSize, weight: .semibold)
             text.fontSize = LiveLayout.lyricFontSize
             text.foregroundColor = NSColor.white.cgColor
@@ -63,6 +66,27 @@ final class LiveScene {
             return text
         }
         lyricLayers.forEach(root.addSublayer)
+    }
+
+    /// The artwork and bars track the pill's edges using the same spring as the pill.
+    func setPillWidth(_ width: CGFloat, animated: Bool) {
+        let targets = [(artwork, layout.artwork(forPillWidth: width).midX)] + bars.enumerated().map { ($0.element, layout.bar($0.offset, forPillWidth: width).midX) }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (layer, x) in targets {
+            if animated {
+                let spring = CASpringAnimation(perceptualDuration: IslandGeometry.liveSpring.response, bounce: IslandGeometry.liveSpring.bounce)
+                spring.keyPath = "position.x"
+                spring.fromValue = (layer.presentation() ?? layer).position.x
+                spring.toValue = x
+                spring.duration = spring.settlingDuration
+                layer.add(spring, forKey: "position.x")
+            } else {
+                layer.removeAnimation(forKey: "position.x")
+            }
+            layer.position.x = x
+        }
+        CATransaction.commit()
     }
 
     /// The line being sung, or nil for none. A new line rises in from below as the old one rises

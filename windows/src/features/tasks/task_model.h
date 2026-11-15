@@ -626,7 +626,8 @@ struct TasksPageModel {
     // Overdue work is hidden until `showOverdue`: the page is about what can still be done.
     static TasksPageModel Make(const std::vector<MoodleTask>& allTasks, const std::set<int64_t>& unviewed, bool signedIn, bool checking,
                                MoodleProblem problem, std::optional<double> asOf, double now, int offset, double utcOffset, bool showOverdue = false,
-                               const std::string& site = "Scele") {
+                               const std::string& site = "Scele", int visibleRows = TaskRule::kVisibleRows) {
+        visibleRows = std::max(1, visibleRows);
         TasksPageModel model;
         model.siteName = site;
         const auto clock = [utcOffset](double time) {
@@ -708,14 +709,14 @@ struct TasksPageModel {
         model.loadCaption = total == 0 ? "Nothing due" : "Busiest: " + busiestName + " \xC2\xB7 " + std::to_string(busiest);
         model.loadDetail = total == 0 ? "in the next 7 days" : std::to_string(total) + " due in 7 days";
         const int count = static_cast<int>(tasks.size());
-        const int start = std::clamp(offset, 0, std::max(count - TaskRule::kVisibleRows, 0));
-        for (int i = start; i < std::min(start + TaskRule::kVisibleRows, count); ++i) {
+        const int start = std::clamp(offset, 0, std::max(count - visibleRows, 0));
+        for (int i = start; i < std::min(start + visibleRows, count); ++i) {
             const MoodleTask& task = tasks[static_cast<size_t>(i)];
             model.rows.push_back({task.id, task.title, task.course, TaskRule::DueText(task.due, now, utcOffset), TaskRule::Urgency(task.due, now), task.module,
                                   unviewed.count(task.id) > 0, task.url, loadDay(task)});
         }
-        if (count > TaskRule::kVisibleRows) {
-            model.more = start == 0 ? "+" + std::to_string(count - TaskRule::kVisibleRows) + " more \xC2\xB7 scroll"
+        if (count > visibleRows) {
+            model.more = start == 0 ? "+" + std::to_string(count - visibleRows) + " more \xC2\xB7 scroll"
                                     : std::to_string(start + 1) + "\xE2\x80\x93" + std::to_string(start + static_cast<int>(model.rows.size())) + " of " + std::to_string(count);
         }
         return model;

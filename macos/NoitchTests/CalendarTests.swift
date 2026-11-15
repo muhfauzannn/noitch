@@ -30,6 +30,14 @@ struct CalendarTests {
                              clock: { clock.string(from: $0) }, dayName: { _ in "Fri 13" })
     }
 
+    @Test func `taller Home shows more calendar rows`() {
+        let normal = HomeLayout(size: CGSize(width: 580, height: 180), headerHeight: 38)
+        let tall = HomeLayout(size: CGSize(width: 800, height: 300), headerHeight: 38)
+        #expect(tall.calendarVisibleRows > normal.calendarVisibleRows)
+        #expect(tall.calendarRow(tall.calendarVisibleRows - 1).maxY <= tall.size.height - HomeLayout.bottomPadding)
+        #expect(tall.lyricVisibleRows > normal.lyricVisibleRows)
+    }
+
     @Test func `the strip shows three days, marks today and moves by three`() {
         let strip = model([], selected: 1)
         #expect(strip.days.map(\.number) == ["10", "11", "12"])

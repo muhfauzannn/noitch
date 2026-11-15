@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 #include "features/lyrics/lyrics.h"
 #include "features/now_playing/now_playing.h"
@@ -33,6 +34,7 @@ struct HomeModel {
     // The line being sung, bright, and the one after it, dim. A status message takes the first slot.
     std::string lyric;
     std::string nextLyric;
+    std::vector<std::string> followingLyrics;
     int lyricIndex = -1;  // The synced line, or -1.
     bool lyricIsStatus = false;
     std::string elapsedText = "0:00";
@@ -103,6 +105,10 @@ inline HomeModel MakeHomeModel(const NowPlaying& nowPlaying, const Lyrics* lyric
         model.lyric = current.empty() ? "\xE2\x99\xAA" : current;
         const int next = index + 1;
         if (settings.showNextLyric && next < static_cast<int>(lyrics->synced.size())) model.nextLyric = lyrics->synced[static_cast<size_t>(next)].text;
+        if (settings.showNextLyric) {
+            for (int i = next; i < static_cast<int>(lyrics->synced.size()) && i < next + 8; ++i)
+                model.followingLyrics.push_back(lyrics->synced[static_cast<size_t>(i)].text);
+        }
         for (int step = -1; step <= 2; ++step) {
             const int line = index + step;
             std::string& slot = model.stageLines[static_cast<size_t>(step + 1)];

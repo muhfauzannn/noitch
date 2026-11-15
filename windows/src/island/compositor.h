@@ -52,6 +52,7 @@ public:
     HRESULT Upload(IDCompositionSurface* surface, UINT width, UINT height, const void* pixels) { return Paint(surface, width, height, pixels); }
     // An eased fade as a DirectComposition animation, for any animatable property.
     HRESULT BuildFade(const ContentFade& fade, IDCompositionAnimation** animation);
+    HRESULT BuildAnimation(const PillMotion& motion, int channel, float bias, IDCompositionAnimation** animation);
 
     // For Direct2D, which draws on the same device as the composition surfaces.
     IDXGIDevice* DxgiDevice() const { return dxgi_.Get(); }
@@ -63,7 +64,6 @@ private:
     HRESULT BuildScene();
     HRESULT BuildFlare(IDCompositionVisual* visual, bool mirrored);
     HRESULT Paint(IDCompositionSurface* surface, UINT width, UINT height, const void* pixels);
-    HRESULT BuildAnimation(const PillMotion& motion, int channel, float bias, IDCompositionAnimation** animation);
 
     HWND hwnd_ = nullptr;
     int flareRadius_ = 0;

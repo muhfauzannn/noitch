@@ -12,7 +12,7 @@ constexpr UINT kReleaseDelayMs = 10000;
 void HomeController::IslandWillOpen(const HomeLayout& layout, float left, float scale) {
     KillTimer(window_, kReleaseTimer);
     isOpen_ = true;
-    if (!scene_.Exists() || scale != scale_ || left != left_) {
+    if (!scene_.Exists() || scale != scale_ || left != left_ || layout.Width() != layout_.Width() || layout.Height() != layout_.Height()) {
         scene_.Release();
         layout_ = layout;
         left_ = left;

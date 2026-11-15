@@ -92,7 +92,7 @@ final class TasksController {
         let now = date.timeIntervalSince1970
         let model = TasksPageModel.make(tasks: watch.tasks, unviewed: newOnShow, signedIn: watch.settings.isSignedIn, checking: watch.isChecking,
                                         problem: watch.problem, asOf: watch.record?.asOf, now: now, offset: offset, calendar: .current,
-                                        showOverdue: showOverdue, siteName: TasksSettings.siteName(watch.settings.site))
+                                        showOverdue: showOverdue, siteName: TasksSettings.siteName(watch.settings.site), visibleRows: sceneLayoutRows)
         self.model = model
         scene.apply(model)
         scheduleTick(after: now)
@@ -110,6 +110,8 @@ final class TasksController {
         tickTimer = timer
     }
 
+    private var sceneLayoutRows: Int { layout?.visibleRows ?? TaskRule.visibleRows }
+
     // MARK: Pointer
 
     /// `delta` is vertical scroll in points; a row's height moves the list one row.
@@ -119,7 +121,7 @@ final class TasksController {
         let step = Int(scrolled / TasksLayout.rowHeight)
         guard step != 0 else { return }
         scrolled -= CGFloat(step) * TasksLayout.rowHeight
-        let next = min(max(offset - step, 0), max(model.listCount - TaskRule.visibleRows, 0))
+        let next = min(max(offset - step, 0), max(model.listCount - sceneLayoutRows, 0))
         guard next != offset else { return }
         offset = next
         render()

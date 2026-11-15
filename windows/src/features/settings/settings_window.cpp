@@ -20,7 +20,7 @@ constexpr wchar_t kClassName[] = L"NoitchSettings";
 constexpr DWORD kStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 // Logical pixels.
 constexpr int kWidth = 660;
-constexpr int kHeight = 480;
+constexpr int kHeight = 600;
 constexpr int kSidebarWidth = 170;
 constexpr int kPadding = 20;
 constexpr int kRowHeight = 24;
@@ -169,6 +169,18 @@ void SettingsWindow::ShowPage(int index) {
                     control = add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL, id, left + width - kChoiceWidth, y, kChoiceWidth, 200, font_);
                     for (const auto& option : row.options) SendMessageW(control, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(option.first.c_str()));
                     SendMessageW(control, CB_SETCURSEL, ChoiceIndex(row, row.value(settings_)), 0);
+                    break;
+                }
+                case SettingsRow::Kind::Slider: {
+                    static const bool loaded = [] {
+                        INITCOMMONCONTROLSEX controls{sizeof(controls), ICC_BAR_CLASSES};
+                        return InitCommonControlsEx(&controls) != FALSE;
+                    }();
+                    (void)loaded;
+                    add(L"STATIC", row.title, SS_CENTERIMAGE, 0, left + 4, y, width - kChoiceWidth - 16, kRowHeight, font_);
+                    control = add(TRACKBAR_CLASSW, L"", TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, id, left + width - kChoiceWidth, y, kChoiceWidth, kRowHeight, font_);
+                    SendMessageW(control, TBM_SETRANGE, TRUE, MAKELONG(row.minimum, row.maximum));
+                    SendMessageW(control, TBM_SETPOS, TRUE, static_cast<LPARAM>(row.value(settings_)));
                     break;
                 }
                 case SettingsRow::Kind::Text:
@@ -376,6 +388,9 @@ void SettingsWindow::Changed(int index, HWND control) {
             row.setValue(settings_, row.options[static_cast<size_t>(selected)].second);
             break;
         }
+        case SettingsRow::Kind::Slider:
+            row.setValue(settings_, static_cast<double>(SendMessageW(control, TBM_GETPOS, 0, 0)));
+            break;
         case SettingsRow::Kind::Hotkey: {
             const auto hotkey = static_cast<unsigned>(LOWORD(SendMessageW(control, HKM_GETHOTKEY, 0, 0)));
             if (hotkey != 0 && !PinHotkeyUsable(hotkey)) return;
@@ -403,6 +418,12 @@ LRESULT CALLBACK SettingsWindow::WndProc(HWND hwnd, UINT message, WPARAM wparam,
 
 LRESULT SettingsWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
     switch (message) {
+        case WM_HSCROLL: {
+            const HWND control = reinterpret_cast<HWND>(lparam);
+            const int id = control ? GetDlgCtrlID(control) : 0;
+            if (id >= kFirstRowId) Changed(id - kFirstRowId, control);
+            return 0;
+        }
         case WM_COMMAND: {
             const int id = LOWORD(wparam);
             const int code = HIWORD(wparam);

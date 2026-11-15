@@ -38,6 +38,42 @@ double Evaluate(const CubicSegment& s, double t) {
     return s.c0 + t * (s.c1 + t * (s.c2 + t * s.c3));
 }
 
+void TestCustomExpandedSize() {
+    const IslandGeometry normal(1.5f);
+    const IslandGeometry custom(1.5f, 720, 230);
+    const Pill open = custom.PillFor(IslandState::Expanded);
+    const Pill closed = custom.PillFor(IslandState::Collapsed);
+    const Pill original = normal.PillFor(IslandState::Collapsed);
+    assert(Near(open.right - open.left, 720 * 1.5, 0.01));
+    assert(Near(open.bottom, 230 * 1.5, 0.01));
+    assert(Near(closed.right - closed.left, original.right - original.left, 0.01));
+    assert(Near(closed.bottom, original.bottom, 0.01));
+}
+
+void TestLiveLyricWidth() {
+    const LiveLayout live(180, 32);
+    const float base = live.Width();
+    assert(LiveLayout::WidthForLyric(80, base, 580) == base);
+    assert(LiveLayout::WidthForLyric(400, base, 580) == 424);
+    const float edge = (424 - base) / 2;
+    assert(Near(live.ArtworkForWidth(424).x, live.Artwork().x - edge, 0.01));
+    assert(Near(live.BarForWidth(0, 424).x, live.Bar(0).x + edge, 0.01));
+    assert(LiveLayout::WidthForLyric(900, base, 580) == 580);
+    IslandGeometry geometry;
+    geometry.SetLive(true);
+    geometry.SetLiveLyric(true);
+    geometry.SetLiveLyricWidth(424);
+    auto pill = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(pill.right - pill.left, 424, 0.01));
+    geometry.SetTaskAlert(TaskAlertShape::Slip);
+    pill = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(pill.right - pill.left, base, 0.01));
+    geometry.SetTaskAlert(TaskAlertShape::Dot);
+    geometry.SetLiveLyricWidth(900);
+    pill = geometry.PillFor(IslandState::Collapsed);
+    assert(Near(pill.right - pill.left, 580, 0.01));
+}
+
 void TestPillStaysCenteredAndInsideTheWindow() {
     for (float scale : {1.0f, 1.25f, 1.5f, 2.0f, 3.5f}) {
         const IslandGeometry geometry(scale);
@@ -286,7 +322,7 @@ void TestPercentEncoding() {
 
 void TestHomeControlsDoNotOverlapAndStayInsideThePill() {
     for (float scale : {1.0f, 1.5f, 2.0f}) {
-        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(), scale);
+        const HomeLayout layout(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), IslandGeometry::CollapsedHeight(), scale);
         for (const HomeControl first : kHomeControls) {
             const HomeRect frame = layout.Frame(first);
             assert(frame.x >= 0 && frame.y >= 0 && frame.Right() <= layout.Width() && frame.Bottom() <= layout.Height());
@@ -327,8 +363,8 @@ void TestStageWakesOnlyForTheNextLine() {
 
 void TestLyricsButtonAndStageFitThePage() {
     for (float header : {24.0f, 32.0f, 38.0f}) {
-        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
-        const HeaderLayout headerLayout(IslandGeometry::ExpandedWidth(), header, 1);
+        const HomeLayout layout(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), header, 1);
+        const HeaderLayout headerLayout(IslandGeometry().ExpandedWidth(), header, 1);
         const HomeRect button = layout.LyricsButton(true);
         assert(!button.Intersects(headerLayout.Frame(HeaderControl::Settings)));
         assert(layout.Title().Right() <= layout.LyricsButton(false).x);
@@ -385,7 +421,7 @@ void TestLyricStripGrowsTheLivePillDown() {
     geometry.SetLiveLyric(true);
     const Pill tall = geometry.PillFor(IslandState::Collapsed);
     assert(Near(tall.bottom, wings.bottom + LiveLayout::kLyricStrip * 1.5f, 1e-4) && Near(tall.left, wings.left, 1e-4));
-    assert(Near(geometry.PillFor(IslandState::Expanded).bottom, IslandGeometry::ExpandedHeight() * 1.5f, 1e-4));
+    assert(Near(geometry.PillFor(IslandState::Expanded).bottom, IslandGeometry().ExpandedHeight() * 1.5f, 1e-4));
     geometry.SetLive(false);
     assert(Near(geometry.PillFor(IslandState::Collapsed).bottom, IslandGeometry::CollapsedHeight() * 1.5f, 1e-4));
 }
@@ -428,7 +464,7 @@ void TestHomeModelShowsThePlaceholderAndFollowsLyrics() {
     assert(hidden.lyric.empty() && hidden.nextLyric.empty());
 
     for (float header : {24.0f, 32.0f, 38.0f}) {
-        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
+        const HomeLayout layout(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), header, 1);
         assert(layout.Lyric().y >= layout.Artist().Bottom());
         assert(layout.NextLyric().Bottom() <= layout.SliderTrack().y - 4);
     }
@@ -625,8 +661,8 @@ void TestThePageSaysWhatMattersInAFewWords() {
 
 void TestUsagePageFitsUnderTheHeader() {
     for (float header : {24.0f, 32.0f, 38.0f}) {
-        const UsageLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 1);
-        const float bottom = IslandGeometry::ExpandedHeight() - 8;
+        const UsageLayout layout(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), header, 1);
+        const float bottom = IslandGeometry().ExpandedHeight() - 8;
         assert(layout.Detail(1).Bottom() <= bottom && layout.Gauge(1).Bottom() <= bottom);
         assert(layout.Gauge(0).y >= header);
         assert(layout.RowReset(0, 0).Right() <= layout.Gauge(1).x);
@@ -634,8 +670,8 @@ void TestUsagePageFitsUnderTheHeader() {
 }
 
 void TestHeaderControlsStayClearOfHomesControls() {
-    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1);
-    const HomeLayout home(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 32, 1);
+    const HeaderLayout header(IslandGeometry().ExpandedWidth(), 32, 1);
+    const HomeLayout home(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), 32, 1);
     for (const HomeControl control : kHomeControls) {
         for (const HeaderControl tab : {HeaderControl::HomeTab, HeaderControl::UsageTab, HeaderControl::TasksTab, HeaderControl::Settings}) {
             assert(!header.Frame(tab).Intersects(home.Frame(control)));
@@ -687,11 +723,11 @@ void TestPagesOpenWhereTheSettingsSay() {
     pages.showUsage = false;
     assert(pages.Opening(IslandPage::Usage) == IslandPage::Home && pages.Shows(IslandPage::Home));
     // Tasks moves up into Usage's slot.
-    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1, pages.Visible());
+    const HeaderLayout header(IslandGeometry().ExpandedWidth(), 32, 1, pages.Visible());
     assert(header.ControlAt(22 + 45, 16) == HeaderControl::TasksTab);
     pages.showTasks = false;
     pages.showShelf = false;
-    const HeaderLayout homeOnly(IslandGeometry::ExpandedWidth(), 32, 1, pages.Visible());
+    const HeaderLayout homeOnly(IslandGeometry().ExpandedWidth(), 32, 1, pages.Visible());
     assert(homeOnly.ControlAt(22 + 45, 16) == HeaderControl::None);
     pages = PageSettings{};
     pages.openOn = OpenPage::Tasks;
@@ -705,11 +741,11 @@ void TestUsageSettingsPickColumnsAndWhereAmberStarts() {
     assert(settings.Tools().size() == 1 && settings.Tools()[0] == UsageTool::Codex);
     settings.showCodex = false;
     assert(settings.Tools().size() == 1 && settings.Tools()[0] == UsageTool::Claude);
-    UsageLayout single(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 32, 1);
+    UsageLayout single(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), 32, 1);
     single.SetColumns(1);
-    const UsageLayout both(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 32, 1);
+    const UsageLayout both(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), 32, 1);
     const float columnWidth = both.Detail(0).Right() - both.Gauge(0).x;
-    assert(Near(single.Gauge(0).x + columnWidth / 2, IslandGeometry::ExpandedWidth() / 2, 0.5));
+    assert(Near(single.Gauge(0).x + columnWidth / 2, IslandGeometry().ExpandedWidth() / 2, 0.5));
     ToolLimits limits;
     limits.fiveHour = LimitWindow{65, std::nullopt, LimitWindow::kFiveHours};
     settings.warnAt = 60;
@@ -745,7 +781,7 @@ void TestSettingsPanesWriteWhatTheyRead() {
 
 void TestGlowFadesBeforeTheTopEdge() {
     for (float header : {24.0f, 32.0f, 38.0f}) {
-        const HomeLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), header, 2);
+        const HomeLayout layout(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), header, 2);
         assert(layout.GlowRadiusY() >= layout.GlowCenterY());
         assert(layout.GlowCenterX() + layout.GlowRadiusX() < layout.Width());
     }
@@ -914,6 +950,17 @@ void TestTaskCacheRoundTrips() {
     assert(mac && mac->tasks.size() == 1 && mac->tasks[0].due == 1794589500 && mac->unviewed.empty());
 }
 
+void TestExpandedContentCapacity() {
+    const TasksLayout normal(580, 180, 38, 1);
+    const TasksLayout tall(800, 300, 38, 1);
+    assert(normal.VisibleRows() == 3);
+    assert(tall.VisibleRows() > normal.VisibleRows());
+    assert(tall.More().Bottom() <= tall.Height() - 8);
+    const HomeLayout homeNormal(580, 180, 38, 1);
+    const HomeLayout homeTall(800, 300, 38, 1);
+    assert(homeTall.LyricVisibleRows() > homeNormal.LyricVisibleRows());
+}
+
 void TestTasksPageSaysWhatToDo() {
     TasksPageModel model = TasksPageModel::Make({}, {}, false, false, MoodleProblem::None, std::nullopt, kTaskNow, 0, kJakarta);
     assert(model.isMessage && model.title == "See your Scele tasks here" && !model.button.empty());
@@ -953,7 +1000,7 @@ void TestOverdueWorkStaysHiddenUntilAskedFor() {
 }
 
 void TestPinSitsLeftOfSettingsAndItsShortcutNeedsAModifier() {
-    const HeaderLayout header(IslandGeometry::ExpandedWidth(), 32, 1);
+    const HeaderLayout header(IslandGeometry().ExpandedWidth(), 32, 1);
     const HomeRect pin = header.Frame(HeaderControl::Pin);
     assert(pin.Right() < header.Frame(HeaderControl::Settings).x);
     assert(header.ControlAt(pin.x + 1, pin.y + 1) == HeaderControl::Pin);
@@ -998,7 +1045,7 @@ void TestTaskAlertShapesThePill() {
 }
 
 void TestTasksPageFitsAndSitesNormalize() {
-    const TasksLayout layout(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), 38, 1);
+    const TasksLayout layout(IslandGeometry().ExpandedWidth(), IslandGeometry().ExpandedHeight(), 38, 1);
     assert(layout.More().Bottom() <= layout.Height() - 4 && layout.OpenButton().Bottom() <= layout.Height() - 4);
     assert(layout.Row(0).y >= layout.Load().Bottom() && layout.RowDue(0).Right() <= layout.Width() - TasksLayout::kSidePadding);
     assert(layout.BarLetter(0).Bottom() <= layout.Row(0).y && layout.Bar(TaskRule::kLoadDays - 1, 1).Right() < layout.LoadCaption().x);
@@ -1085,6 +1132,8 @@ int main() {
     TestUsagePageFitsUnderTheHeader();
     TestHeaderControlsStayClearOfHomesControls();
     TestSwipeStepsOnePageHoweverLongItRuns();
+    TestCustomExpandedSize();
+    TestLiveLyricWidth();
     TestPillStaysCenteredAndInsideTheWindow();
     TestSpringStartsWhereItWasAskedTo();
     TestSpringSettlesOnTarget();
@@ -1132,6 +1181,7 @@ int main() {
     TestDueTimesReadAsPeopleSayThem();
     TestRemindersFallOnceEach();
     TestTaskCacheRoundTrips();
+    TestExpandedContentCapacity();
     TestTasksPageSaysWhatToDo();
     TestOverdueWorkStaysHiddenUntilAskedFor();
     TestPinSitsLeftOfSettingsAndItsShortcutNeedsAModifier();

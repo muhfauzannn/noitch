@@ -24,12 +24,12 @@ struct WindowSize {
 
 class IslandGeometry {
 public:
-    explicit IslandGeometry(float scale = 1.0f) : scale_(scale) {}
+    explicit IslandGeometry(float scale = 1.0f, float width = 580, float height = 180) : scale_(scale), width_(width), height_(height), maxLiveWidth_(width) {}
 
     // The window never changes size during a transition, so its coordinate space stays fixed.
     // It is the expanded pill plus room for its flares and spring overshoot.
     WindowSize Window() const {
-        return {Px(kExpandedWidth + kOvershootMargin * 2), Px(kExpandedHeight + kOvershootMargin)};
+        return {Px(width_ + kOvershootMargin * 2), Px(height_ + kOvershootMargin)};
     }
 
     int FlareRadius() const { return Px(kFlareRadius); }
@@ -41,13 +41,15 @@ public:
     bool IsLive() const { return live_; }
     // The live pill also shows the line being sung, under the notch.
     void SetLiveLyric(bool lyric) { liveLyric_ = lyric; }
+    void SetLiveLyricWidth(float width) { liveLyricWidth_ = width; }
+    void SetMaximumLiveWidth(float width) { maxLiveWidth_ = std::min(width_, width); }
     // A task alert on the closed pill, see TaskAlertLayout.
     void SetTaskAlert(TaskAlertShape shape) { taskAlert_ = shape; }
     static constexpr float CollapsedWidth() { return kCollapsedWidth; }
 
     // Logical sizes for laying out what sits on the expanded pill.
-    static constexpr float ExpandedWidth() { return kExpandedWidth; }
-    static constexpr float ExpandedHeight() { return kExpandedHeight; }
+    float ExpandedWidth() const { return width_; }
+    float ExpandedHeight() const { return height_; }
     static constexpr float CollapsedHeight() { return kCollapsedHeight; }
 
     Pill PillFor(IslandState state) const {
@@ -55,12 +57,16 @@ public:
         float collapsed = 0;
         float collapsedHeight = 0;
         TaskAlertLayout::PillSize(kCollapsedWidth, kCollapsedHeight, live_, liveLyric_, taskAlert_, &collapsed, &collapsedHeight);
-        const float halfWidth = (expanded ? kExpandedWidth : collapsed) * scale_ / 2;
+        if (live_ && liveLyric_ && taskAlert_ != TaskAlertShape::Slip) {
+            const float dotMargin = taskAlert_ == TaskAlertShape::Dot ? TaskAlertLayout::kDotWing * 2 : 0;
+            collapsed = std::min(std::max(collapsed, liveLyricWidth_ + dotMargin), std::max(collapsed, maxLiveWidth_));
+        }
+        const float halfWidth = (expanded ? width_ : collapsed) * scale_ / 2;
         const float center = Window().width / 2.0f;
         return {
             center - halfWidth,
             center + halfWidth,
-            (expanded ? kExpandedHeight : collapsedHeight) * scale_,
+            (expanded ? height_ : collapsedHeight) * scale_,
             (expanded ? kExpandedRadius : kCollapsedRadius) * scale_,
         };
     }
@@ -70,8 +76,6 @@ private:
     static constexpr float kCollapsedWidth = 180;
     static constexpr float kCollapsedHeight = 32;
     static constexpr float kCollapsedRadius = 10;
-    static constexpr float kExpandedWidth = 580;
-    static constexpr float kExpandedHeight = 180;
     static constexpr float kExpandedRadius = 24;
     static constexpr float kFlareRadius = 8;
     static constexpr float kOvershootMargin = 16;
@@ -79,8 +83,12 @@ private:
     int Px(float logical) const { return static_cast<int>(logical * scale_ + 0.5f); }
 
     float scale_;
+    float width_;
+    float height_;
     bool live_ = false;
     bool liveLyric_ = false;
+    float liveLyricWidth_ = 0;
+    float maxLiveWidth_;
     TaskAlertShape taskAlert_ = TaskAlertShape::None;
 };
 

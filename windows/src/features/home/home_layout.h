@@ -45,13 +45,13 @@ public:
     float Width() const { return width_ * scale_; }
     float Height() const { return height_ * scale_; }
 
-    HomeRect Artwork() const { return Px({kSidePadding, BodyTop(), BodyHeight(), BodyHeight()}); }
+    HomeRect Artwork() const { return Px({kSidePadding, BodyTop(), ArtworkSide(), ArtworkSide()}); }
     // The artwork's glow: an ellipse around the artwork that has faded out by the top edge, where the
     // pill meets the black flares, and well before the right side. In pixels.
-    float GlowCenterX() const { return (kSidePadding + BodyHeight() / 2) * scale_; }
-    float GlowCenterY() const { return (BodyTop() + BodyHeight() / 2) * scale_; }
+    float GlowCenterX() const { return (kSidePadding + ArtworkSide() / 2) * scale_; }
+    float GlowCenterY() const { return (BodyTop() + ArtworkSide() / 2) * scale_; }
     float GlowRadiusX() const { return width_ * 0.62f * scale_; }
-    float GlowRadiusY() const { return (BodyTop() + BodyHeight() / 2 + 4) * scale_; }
+    float GlowRadiusY() const { return (BodyTop() + ArtworkSide() / 2 + 4) * scale_; }
     // Title and artist end before the lyrics button.
     HomeRect Title() const { return Px({ColumnX(), BodyTop() - 2, HeadingWidth(), 20}); }
     HomeRect Artist() const { return Px({ColumnX(), BodyTop() + 17, HeadingWidth(), 17}); }
@@ -83,7 +83,9 @@ public:
 
     // The bright line; the dim one is kLyricStep below it, drawn smaller.
     HomeRect Lyric() const { return Px({ColumnX(), BodyTop() + 38, ColumnWidth(), 19}); }
-    HomeRect NextLyric() const { return Px({ColumnX(), BodyTop() + 38 + kLyricStep, ColumnWidth(), 19}); }
+    HomeRect LyricLine(int index) const { return Px({ColumnX(), BodyTop() + 38 + index * kLyricStep, ColumnWidth(), 19}); }
+    HomeRect NextLyric() const { return LyricLine(1); }
+    int LyricVisibleRows() const { return std::max(2, static_cast<int>((SliderY() - 4 - BodyTop() - 38) / kLyricStep)); }
     HomeRect ElapsedTime() const { return Px({ColumnX(), SliderY(), kTimeWidth, kSliderHeight}); }
     HomeRect RemainingTime() const { return Px({ColumnX() + ColumnWidth() - kTimeWidth, SliderY(), kTimeWidth, kSliderHeight}); }
     HomeRect SliderTrack() const { return Px(LogicalTrack()); }
@@ -141,7 +143,8 @@ private:
 
     float BodyTop() const { return header_ + kHeaderGap; }
     float BodyHeight() const { return height_ - BodyTop() - kBottomPadding; }
-    float ColumnX() const { return kSidePadding + BodyHeight() + kColumnGap; }
+    float ArtworkSide() const { return std::min(BodyHeight(), std::max(0.0f, width_ - kSidePadding * 2 - kColumnGap - 190)); }
+    float ColumnX() const { return kSidePadding + ArtworkSide() + kColumnGap; }
     float ColumnWidth() const { return width_ - ColumnX() - kSidePadding; }
     float HeadingWidth() const { return ColumnWidth() - kLyricsButton - kLyricsButtonGap; }
     // A little above the middle, so two lines fit below the one being sung.

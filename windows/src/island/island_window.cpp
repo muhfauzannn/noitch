@@ -223,9 +223,11 @@ void IslandWindow::ApplyLayout() {
     UINT dpiY = USER_DEFAULT_SCREEN_DPI;
     GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
 
-    geometry_ = IslandGeometry(static_cast<float>(dpiX) / USER_DEFAULT_SCREEN_DPI);
+    geometry_ = IslandGeometry(static_cast<float>(dpiX) / USER_DEFAULT_SCREEN_DPI, static_cast<float>(settings_.general.expandedWidth), static_cast<float>(settings_.general.expandedHeight));
+    geometry_.SetMaximumLiveWidth(static_cast<float>(info.rcMonitor.right - info.rcMonitor.left) / geometry_.Scale() - 16);
     geometry_.SetLive(live_.IsActive());
     geometry_.SetLiveLyric(live_.ShowsLyric());
+    geometry_.SetLiveLyricWidth(live_.LyricWidth());
     geometry_.SetTaskAlert(taskAlert_.Shape());
     const WindowSize size = geometry_.Window();
     const RECT& screen = info.rcMonitor;
@@ -240,6 +242,9 @@ void IslandWindow::ApplyLayout() {
     compositor_.ShowPill(pill);
     live_.SetGeometry(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight(), size.width, geometry_.Scale());
     taskAlert_.SetGeometry(IslandGeometry::CollapsedWidth(), IslandGeometry::CollapsedHeight(), size.width, geometry_.Scale());
+    const Pill closed = geometry_.PillFor(IslandState::Collapsed);
+    live_.SetPillWidth((closed.right - closed.left) / geometry_.Scale());
+    compositor_.Commit();
 }
 
 // The closed pill widens into its wings when music starts and narrows when it ends; it grows down for
@@ -251,6 +256,7 @@ void IslandWindow::ShapeChanged() {
     const Pill before = geometry_.PillFor(IslandState::Collapsed);
     geometry_.SetLive(live_.IsActive());
     geometry_.SetLiveLyric(live_.ShowsLyric());
+    geometry_.SetLiveLyricWidth(live_.LyricWidth());
     geometry_.SetTaskAlert(taskAlert_.Shape());
     taskAlert_.SetLiveShown(live_.IsActive());
     live_.SetLyricHeld(taskAlert_.Shape() == TaskAlertShape::Slip);
@@ -265,6 +271,7 @@ void IslandWindow::ShapeChanged() {
                                           static_cast<int>(std::max(before.right, after.right)) + flare,
                                           static_cast<int>(std::max(before.bottom, after.bottom))), FALSE);
     }
+    live_.AnimateEdges(motion_);
     compositor_.AnimatePill(motion_);
     KillTimer(hwnd_, kSettleTimer);
     SetTimer(hwnd_, kSettleTimer, static_cast<UINT>(motion_.Duration() * 1000) + 1, nullptr);
@@ -291,6 +298,8 @@ void IslandWindow::RegisterPinHotkey() {
 
 void IslandWindow::TransitionTo(IslandState next) {
     if (next == state_) return;
+    if (next == IslandState::Expanded && (geometry_.ExpandedWidth() != static_cast<float>(settings_.general.expandedWidth) ||
+        geometry_.ExpandedHeight() != static_cast<float>(settings_.general.expandedHeight))) ApplyLayout();
     state_ = next;
     KillTimer(hwnd_, kHoverTimer);
     hoverPending_ = false;
@@ -303,7 +312,7 @@ void IslandWindow::TransitionTo(IslandState next) {
         const std::optional<IslandPage> preferred = taskAlert_.WantsTasksPage() ? std::optional<IslandPage>(IslandPage::Tasks) : std::nullopt;
         taskAlert_.IslandWillOpen();
         UpdateHitRegion();
-        pages_.IslandWillOpen(IslandGeometry::ExpandedWidth(), IslandGeometry::ExpandedHeight(), IslandGeometry::CollapsedHeight(),
+        pages_.IslandWillOpen(geometry_.ExpandedWidth(), geometry_.ExpandedHeight(), IslandGeometry::CollapsedHeight(),
                               geometry_.PillFor(IslandState::Expanded).left, geometry_.Scale(), preferred);
         watch_.IslandWillOpen();
         AnimateContent(true, now);
@@ -311,6 +320,8 @@ void IslandWindow::TransitionTo(IslandState next) {
         live_.IslandWillClose();
         taskAlert_.IslandWillClose();
         pages_.IslandWillClose();
+        const Pill closed = geometry_.PillFor(IslandState::Collapsed);
+        live_.SetPillWidth((closed.right - closed.left) / geometry_.Scale());
         AnimateContent(false, now);
     }
     compositor_.AnimatePill(motion_);

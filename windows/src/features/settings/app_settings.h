@@ -36,6 +36,8 @@ struct GeneralSettings {
     bool openOnHover = true;
     // Seconds the pointer must rest in the notch before the island opens. 0 opens at once.
     double hoverDelay = 0;
+    double expandedWidth = 580;
+    double expandedHeight = 180;
     // Pins the island open, and lets it go, from anywhere. 0 when turned off.
     unsigned pinHotkey = kDefaultPinHotkey;
 

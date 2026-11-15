@@ -55,6 +55,9 @@ public:
         return Px(caption);
     }
 
+    int VisibleRows() const {
+        return std::max(1, static_cast<int>((height_ - 8 - (BodyTop() + kLoadHeight + 4) - 14 + kRowGap) / (kRowHeight + kRowGap)));
+    }
     HomeRect Row(int index) const { return Px(RowLogical(index)); }
     HomeRect RowIcon(int index) const {
         const HomeRect row = RowLogical(index);
@@ -70,12 +73,12 @@ public:
     }
     static constexpr float kOverdueWidth = 104;
     HomeRect More() const {
-        const HomeRect last = RowLogical(TaskRule::kVisibleRows - 1);
+        const HomeRect last = RowLogical(VisibleRows() - 1);
         return Px({ColumnX() + 6, last.Bottom() + 2, ColumnWidth() - 12 - kOverdueWidth, 12});
     }
     // "Show 2 overdue", at the right end of the line under the list.
     HomeRect OverdueToggle() const {
-        const HomeRect last = RowLogical(TaskRule::kVisibleRows - 1);
+        const HomeRect last = RowLogical(VisibleRows() - 1);
         return Px({ColumnX() + ColumnWidth() - 6 - kOverdueWidth, last.Bottom() + 2, kOverdueWidth, 12});
     }
 

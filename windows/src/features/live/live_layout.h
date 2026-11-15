@@ -46,6 +46,10 @@ public:
     // The pill grows down by the lyric strip; the wings stay level with the notch.
     float Height(bool withLyric) const { return height_ + (withLyric ? kLyricStrip : 0); }
 
+    static float WidthForLyric(float textWidth, float baseWidth, float maximum) {
+        return std::min(std::max(baseWidth, std::ceil(textWidth) + (kOuterPadding + 3) * 2), std::max(baseWidth, maximum));
+    }
+
     // Under the notch, centred, clear of the pill's rounded bottom corners. Logical units.
     HomeRect Lyric() const {
         const float inset = kOuterPadding + 3;
@@ -53,6 +57,12 @@ public:
     }
 
     HomeRect Artwork() const { return {kOuterPadding, (height_ - ArtSide()) / 2, ArtSide(), ArtSide()}; }
+
+    HomeRect ArtworkForWidth(float pillWidth) const {
+        HomeRect art = Artwork();
+        art.x -= std::max(0.0f, pillWidth - Width()) / 2;
+        return art;
+    }
 
     float BarsWidth() const { return kBarCount * kBarWidth + (kBarCount - 1) * kBarGap; }
 
@@ -67,6 +77,12 @@ public:
     HomeRect Bar(int index) const {
         const HomeRect area = Bars();
         return {area.x + static_cast<float>(index) * (kBarWidth + kBarGap), area.y, kBarWidth, area.height};
+    }
+
+    HomeRect BarForWidth(int index, float pillWidth) const {
+        HomeRect bar = Bar(index);
+        bar.x += std::max(0.0f, pillWidth - Width()) / 2;
+        return bar;
     }
 
 private:

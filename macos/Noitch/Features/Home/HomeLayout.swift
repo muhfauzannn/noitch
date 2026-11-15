@@ -52,7 +52,11 @@ struct HomeLayout: Equatable {
 
     private var bodyTop: CGFloat { headerHeight + Self.headerGap }
     private var bodyHeight: CGFloat { size.height - bodyTop - Self.bottomPadding }
-    private var columnX: CGFloat { Self.sidePadding + bodyHeight + Self.columnGap }
+    private var artworkSide: CGFloat {
+        let right = showsCalendar ? size.width - Self.sidePadding - Self.calendarWidth - Self.calendarGap * 2 : size.width - Self.sidePadding
+        return min(bodyHeight, max(0, right - Self.sidePadding - Self.columnGap - 190))
+    }
+    private var columnX: CGFloat { Self.sidePadding + artworkSide + Self.columnGap }
     /// The music column ends before the calendar when there is one.
     private var columnWidth: CGFloat {
         (showsCalendar ? calendarPanel.minX - Self.calendarGap * 2 : size.width - Self.sidePadding) - columnX
@@ -98,9 +102,12 @@ struct HomeLayout: Equatable {
     }
     /// "+2 more", right-aligned on the heading's line.
     var calendarMore: CGRect { calendarHeading }
+    var calendarVisibleRows: Int {
+        max(1, Int((size.height - Self.bottomPadding - calendarRow(0).minY) / Self.calendarRowHeight))
+    }
     var calendarMessage: CGRect { calendarRow(0) }
 
-    var artwork: CGRect { CGRect(x: Self.sidePadding, y: bodyTop, width: bodyHeight, height: bodyHeight) }
+    var artwork: CGRect { CGRect(x: Self.sidePadding, y: bodyTop, width: artworkSide, height: artworkSide) }
 
     /// The artwork's glow: an ellipse around the artwork that has faded out by the top edge, where the
     /// pill meets the black flares, and well before the right side.
@@ -135,6 +142,9 @@ struct HomeLayout: Equatable {
 
     /// The bright line. The dim one is `lyricStep` below it.
     var lyric: CGRect { CGRect(x: columnX, y: bodyTop + 38, width: columnWidth, height: 19) }
+    var lyricVisibleRows: Int {
+        max(2, Int((sliderY - 4 - lyric.minY) / Self.lyricStep))
+    }
     var nextLyric: CGRect { lyric.offsetBy(dx: 0, dy: Self.lyricStep) }
     var elapsedTime: CGRect { CGRect(x: columnX, y: sliderY, width: Self.timeWidth, height: Self.sliderHeight) }
     var remainingTime: CGRect {

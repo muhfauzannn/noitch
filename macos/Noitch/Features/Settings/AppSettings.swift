@@ -35,12 +35,34 @@ struct GeneralSettings: Equatable {
     /// Pins the island open, and lets it go, from anywhere. Nil when turned off.
     var pinShortcut: Shortcut? = .pinDefault
 
+    static let defaultExpandedWidth = 580.0
+    static let defaultExpandedHeight = 180.0
+
+    static let expandedWidthRange = 580.0...900.0
+    static let expandedHeightRange = 180.0...300.0
+
+    var expandedWidth = defaultExpandedWidth
+    var expandedHeight = defaultExpandedHeight
+
     static let hoverDelays = [0.0, 0.15, 0.3, 0.5]
 
     static func load(_ store: SettingsStore) -> GeneralSettings {
         var settings = GeneralSettings()
         store.read("openOnHover", into: &settings.openOnHover)
         store.read("hoverDelay", into: &settings.hoverDelay)
+        store.read("expandedWidth", into: &settings.expandedWidth)
+        store.read("expandedHeight", into: &settings.expandedHeight)
+
+        settings.expandedWidth = min(
+            max(settings.expandedWidth, expandedWidthRange.lowerBound),
+            expandedWidthRange.upperBound
+        )
+
+        settings.expandedHeight = min(
+            max(settings.expandedHeight, expandedHeightRange.lowerBound),
+            expandedHeightRange.upperBound
+        )
+
         store.read("display", into: &settings.display)
         store.read("haptics", into: &settings.haptics)
         settings.hoverDelay = min(max(settings.hoverDelay, 0), 1)
@@ -62,6 +84,8 @@ struct GeneralSettings: Equatable {
         store.write("haptics", haptics)
         store.write("pinKeyCode", pinShortcut.map { Double($0.keyCode) } ?? -1)
         store.write("pinModifiers", pinShortcut?.storedModifiers ?? 0)
+        store.write("expandedWidth", expandedWidth)
+        store.write("expandedHeight", expandedHeight)
     }
 }
 

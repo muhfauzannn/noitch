@@ -17,6 +17,10 @@ inline SettingsPane GeneralSettingsPaneBase() {
     return {L"General",
             {
                 {L"Startup", L"", {launch}},
+                {L"Island size", L"Changes apply the next time the island opens.", {
+                    SliderRow(L"Width", 580, 900, [](const AppSettings& s) { return s.general.expandedWidth; }, [](AppSettings& s, double v) { s.general.expandedWidth = v; }),
+                    SliderRow(L"Height", 180, 300, [](const AppSettings& s) { return s.general.expandedHeight; }, [](AppSettings& s, double v) { s.general.expandedHeight = v; }),
+                }},
                 {L"Opening",
                  L"A click on the notch always opens the island.",
                  {

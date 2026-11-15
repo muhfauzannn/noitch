@@ -162,7 +162,7 @@ final class CalendarController: NSObject {
         let now = Date()
         let deadlines = tasks().map { CalendarDeadline(title: $0.title, course: $0.course, due: Date(timeIntervalSince1970: $0.due)) }
         scene.apply(CalendarModel(
-            events: events, deadlines: deadlines, rangeStart: rangeStart, selected: selected, now: now, calendar: calendar, access: access,
+            events: events, deadlines: deadlines, rangeStart: rangeStart, selected: selected, now: now, calendar: calendar, access: access, maxRows: layout?.calendarVisibleRows ?? CalendarModel.maxRows,
             clock: { Self.clock.string(from: $0) }, dayName: { Self.dayName.string(from: $0) }
         ))
         scheduleNextChange(after: now)

@@ -116,10 +116,10 @@ final class CalendarScene {
             layer.contentsScale = scale
             list.addSublayer(layer)
         }
-        bars = (0..<CalendarModel.maxRows).map { _ in CALayer() }
-        times = (0..<CalendarModel.maxRows).map { _ in Self.makeText(size: 11, weight: .regular, opacity: 0.5) }
-        titles = (0..<CalendarModel.maxRows).map { _ in Self.makeText(size: 12, weight: .regular, opacity: 1) }
-        for index in 0..<CalendarModel.maxRows {
+        bars = (0..<layout.calendarVisibleRows).map { _ in CALayer() }
+        times = (0..<layout.calendarVisibleRows).map { _ in Self.makeText(size: 11, weight: .regular, opacity: 0.5) }
+        titles = (0..<layout.calendarVisibleRows).map { _ in Self.makeText(size: 12, weight: .regular, opacity: 1) }
+        for index in 0..<layout.calendarVisibleRows {
             let row = layout.calendarRow(index)
             bars[index].frame = CGRect(x: row.minX, y: row.minY + 3, width: 2.5, height: row.height - 6)
             bars[index].cornerRadius = 1.25
@@ -197,7 +197,7 @@ final class CalendarScene {
         }
         heading.string = model.heading
         more.string = model.more ?? ""
-        for index in 0..<CalendarModel.maxRows {
+        for index in 0..<layout.calendarVisibleRows {
             let row = model.rows.indices.contains(index) ? model.rows[index] : nil
             bars[index].isHidden = row == nil
             times[index].string = row?.time ?? ""
